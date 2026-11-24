@@ -35,6 +35,8 @@ type CandidateSearch struct {
 	DispatchFor func(mediaType string) music.Dispatch
 	Queue       *jobs.Queue
 	Clock       clock.Clock
+	// SearchesStopped says the instance's mode (or safe mode) keeps indexers from being asked; nil says it does not.
+	SearchesStopped func() bool
 }
 
 // recogniser is how the work's media type reads a release title, nil when it reads none.
@@ -89,7 +91,7 @@ func (c CandidateSearch) SearchWork(
 	}
 	result, err := searching.SearchWanted(ctx, media.WantedSearch{ItemID: itemID, Part: part, Terms: terms})
 	if err != nil {
-		return apiserver.SearchItemResult{}, searchError(err)
+		return apiserver.SearchItemResult{}, c.searchError(err)
 	}
 	return c.searchItemResultView(ctx, result, c.recogniser(ctx, workID)), nil
 }
@@ -138,7 +140,7 @@ func (c CandidateSearch) grabOne(ctx context.Context, workID int64, scope apiser
 	}
 	found, best, err := searching.GrabWanted(ctx, media.WantedSearch{ItemID: itemID, Part: part})
 	if err != nil {
-		return apiserver.GrabResult{}, searchError(err)
+		return apiserver.GrabResult{}, c.searchError(err)
 	}
 	view := apiserver.GrabResult{Found: len(found.Decisions), AlreadyDownloading: best.AlreadyInFlight, Held: best.Held, Refused: best.Refused}
 	if best.Sent != nil {
@@ -149,9 +151,12 @@ func (c CandidateSearch) grabOne(ctx context.Context, workID int64, scope apiser
 }
 
 // searchError maps a type's search errors to apiserver's.
-func searchError(err error) error {
+func (c CandidateSearch) searchError(err error) error {
 	switch {
 	case errors.Is(err, media.ErrNoIndexers):
+		if c.SearchesStopped != nil && c.SearchesStopped() {
+			return apiserver.ErrSearchesStopped
+		}
 		return apiserver.ErrNoIndexersConfigured
 	case errors.Is(err, media.ErrWholeItemOnly):
 		return apiserver.ErrWholeItemOnly

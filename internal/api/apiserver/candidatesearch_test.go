@@ -514,3 +514,13 @@ func TestListWorkCandidates_AnswersWhenADeferralIsActedOn(t *testing.T) {
 		t.Errorf("body = %s, want retry_after on the delay alone", body)
 	}
 }
+
+func TestSearchWork_SearchesStoppedByTheModeSaysSoNotNoIndexers(t *testing.T) {
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
+	fixture.candidateSearcher.searchErr = apiserver.ErrSearchesStopped
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", ""))
+	if recorder.Code != http.StatusConflict || !strings.Contains(recorder.Body.String(), "Searches are off") {
+		t.Errorf("status = %d, body = %s; want 409 naming the mode", recorder.Code, recorder.Body)
+	}
+}

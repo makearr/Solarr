@@ -25,9 +25,6 @@ func (q QualityPreview) Preview(ctx context.Context, categoryID int64, change ap
 	if !found {
 		return apiserver.QualityChangePreview{Reason: "the library is gone"}, nil
 	}
-	if change.TargetAuto {
-		return apiserver.QualityChangePreview{Reason: "an automatic target is worked out when it is saved"}, nil
-	}
 	previewing, ok := media.Capability[cutoff.Previewing](q.Registry, media.Key(current.MediaType))
 	if !ok {
 		return apiserver.QualityChangePreview{Reason: "this media type cannot preview a quality change"}, nil
@@ -36,7 +33,13 @@ func (q QualityPreview) Preview(ctx context.Context, categoryID int64, change ap
 	proposed.QualityProfileIDs = change.ProfileIDs
 	proposed.QualityCutoffID = change.CutoffProfileID
 	proposed.QualityTarget = nil
-	if change.TargetID != nil {
+	if change.TargetAuto {
+		target, derived := automaticTargetOf(snapshot, change.ProfileIDs, current.MediaType)
+		if !derived {
+			return apiserver.QualityChangePreview{Reason: "the first profile says nothing to aim for, so the library keeps no target"}, nil
+		}
+		proposed.QualityTarget = &target
+	} else if change.TargetID != nil {
 		target, found := snapshot.QualityTarget(*change.TargetID)
 		if !found {
 			return apiserver.QualityChangePreview{Reason: "that target no longer exists"}, nil
@@ -66,6 +69,18 @@ func (q QualityPreview) Preview(ctx context.Context, categoryID int64, change ap
 			return preview, nil
 		}
 	}
+}
+
+// automaticTargetOf is the target a library would aim for with the first of the profiles and no target of its own.
+func automaticTargetOf(snapshot *settings.Snapshot, profileIDs []int64, mediaType string) (settings.QualityTarget, bool) {
+	if len(profileIDs) == 0 {
+		return settings.QualityTarget{}, false
+	}
+	profile, found := snapshot.QualityProfile(profileIDs[0])
+	if !found {
+		return settings.QualityTarget{}, false
+	}
+	return settings.AutoTarget(profile, mediaType)
 }
 
 // countUnder adds one item to the counts when it can be judged under both the library's quality now and as proposed.

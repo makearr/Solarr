@@ -4,6 +4,8 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- The quality-change preview now covers the Automatic target: it counts what would fall under or over the cutoff with the target the first profile gives.
+- An interactive search in observe or companion mode now says searches are off because of the mode, instead of "no indexer is configured".
 - Removing a title from the library now also takes its running downloads out of the download client, so one that finishes later cannot bring the title back.
 - Importing a season pack fingerprints its files several at a time (the "Videos hashed at once" setting) and reads the series' held hashes once; the video hash backfill reads three moments of a file with one ffmpeg process instead of three.
 - Internal: the outbound limiter lost its unused token bucket, daily cap and global gate; pacing and per-host concurrency are unchanged.

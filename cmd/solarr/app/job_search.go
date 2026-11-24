@@ -296,5 +296,6 @@ func (p *process) candidateSearcher() adapters.CandidateSearch {
 		Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library), Searching: adapters.MediaTypes{Registry: p.media}.SearchingOf,
 		Recognising: adapters.MediaTypes{Registry: p.media}.RecognisingOf,
 		Search:      p.musicSearch(), Dispatch: p.musicDispatch(), DispatchFor: p.dispatchOf, Queue: p.queue, Clock: clock.NewSystem(),
+		SearchesStopped: func() bool { return p.solarrMode().SearchesStopped() },
 	}
 }

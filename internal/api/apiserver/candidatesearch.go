@@ -36,6 +36,9 @@ var ErrReleaseNotFetched = errors.New("apiserver: the release could not be fetch
 // ErrDownloadClientRefused is the client declining the release it was sent; the wrapped text says why.
 var ErrDownloadClientRefused = errors.New("apiserver: the download client refused the release")
 
+// ErrSearchesStopped is a search refused because the instance's mode asks no indexer.
+var ErrSearchesStopped = errors.New("apiserver: searches are stopped by the mode")
+
 // ErrDownloadsPaused is a send refused because the instance's mode keeps downloads paused.
 var ErrDownloadsPaused = errors.New("apiserver: downloads are paused")
 
@@ -432,6 +435,9 @@ func writeCandidateSearchError(w http.ResponseWriter, s *Server, err error) {
 	case errors.Is(err, ErrNoIndexersConfigured):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"No indexers", "no indexer is configured and enabled")
+	case errors.Is(err, ErrSearchesStopped):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Searches are off", "Solarr's mode asks no indexer; change it under Settings, General")
 	case errors.Is(err, ErrDecisionNotAccepted):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"Not accepted", "only an ACCEPT decision can be dispatched")
