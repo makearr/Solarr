@@ -246,3 +246,17 @@ func TestEnvSet_SeesEitherName(t *testing.T) {
 		t.Error("EnvSet reported an unset variable")
 	}
 }
+
+func TestParseWithEnv_SafeModeComesFromTheFileOrTheVariable(t *testing.T) {
+	fromFile, err := config.ParseWithEnv([]byte("version: 1\nsafe_mode: true\n"), env())
+	if err != nil || !fromFile.SafeMode {
+		t.Fatalf("file: SafeMode = %v, %v; want true", fromFile.SafeMode, err)
+	}
+	fromEnv, err := config.ParseWithEnv([]byte("version: 1\n"), env("SOLARR_SAFE_MODE", "true"))
+	if err != nil || !fromEnv.SafeMode {
+		t.Fatalf("env: SafeMode = %v, %v; want true", fromEnv.SafeMode, err)
+	}
+	if off, err := config.ParseWithEnv([]byte("version: 1\n"), env()); err != nil || off.SafeMode {
+		t.Fatalf("default: SafeMode = %v, %v; want false", off.SafeMode, err)
+	}
+}

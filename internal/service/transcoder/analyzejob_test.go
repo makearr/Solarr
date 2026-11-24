@@ -79,3 +79,14 @@ func TestAnalyze_StartsADispatchOnlyWhenItFoundWorkToDo(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyze_SafeModeJudgesNothingWithEverythingElseOn(t *testing.T) {
+	items := newMemItems()
+	items.objects = []library.ObjectToAnalyze{{MediaObjectID: 1, Kind: "audio"}}
+	items.facts[1] = library.ObjectFacts{Measured: true}
+	service := analyzeService(items, true, true)
+	service.SafeMode = true
+	if err := service.Analyze(t.Context(), 3, nil); err != nil || len(items.judged) != 0 {
+		t.Errorf("judged %d, err %v, want nothing", len(items.judged), err)
+	}
+}

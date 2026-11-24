@@ -218,4 +218,9 @@ memory:
 # arr_companion   — observe, plus sending monitoring back to the *Arrs
 # Settings -> General changes it while running; SOLARR_MODE sets it at every start.
 mode: normal
+
+# Safe mode forces transcoding, the hunt, the RSS sync, the cutoff check and sending monitoring to the *Arrs off,
+# without changing any stored setting. For a second instance that watches a library another one manages.
+# SOLARR_SAFE_MODE=true sets it as well.
+safe_mode: false
 `

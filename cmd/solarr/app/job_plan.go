@@ -62,9 +62,9 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 	}
 	feed := rss.NewJob(rss.Config{Sources: p.feedSources, Clock: clock.NewSystem(), Logger: p.logger})
 	// What an indexer just published is new content: its requests queue ahead of background fill.
-	executor.Handle(rss.JobType, jobs.HandlerFunc(func(ctx context.Context, job jobs.Job) error {
+	executor.Handle(rss.JobType, p.unlessSafe(jobs.HandlerFunc(func(ctx context.Context, job jobs.Job) error {
 		return feed.Run(httpx.WithPriority(ctx, httpx.PriorityFresh), job)
-	}))
+	})))
 	return nil
 }
 
@@ -158,7 +158,7 @@ func upgradeWindows(snapshot *settings.Snapshot) map[int64]time.Duration {
 // searchesPerHour is the hunt's budget; with no indexer enabled there is nothing to spend it on. It counts settings rows,
 // not connections: a media type no indexer serves costs no budget in its own hunt.
 func (p *process) searchesPerHour(ctx context.Context) (int, error) {
-	if p.solarrMode().SearchesStopped() {
+	if p.config.SafeMode || p.solarrMode().SearchesStopped() {
 		return 0, nil
 	}
 	enabled, err := p.enabledIndexers(ctx)

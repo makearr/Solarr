@@ -1075,6 +1075,7 @@ const catalogue = {
   "transcode.setup.skip.alsoVideo": "Also skip these video codecs",
   "transcode.setup.skip.alsoAudio": "Also skip these audio codecs",
   "transcode.setup.streams.copyMaxPct": "Copy up to % of the target's bitrate",
+  "safeMode.banner": "This instance runs in safe mode: transcoding, the automatic search, the RSS sync, the cutoff check and sending monitoring to an *Arr are off, whatever is set here. Turn off safe_mode in config.yml (SOLARR_SAFE_MODE) to use them.",
   "transcode.diskFull": "{count} library folders are short of free space or not writable, so conversion waits there.",
   "transcode.originalsNext": "{count} kept, the first expires {date}.",
   "transcode.targets": "Target qualities",

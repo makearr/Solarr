@@ -37,7 +37,7 @@ const pickWindow = 20
 // conversions the lanes have room for. The master switch off does nothing at all.
 func (s *Service) Dispatch(ctx context.Context) error {
 	global := s.Settings.Global()
-	if !global.Enabled {
+	if !global.Enabled || s.SafeMode {
 		return nil
 	}
 	if err := s.reconcileOnce(ctx); err != nil {

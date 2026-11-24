@@ -15,7 +15,8 @@ func (s *Server) generalSettings() gen.GeneralSettings {
 	hashing, previews, gaps := snapshot.VideoPerceptualHash(), snapshot.VideoPreviews(), snapshot.HuntGaps()
 	mode := gen.GeneralSettingsSolarrMode(snapshot.SolarrMode())
 	recommendations := snapshot.DiscoverGlobal().Enabled
-	return gen.GeneralSettings{VideoHashing: &hashing, VideoPreviews: &previews, HuntOldMissing: &gaps, Recommendations: &recommendations, SolarrMode: &mode}
+	safe := s.auth.SafeMode
+	return gen.GeneralSettings{VideoHashing: &hashing, VideoPreviews: &previews, HuntOldMissing: &gaps, Recommendations: &recommendations, SolarrMode: &mode, SafeMode: &safe}
 }
 
 // GetGeneralSettings answers the instance-wide switches of Settings -> General.

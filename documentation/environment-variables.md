@@ -105,6 +105,7 @@ Indexer and download-client credentials belong to individual entries and are set
 | `SOLARR_LOG_LEVEL` | `logging.level` | `info` | `debug`, `info`, `warn` or `error` |
 | `SOLARR_LOG_FORMAT` | `logging.format` | `json` | `json` or `text` |
 | `SOLARR_MODE` | `mode` | `normal` | `normal`, `read_only` (no writes into a library), `pause_downloads`, `observe` (read-only, no searches, no downloads) or `arr_companion` (observe, plus monitoring sent back to the *Arrs). Sets Settings, General, Solarr mode at every start |
+| `SOLARR_SAFE_MODE` | `safe_mode` | `false` | `true` forces transcoding, the automatic search, the RSS sync, the cutoff check and sending monitoring to an *Arr off, whatever their settings say ([safe-mode.md](safe-mode.md)) |
 
 ## Every other `config.yml` setting
 

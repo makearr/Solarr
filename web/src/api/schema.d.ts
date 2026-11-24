@@ -12569,6 +12569,8 @@ export interface components {
              * @enum {string}
              */
             solarr_mode?: "normal" | "read_only" | "pause_downloads" | "observe" | "arr_companion";
+            /** @description The instance runs in safe mode (safe_mode in config.yml, SOLARR_SAFE_MODE): transcoding, the automatic search, the RSS sync, the cutoff check and sending monitoring to an *Arr are off, whatever their settings say. Not changeable here. */
+            readonly safe_mode?: boolean;
         };
         TranscodeLaneLimits: {
             cpu: number;

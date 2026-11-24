@@ -44,6 +44,7 @@ func (p *process) transcodeService() *transcoder.Service {
 				return map[transcoder.Lane]int{transcoder.LaneCPU: int(lanes.CPU), transcoder.LaneGPU: int(lanes.GPU), transcoder.LaneAudio: int(lanes.Audio)}
 			}, p.transcoder.Active, cl),
 			Queue: p.queue, FS: p.fsys, Clock: cl, Logger: p.logger, ScratchDir: filepath.Join(p.config.Paths.CacheDir, "transcode-work"),
+			SafeMode: p.config.SafeMode,
 		}
 	})
 	return p.pipeline

@@ -14,11 +14,17 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 )
 
+// ErrSafeMode is what a refused write to an *Arr says when the instance runs in safe mode.
+var ErrSafeMode = errors.New("safe mode sends nothing to an *Arr")
+
 // PushResult is what one send of monitoring did: how many items it looked at and how many it changed at the *Arr.
 type PushResult = apiserver.ArrPushResult
 
 // Run is the job of the schedule that sends monitoring back: every connection that asked for it, one after another.
 func (a ArrSync) Run(ctx context.Context, _ jobs.Job) error {
+	if a.SafeMode {
+		return nil
+	}
 	instances, err := a.Cache.ArrInstances(ctx)
 	if err != nil {
 		return err
@@ -67,6 +73,9 @@ func (a ArrSync) pullMonitored(ctx context.Context, instance settings.ArrInstanc
 // PushMonitoring writes Solarr's monitoring of every item an import matched back to the connection's *Arr, where it
 // differs. Only items an import linked are touched, and only their monitored flag; Solarr's state is the one that stands.
 func (a ArrSync) PushMonitoring(ctx context.Context, instanceID int64) (apiserver.ArrPushResult, error) {
+	if a.SafeMode {
+		return apiserver.ArrPushResult{}, ErrSafeMode
+	}
 	instance, err := a.Cache.GetArrInstance(ctx, instanceID)
 	if err != nil {
 		return apiserver.ArrPushResult{}, err

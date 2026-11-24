@@ -92,3 +92,12 @@ func TestDispatch_AKindInBackoffWaitsAndThenProbesWithOneFileFarAway(t *testing.
 		t.Errorf("file jobs = %v, want one probe from the far end, away from the failed file's folder", got)
 	}
 }
+
+func TestDispatch_SafeModeQueuesNothingWithTheMasterSwitchOn(t *testing.T) {
+	p := newPipeline(t, musicTarget(), nil)
+	needed(p, 1, "a/1.flac", false)
+	p.svc.SafeMode = true
+	if err := p.svc.Dispatch(context.Background()); err != nil || len(p.queue.requests) != 0 || p.item(1).State != library.TranscodeNeeded {
+		t.Errorf("err %v, requests %d, state %s; want nothing started", err, len(p.queue.requests), p.item(1).State)
+	}
+}

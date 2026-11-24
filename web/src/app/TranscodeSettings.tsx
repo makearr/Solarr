@@ -8,6 +8,7 @@ import { t, tOr, type MessageKey } from "@/lib/i18n";
 import { Button } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
 
+import { SafeModeBanner } from "./SafeModeBanner";
 import { Card, Toggle } from "./SettingsCard";
 import { formatSize } from "./work/workFormat";
 
@@ -52,6 +53,7 @@ export function TranscodeSettings() {
         help={t("transcode.help")}
         toggle={<Toggle label={t("transcode.switch")} checked={global?.enabled ?? false} disabled={!global || saveGlobal.isPending} onChange={(enabled) => global && saveGlobal.mutate({ ...global, enabled })} />}
       >
+        <SafeModeBanner />
         <Banners summary={sum} />
       </Card>
       {sum && <Pipeline summary={sum} />}

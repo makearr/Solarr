@@ -16829,6 +16829,7 @@ components:
           type: string
           enum: [normal, read_only, pause_downloads, observe, arr_companion]
           description: "How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start."
+        safe_mode: { type: boolean, readOnly: true, description: "The instance runs in safe mode (safe_mode in config.yml, SOLARR_SAFE_MODE): transcoding, the automatic search, the RSS sync, the cutoff check and sending monitoring to an *Arr are off, whatever their settings say. Not changeable here." }
 
     TranscodeLaneLimits:
       type: object

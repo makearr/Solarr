@@ -346,3 +346,15 @@ func TestFreshPlan_ReadsTheFileNowAndLeavesRunningAndFinishedItemsAlone(t *testi
 		}
 	}
 }
+
+func TestRunFile_SafeModeConvertsNothingAndReleasesTheItem(t *testing.T) {
+	p := musicPipeline(t)
+	p.outputs(t, []int{800_000}, m4aResult)
+	p.svc.SafeMode = true
+	if err := p.run(t, 1); err != nil {
+		t.Fatal(err)
+	}
+	if item := p.item(1); item.State != library.TranscodeNeeded || !p.exists("/lib/Album/t1.flac") || p.exists("/lib/Album/t1.m4a") {
+		t.Errorf("item %+v, original present %v; want it waiting, untouched", item, p.exists("/lib/Album/t1.flac"))
+	}
+}

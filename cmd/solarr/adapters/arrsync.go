@@ -30,6 +30,8 @@ type ArrSync struct {
 	Imports  library.ArrImports
 	Reverter library.ArrImportRevert
 	Clock    clock.Clock
+	// SafeMode refuses everything that writes to an *Arr (documentation/safe-mode.md).
+	SafeMode bool
 	// Desired and Subscriptions read the monitoring a push sends back.
 	Desired       library.Desired
 	Subscriptions library.Subscriptions

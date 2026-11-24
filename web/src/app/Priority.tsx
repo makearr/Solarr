@@ -7,6 +7,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 import { inputStyle, labelStyle } from "@/ui/form";
 
+import { SafeModeBanner } from "./SafeModeBanner";
 import { Card, Field, SaveBar } from "./SettingsCard";
 
 type PrioritySettings = components["schemas"]["PrioritySettings"];
@@ -166,6 +167,7 @@ function PriorityForm({
         submit();
       }}
     >
+      <SafeModeBanner />
       <Card
         title={t("priority.autoSearch")}
         help="Missing items are searched on their own, most urgent first, the hour's searches spread over its runs. Keep the number low if an indexer limits API calls per day."

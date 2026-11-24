@@ -68,6 +68,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [media-tools.md](media-tools.md) | ffprobe, fpcalc and the tagging helper: what Alpine has, what it costs |
 | [database-layout.md](database-layout.md) | Which database a table belongs in, and why |
 | [memory-copies.md](memory-copies.md) | Running the cache or the databases from RAM, and the guard when memory runs out |
+| [safe-mode.md](safe-mode.md) | The instance flag that keeps transcoding, searching, RSS, cutoff and *Arr push off |
 | [solarr-mode.md](solarr-mode.md) | Normal, read only, pause downloads, observe and *Arr companion mode |
 | [disk-io.md](disk-io.md) | Disk groups, the per-disk IO gate and its priorities, latency probing, ionice |
 | [pausing-tasks.md](pausing-tasks.md) | Pausing and resuming scheduler tasks: what a pause holds, interrupts and keeps |

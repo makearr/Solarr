@@ -123,7 +123,7 @@ func (s *Service) prepare(ctx context.Context, item library.TranscodeItem, progr
 			one = &candidate
 		}
 	}
-	if !s.Settings.Global().Enabled || one == nil {
+	if !s.Settings.Global().Enabled || s.SafeMode || one == nil {
 		return nil, false, s.release(ctx, id)
 	}
 	stored, err := s.Settings.Setup(ctx, one.Target.ID)

@@ -26,9 +26,10 @@ func (p *process) registerCutoffJob(registry *jobs.Registry, executor *jobs.Exec
 	if err := registry.Register(cutoff.Definition); err != nil {
 		return err
 	}
-	executor.Handle(cutoff.JobType, cutoff.NewJob(cutoff.Config{
+	check := cutoff.NewJob(cutoff.Config{
 		Desired: library.NewDesired(p.library), Settings: p.cache, Sources: p.cutoffSources, Logger: p.logger, Tally: p.recordCutoffTally,
-	}))
+	})
+	executor.Handle(cutoff.JobType, p.unlessSafe(check))
 	return nil
 }
 

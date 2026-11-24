@@ -114,6 +114,8 @@ type Service struct {
 	Logger   *slog.Logger
 	// ScratchDir is where ffmpeg's temporary files go.
 	ScratchDir string
+	// SafeMode makes the whole pipeline do nothing, whatever the master switch says.
+	SafeMode bool
 
 	mu sync.Mutex
 	// blockedRoots are the roots found short of space, until when.

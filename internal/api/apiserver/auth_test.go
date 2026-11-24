@@ -47,6 +47,11 @@ const testPassword = "correct horse battery staple"
 
 func newAuthFixture(t *testing.T, mode apiserver.AuthMode, networks ...netip.Prefix) authFixture {
 	t.Helper()
+	return newAuthFixtureInSafeMode(t, mode, false, networks...)
+}
+
+func newAuthFixtureInSafeMode(t *testing.T, mode apiserver.AuthMode, safe bool, networks ...netip.Prefix) authFixture {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -114,6 +119,7 @@ func newAuthFixture(t *testing.T, mode apiserver.AuthMode, networks ...netip.Pre
 			Clock:         fake,
 			ProxyHeader:   "X-Remote-User",
 			ProxyNetworks: networks,
+			SafeMode:      safe,
 		},
 	})
 	if err != nil {
@@ -741,5 +747,21 @@ func TestAuth_ABodyOfManySealedValuesIsRefused(t *testing.T) {
 	}
 	if got := post(9); got != http.StatusBadRequest {
 		t.Errorf("nine sealed values: %d, want 400", got)
+	}
+}
+
+func TestGeneralSettings_ReportSafeModeOnlyWhenTheInstanceRunsIt(t *testing.T) {
+	for _, safe := range []bool{false, true} {
+		fixture := newAuthFixtureInSafeMode(t, apiserver.AuthLocal, safe)
+		cookies := fixture.login(t, "avs", testPassword).Result().Cookies()
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/settings/general", nil)
+		request.AddCookie(cookies[0])
+		response := fixture.do(t, request)
+		var body struct {
+			SafeMode bool `json:"safe_mode"`
+		}
+		if err := json.NewDecoder(response.Body).Decode(&body); err != nil || response.Code != http.StatusOK || body.SafeMode != safe {
+			t.Errorf("safe %v: code %d, safe_mode %v, err %v", safe, response.Code, body.SafeMode, err)
+		}
 	}
 }

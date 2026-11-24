@@ -1197,6 +1197,7 @@ func (p *process) authConfig() (apiserver.AuthConfig, error) {
 		return apiserver.AuthConfig{}, err
 	}
 	return apiserver.AuthConfig{
+		SafeMode:      p.config.SafeMode,
 		Mode:          apiserver.AuthMode(p.config.Security.AuthMode),
 		Sessions:      auth.NewSessions(key, wall, auth.DefaultSessionTTL),
 		Transport:     transport,
@@ -1266,6 +1267,7 @@ func (p *process) vanishedFiles() adapters.VanishedFiles {
 // arrSync is the *Arr import over the real stores: the API's import and preview, and the job that sends monitoring back.
 func (p *process) arrSync() adapters.ArrSync {
 	return adapters.ArrSync{
+		SafeMode: p.config.SafeMode,
 		Progress: adapters.NewArrProgress(), Registry: p.media, Importers: p.arrImporters(),
 		Cache: p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),
 		Imports: library.NewArrImports(p.library), Desired: library.NewDesired(p.library), Subscriptions: library.NewSubscriptions(p.library),

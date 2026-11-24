@@ -48,6 +48,8 @@ type AuthConfig struct {
 	ProxyHeader string
 	// ProxyNetworks are the only sources whose ProxyHeader is believed.
 	ProxyNetworks []netip.Prefix
+	// SafeMode is the instance flag reported to the web interface; the jobs enforce it themselves.
+	SafeMode bool
 }
 
 // authenticate resolves a request's identity and attaches an authz.Access.

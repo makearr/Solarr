@@ -13,6 +13,7 @@ import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 import { ArrConnectionTools } from "./ArrConnectionTools";
 import { ArrSyncOptions } from "./ArrSyncOptions";
+import { SafeModeBanner } from "./SafeModeBanner";
 
 type ArrInstance = components["schemas"]["ArrInstance"];
 type ArrApp = components["schemas"]["ArrApp"];
@@ -311,6 +312,7 @@ function PushMonitoring({ instance, onChanged }: { instance: ArrInstance; onChan
   const on = instance.push_monitoring === true;
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+      <SafeModeBanner />
       <label className="flex items-center gap-1.5">
         <input type="checkbox" checked={on} disabled={toggle.isPending} onChange={(event) => toggle.mutate(event.target.checked)} />
         <span title={`Write the monitored flag of what an import brought in back to ${instance.name}, whenever it changes here. The one thing Solarr ever writes to an *Arr.`}>Send back</span>

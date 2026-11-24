@@ -26,6 +26,10 @@ type Config struct {
 
 	// Mode is the dry-run level, enforced at the job executor (ADR-20).
 	Mode Mode `yaml:"mode"`
+
+	// SafeMode forces transcoding, the hunt, the RSS sync, the cutoff check and sending monitoring to the *Arrs off,
+	// whatever the stored settings say (documentation/safe-mode.md).
+	SafeMode bool `yaml:"safe_mode"`
 }
 
 // Memory runs the pictures and provider responses of the cache, or the databases, from RAM and copies them back to disk

@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -51,4 +52,14 @@ func (p *process) applyModeEnv(ctx context.Context) error {
 	}
 	p.logger.Info("mode set from the environment", "mode", string(mode))
 	return nil
+}
+
+// unlessSafe makes a job a no-op on an instance in safe mode (documentation/safe-mode.md).
+func (p *process) unlessSafe(handler jobs.Handler) jobs.Handler {
+	return jobs.HandlerFunc(func(ctx context.Context, job jobs.Job) error {
+		if p.config.SafeMode {
+			return nil
+		}
+		return handler.Run(ctx, job)
+	})
 }

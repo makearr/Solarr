@@ -52,7 +52,7 @@ func (h AnalyzeHandler) Run(ctx context.Context, job jobs.Job) error {
 // Analyze judges every audio and video file of the library that has no judgement for the current target and setup.
 // A file the probe has not read yet is left for the next run.
 func (s *Service) Analyze(ctx context.Context, categoryID int64, progress *jobs.Progress) error {
-	if !s.Settings.Global().Enabled {
+	if !s.Settings.Global().Enabled || s.SafeMode {
 		return nil
 	}
 	libraries, err := s.Settings.Libraries(ctx)

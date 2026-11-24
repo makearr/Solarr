@@ -9,6 +9,7 @@ import type { components } from "@/api/schema";
 import { problemText } from "@/lib/useNotifications";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { SubTabs } from "@/ui/SubTabs";
+import { SafeModeBanner } from "./SafeModeBanner";
 import { ToolbarSort } from "@/ui/Toolbar";
 
 import { formatRuntime, greenLimit, heatColor, heatSlots, parseSortKey, poolLoad, slotOf, sortRunning, sortTasks, type RunningSortKey, type SortDirection, type SortKey } from "./schedulerLoad";
@@ -119,6 +120,7 @@ export function SchedulerPage() {
         <header className="flex flex-col gap-1">
           <h1 className="text-base font-semibold">Scheduler</h1>
         </header>
+        <SafeModeBanner />
         <Scheduler />
       </div>
     </div>

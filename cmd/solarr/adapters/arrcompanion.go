@@ -18,7 +18,7 @@ import (
 // (added with a search when it lacks it) and searches and downloads itself; Solarr finds the file at its next scan.
 // Movies by TMDB id go to Radarr and series by TVDB id to Sonarr; anything else is left to the person.
 func (a ArrSync) Added(ctx context.Context, added apiserver.AddedWork) error {
-	if a.Cache.Snapshot().SolarrMode() != settings.ModeArrCompanion {
+	if a.SafeMode || a.Cache.Snapshot().SolarrMode() != settings.ModeArrCompanion {
 		return nil
 	}
 	if target, ok := mediaTarget(added); ok {
