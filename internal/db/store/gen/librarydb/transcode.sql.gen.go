@@ -450,7 +450,7 @@ func (q *Queries) ListTranscodeItems(ctx context.Context, arg ListTranscodeItems
 }
 
 const pickNeededAlphabetical = `-- name: PickNeededAlphabetical :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE ti.state = 'needed' AND ti.category_id = ? AND ti.kind = ?
@@ -466,6 +466,7 @@ type PickNeededAlphabeticalParams struct {
 
 type PickNeededAlphabeticalRow struct {
 	MediaObjectID int64
+	Lane          string
 	LastRunSeq    int64
 	Interrupted   int64
 	RootFolderID  int64
@@ -483,6 +484,7 @@ func (q *Queries) PickNeededAlphabetical(ctx context.Context, arg PickNeededAlph
 		var i PickNeededAlphabeticalRow
 		if err := rows.Scan(
 			&i.MediaObjectID,
+			&i.Lane,
 			&i.LastRunSeq,
 			&i.Interrupted,
 			&i.RootFolderID,
@@ -502,7 +504,7 @@ func (q *Queries) PickNeededAlphabetical(ctx context.Context, arg PickNeededAlph
 }
 
 const pickNeededFarAway = `-- name: PickNeededFarAway :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE ti.state = 'needed' AND ti.category_id = ? AND ti.kind = ?
@@ -521,6 +523,7 @@ type PickNeededFarAwayParams struct {
 
 type PickNeededFarAwayRow struct {
 	MediaObjectID int64
+	Lane          string
 	LastRunSeq    int64
 	Interrupted   int64
 	RootFolderID  int64
@@ -545,6 +548,7 @@ func (q *Queries) PickNeededFarAway(ctx context.Context, arg PickNeededFarAwayPa
 		var i PickNeededFarAwayRow
 		if err := rows.Scan(
 			&i.MediaObjectID,
+			&i.Lane,
 			&i.LastRunSeq,
 			&i.Interrupted,
 			&i.RootFolderID,
@@ -564,7 +568,7 @@ func (q *Queries) PickNeededFarAway(ctx context.Context, arg PickNeededFarAwayPa
 }
 
 const pickNeededFound = `-- name: PickNeededFound :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE ti.state = 'needed' AND ti.category_id = ? AND ti.kind = ?
@@ -580,6 +584,7 @@ type PickNeededFoundParams struct {
 
 type PickNeededFoundRow struct {
 	MediaObjectID int64
+	Lane          string
 	LastRunSeq    int64
 	Interrupted   int64
 	RootFolderID  int64
@@ -597,6 +602,7 @@ func (q *Queries) PickNeededFound(ctx context.Context, arg PickNeededFoundParams
 		var i PickNeededFoundRow
 		if err := rows.Scan(
 			&i.MediaObjectID,
+			&i.Lane,
 			&i.LastRunSeq,
 			&i.Interrupted,
 			&i.RootFolderID,
@@ -616,7 +622,7 @@ func (q *Queries) PickNeededFound(ctx context.Context, arg PickNeededFoundParams
 }
 
 const pickNeededLargest = `-- name: PickNeededLargest :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -633,6 +639,7 @@ type PickNeededLargestParams struct {
 
 type PickNeededLargestRow struct {
 	MediaObjectID int64
+	Lane          string
 	LastRunSeq    int64
 	Interrupted   int64
 	RootFolderID  int64
@@ -650,6 +657,7 @@ func (q *Queries) PickNeededLargest(ctx context.Context, arg PickNeededLargestPa
 		var i PickNeededLargestRow
 		if err := rows.Scan(
 			&i.MediaObjectID,
+			&i.Lane,
 			&i.LastRunSeq,
 			&i.Interrupted,
 			&i.RootFolderID,
@@ -669,7 +677,7 @@ func (q *Queries) PickNeededLargest(ctx context.Context, arg PickNeededLargestPa
 }
 
 const pickNeededNewest = `-- name: PickNeededNewest :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -686,6 +694,7 @@ type PickNeededNewestParams struct {
 
 type PickNeededNewestRow struct {
 	MediaObjectID int64
+	Lane          string
 	LastRunSeq    int64
 	Interrupted   int64
 	RootFolderID  int64
@@ -703,6 +712,7 @@ func (q *Queries) PickNeededNewest(ctx context.Context, arg PickNeededNewestPara
 		var i PickNeededNewestRow
 		if err := rows.Scan(
 			&i.MediaObjectID,
+			&i.Lane,
 			&i.LastRunSeq,
 			&i.Interrupted,
 			&i.RootFolderID,
@@ -722,7 +732,7 @@ func (q *Queries) PickNeededNewest(ctx context.Context, arg PickNeededNewestPara
 }
 
 const pickNeededOldest = `-- name: PickNeededOldest :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -739,6 +749,7 @@ type PickNeededOldestParams struct {
 
 type PickNeededOldestRow struct {
 	MediaObjectID int64
+	Lane          string
 	LastRunSeq    int64
 	Interrupted   int64
 	RootFolderID  int64
@@ -756,6 +767,7 @@ func (q *Queries) PickNeededOldest(ctx context.Context, arg PickNeededOldestPara
 		var i PickNeededOldestRow
 		if err := rows.Scan(
 			&i.MediaObjectID,
+			&i.Lane,
 			&i.LastRunSeq,
 			&i.Interrupted,
 			&i.RootFolderID,
@@ -775,7 +787,7 @@ func (q *Queries) PickNeededOldest(ctx context.Context, arg PickNeededOldestPara
 }
 
 const pickNeededSmallest = `-- name: PickNeededSmallest :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -792,6 +804,7 @@ type PickNeededSmallestParams struct {
 
 type PickNeededSmallestRow struct {
 	MediaObjectID int64
+	Lane          string
 	LastRunSeq    int64
 	Interrupted   int64
 	RootFolderID  int64
@@ -809,6 +822,7 @@ func (q *Queries) PickNeededSmallest(ctx context.Context, arg PickNeededSmallest
 		var i PickNeededSmallestRow
 		if err := rows.Scan(
 			&i.MediaObjectID,
+			&i.Lane,
 			&i.LastRunSeq,
 			&i.Interrupted,
 			&i.RootFolderID,

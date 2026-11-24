@@ -274,6 +274,7 @@ const (
 // TranscodePick is a candidate for the dispatcher.
 type TranscodePick struct {
 	MediaObjectID, LastRunSeq, RootFolderID int64
+	Lane                                    string
 	Interrupted                             bool
 	RelPath                                 string
 }
@@ -282,8 +283,8 @@ type TranscodePick struct {
 func (t TranscodeItems) Pick(ctx context.Context, order TranscodeOrder, categoryID int64, kind string, limit int64) ([]TranscodePick, error) {
 	reader := librarydb.New(t.store.Read())
 	var picks []TranscodePick
-	add := func(id, seq, root, interrupted int64, path string) {
-		picks = append(picks, TranscodePick{MediaObjectID: id, LastRunSeq: seq, RootFolderID: root, Interrupted: interrupted == 1, RelPath: path})
+	add := func(id int64, lane string, seq, root, interrupted int64, path string) {
+		picks = append(picks, TranscodePick{MediaObjectID: id, Lane: lane, LastRunSeq: seq, RootFolderID: root, Interrupted: interrupted == 1, RelPath: path})
 	}
 	var err error
 	switch order {
@@ -291,37 +292,37 @@ func (t TranscodeItems) Pick(ctx context.Context, order TranscodeOrder, category
 		var rows []librarydb.PickNeededLargestRow
 		rows, err = reader.PickNeededLargest(ctx, librarydb.PickNeededLargestParams{CategoryID: categoryID, Kind: kind, Limit: limit})
 		for _, r := range rows {
-			add(r.MediaObjectID, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
+			add(r.MediaObjectID, r.Lane, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
 		}
 	case OrderSmallest:
 		var rows []librarydb.PickNeededSmallestRow
 		rows, err = reader.PickNeededSmallest(ctx, librarydb.PickNeededSmallestParams{CategoryID: categoryID, Kind: kind, Limit: limit})
 		for _, r := range rows {
-			add(r.MediaObjectID, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
+			add(r.MediaObjectID, r.Lane, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
 		}
 	case OrderOldest:
 		var rows []librarydb.PickNeededOldestRow
 		rows, err = reader.PickNeededOldest(ctx, librarydb.PickNeededOldestParams{CategoryID: categoryID, Kind: kind, Limit: limit})
 		for _, r := range rows {
-			add(r.MediaObjectID, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
+			add(r.MediaObjectID, r.Lane, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
 		}
 	case OrderNewest:
 		var rows []librarydb.PickNeededNewestRow
 		rows, err = reader.PickNeededNewest(ctx, librarydb.PickNeededNewestParams{CategoryID: categoryID, Kind: kind, Limit: limit})
 		for _, r := range rows {
-			add(r.MediaObjectID, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
+			add(r.MediaObjectID, r.Lane, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
 		}
 	case OrderFound:
 		var rows []librarydb.PickNeededFoundRow
 		rows, err = reader.PickNeededFound(ctx, librarydb.PickNeededFoundParams{CategoryID: categoryID, Kind: kind, Limit: limit})
 		for _, r := range rows {
-			add(r.MediaObjectID, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
+			add(r.MediaObjectID, r.Lane, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
 		}
 	default:
 		var rows []librarydb.PickNeededAlphabeticalRow
 		rows, err = reader.PickNeededAlphabetical(ctx, librarydb.PickNeededAlphabeticalParams{CategoryID: categoryID, Kind: kind, Limit: limit})
 		for _, r := range rows {
-			add(r.MediaObjectID, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
+			add(r.MediaObjectID, r.Lane, r.LastRunSeq, r.RootFolderID, r.Interrupted, r.RelPath)
 		}
 	}
 	if err != nil {
@@ -340,7 +341,7 @@ func (t TranscodeItems) PickFarAway(ctx context.Context, categoryID int64, kind 
 	}
 	picks := make([]TranscodePick, len(rows))
 	for i, r := range rows {
-		picks[i] = TranscodePick{MediaObjectID: r.MediaObjectID, LastRunSeq: r.LastRunSeq, RootFolderID: r.RootFolderID, Interrupted: r.Interrupted == 1, RelPath: r.RelPath}
+		picks[i] = TranscodePick{MediaObjectID: r.MediaObjectID, Lane: r.Lane, LastRunSeq: r.LastRunSeq, RootFolderID: r.RootFolderID, Interrupted: r.Interrupted == 1, RelPath: r.RelPath}
 	}
 	return picks, nil
 }

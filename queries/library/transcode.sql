@@ -54,7 +54,7 @@ ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
 -- name: PickNeededAlphabetical :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE ti.state = 'needed' AND ti.category_id = ? AND ti.kind = ?
@@ -62,7 +62,7 @@ ORDER BY ti.interrupted DESC, lp.rel_path, ti.media_object_id
 LIMIT ?;
 
 -- name: PickNeededLargest :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -71,7 +71,7 @@ ORDER BY ti.interrupted DESC, o.size_bytes DESC, ti.media_object_id
 LIMIT ?;
 
 -- name: PickNeededSmallest :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -80,7 +80,7 @@ ORDER BY ti.interrupted DESC, o.size_bytes, ti.media_object_id
 LIMIT ?;
 
 -- name: PickNeededOldest :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -89,7 +89,7 @@ ORDER BY ti.interrupted DESC, o.first_seen_at, ti.media_object_id
 LIMIT ?;
 
 -- name: PickNeededNewest :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -98,7 +98,7 @@ ORDER BY ti.interrupted DESC, o.first_seen_at DESC, ti.media_object_id
 LIMIT ?;
 
 -- name: PickNeededFound :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE ti.state = 'needed' AND ti.category_id = ? AND ti.kind = ?
@@ -107,7 +107,7 @@ LIMIT ?;
 
 -- The far end of the alphabet outside one top-level folder: a probe after failures must not land next to the files that failed.
 -- name: PickNeededFarAway :many
-SELECT ti.media_object_id, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
+SELECT ti.media_object_id, ti.lane, ti.last_run_seq, ti.interrupted, lp.root_folder_id, lp.rel_path
 FROM transcode_item ti
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE ti.state = 'needed' AND ti.category_id = ? AND ti.kind = ?
