@@ -24,7 +24,7 @@ func buildInput(file transcode.File, target settings.QualityTarget, encoder tran
 	setup := settings.DefaultTranscodeSetup(target)
 	return transcoder.BuildInput{
 		File: file, Plan: transcoder.Analyze(file, target, setup, transcoder.WantedLanguages(target, nil)), Target: target, Setup: setup,
-		Pass: transcoder.PassSettings{Marker: "marker"}, Encoder: encoder, Input: "/in", Output: "/out",
+		Marker: "marker", Encoder: encoder, Input: "/in", Output: "/out",
 	}
 }
 
@@ -71,10 +71,15 @@ func TestBuildSpec_BitrateModeCapsAtTheSourceAndAPassOverridesIt(t *testing.T) {
 	if got := transcoder.BuildSpec(in).Video[0].Rate; got.Mode != transcode.RateModeBitrate || got.BitrateKbps != 1500 {
 		t.Errorf("rate = %+v, want 1500 kbit/s: never above the source", got)
 	}
-	in.Pass.BitrateKbps = 1200
+	in.Pass.VideoBitrateKbps = 1200
 	if got := transcoder.BuildSpec(in).Video[0].Rate.BitrateKbps; got != 1200 {
 		t.Errorf("pass bitrate = %d, want 1200", got)
 	}
+	in.Pass.Scale = 0.5
+	if got := transcoder.BuildSpec(in).Video[0].Rate.BitrateKbps; got != 600 {
+		t.Errorf("scaled bitrate = %d, want 600", got)
+	}
+	in.Pass.Scale = 0
 	in.Setup.Encode.RateMode, in.Setup.Encode.Quality, in.Pass.Quality = settings.RateQuality, 28, 31
 	if got := transcoder.BuildSpec(in).Video[0].Rate; got.Mode != transcode.RateModeQuality || got.Quality != 31 {
 		t.Errorf("pass quality = %+v, want 31", got)

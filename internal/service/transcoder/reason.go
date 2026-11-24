@@ -54,6 +54,17 @@ const (
 	ReasonContainerCannot   ReasonCode = "container_cannot_hold"
 )
 
+// Reasons a finished conversion is refused, or passes with a note (below_range and range_unknown are reused).
+const (
+	ReasonUnreadable       ReasonCode = "result_unreadable"
+	ReasonStreamCount      ReasonCode = "stream_count"
+	ReasonAudioMissing     ReasonCode = "audio_missing"
+	ReasonDuration         ReasonCode = "duration_mismatch"
+	ReasonResultLarger     ReasonCode = "result_larger"
+	ReasonResultAboveRange ReasonCode = "result_above_range"
+	ReasonResultAboveMax   ReasonCode = "result_above_max"
+)
+
 // Reason is structured, never a formatted string; Stream is -1 for the file.
 type Reason struct {
 	Code   ReasonCode `json:"code"`

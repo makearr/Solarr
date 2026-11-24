@@ -8,22 +8,15 @@ import (
 	"github.com/makearr/Solarr/internal/platform/transcode"
 )
 
-// PassSettings is what one pass of the ladder changes: a quality or bitrate of its own, and the marker it writes.
-type PassSettings struct {
-	// Quality is in software CRF terms; 0 takes the setup's.
-	Quality float64
-	// BitrateKbps replaces the planned video bitrate when above 0.
-	BitrateKbps int64
-	Marker      string
-}
-
 // BuildInput is everything BuildSpec turns into ffmpeg-side values.
 type BuildInput struct {
-	File    transcode.File
-	Plan    Plan
-	Target  settings.QualityTarget
-	Setup   settings.TranscodeSetup
-	Pass    PassSettings
+	File   transcode.File
+	Plan   Plan
+	Target settings.QualityTarget
+	Setup  settings.TranscodeSetup
+	Pass   PassSettings
+	// Marker is the SOLARR_TRANSCODED value this conversion writes.
+	Marker  string
 	Encoder transcode.EncoderSupport
 	Device  string
 	// FullGPU keeps frames on the GPU; the caller asks transcode.CanRunOnGPU first.
@@ -44,7 +37,7 @@ func BuildSpec(in BuildInput) transcode.ConvertSpec {
 	plan, setup := in.Plan, in.Setup
 	spec := transcode.ConvertSpec{
 		Input: in.Input, Output: in.Output, Container: plan.Container, Engine: in.Encoder.Engine, Device: in.Device,
-		FullGPU: in.FullGPU, Tolerant: in.Tolerant, Marker: in.Pass.Marker, Kind: transcode.Audio,
+		FullGPU: in.FullGPU, Tolerant: in.Tolerant, Marker: in.Marker, Kind: transcode.Audio,
 	}
 	if len(plan.Video) > 0 {
 		spec.Kind = transcode.Video
@@ -57,7 +50,7 @@ func BuildSpec(in BuildInput) transcode.ConvertSpec {
 		spec.Video = append(spec.Video, videoOut(in, stream, sources[stream.Index]))
 	}
 	for _, stream := range plan.Audio {
-		spec.Audio = append(spec.Audio, audioOut(setup.Audio, stream, sources[stream.Index]))
+		spec.Audio = append(spec.Audio, audioOut(setup.Audio, stream, sources[stream.Index], in.Pass.BitrateScale()))
 	}
 	for _, stream := range plan.Subtitles {
 		if stream.Action == ActionDrop {
@@ -98,9 +91,9 @@ func videoOut(in BuildInput, stream StreamPlan, source transcode.Stream) transco
 	if stream.Action == ActionCopy {
 		return transcode.VideoOut{Index: stream.Index, Copy: true}
 	}
-	setup, encode := in.Setup, in.Setup.Encode
+	setup := in.Setup
 	out := transcode.VideoOut{
-		Index: stream.Index, Encoder: in.Encoder.Encoder, Preset: string(encode.Preset),
+		Index: stream.Index, Encoder: in.Encoder.Encoder, Preset: preset(in),
 		TenBit: stream.BitDepth > 8 && in.Encoder.TenBit, HDR: string(stream.HDR),
 		Filters: videoFilters(setup.Video, source.Interlaced, in.Target.Deinterlace),
 	}
@@ -127,12 +120,13 @@ func rateControl(in BuildInput, stream StreamPlan, source transcode.Stream) tran
 	if encode.RateMode == settings.RateBitrate {
 		rate.Mode = transcode.RateModeBitrate
 		rate.BitrateKbps = stream.BitrateKbps
-		if in.Pass.BitrateKbps > 0 {
-			rate.BitrateKbps = in.Pass.BitrateKbps
+		if in.Pass.VideoBitrateKbps > 0 {
+			rate.BitrateKbps = in.Pass.VideoBitrateKbps
 		}
 		if sourceKbps := source.BitrateBps / 1000; sourceKbps > 0 && sourceKbps < rate.BitrateKbps {
 			rate.BitrateKbps = sourceKbps
 		}
+		rate.BitrateKbps = int64(float64(rate.BitrateKbps) * in.Pass.BitrateScale())
 		return rate
 	}
 	rate.Mode = transcode.RateModeQuality
@@ -145,6 +139,14 @@ func rateControl(in BuildInput, stream StreamPlan, source transcode.Stream) tran
 	}
 	rate.Quality = math.Min(math.Max(rate.Quality, 1), maxQuality(in.Encoder.Codec))
 	return rate
+}
+
+// preset is the pass's preset, else the setup's.
+func preset(in BuildInput) string {
+	if in.Pass.Preset != "" {
+		return in.Pass.Preset
+	}
+	return string(in.Setup.Encode.Preset)
 }
 
 func videoFilters(filters settings.VideoFilters, interlaced, targetDeinterlace bool) []transcode.VideoFilter {
@@ -176,13 +178,13 @@ func videoFilters(filters settings.VideoFilters, interlaced, targetDeinterlace b
 	return out
 }
 
-func audioOut(filters settings.AudioFilters, stream StreamPlan, source transcode.Stream) transcode.AudioOut {
+func audioOut(filters settings.AudioFilters, stream StreamPlan, source transcode.Stream, scale float64) transcode.AudioOut {
 	out := transcode.AudioOut{Index: stream.Index, Language: stream.Language, Title: stream.Title, Default: stream.Default}
 	if stream.Action == ActionCopy {
 		out.Copy = true
 		return out
 	}
-	out.Encoder, out.BitrateKbps, out.Channels, out.SampleRate = transcode.AudioEncoder(stream.Codec), stream.BitrateKbps, stream.Channels, stream.SampleRate
+	out.Encoder, out.BitrateKbps, out.Channels, out.SampleRate = transcode.AudioEncoder(stream.Codec), int64(float64(stream.BitrateKbps)*scale), stream.Channels, stream.SampleRate
 	add := func(kind transcode.AudioFilterKind, strength string) {
 		out.Filters = append(out.Filters, transcode.AudioFilter{Kind: kind, Strength: strength})
 	}
