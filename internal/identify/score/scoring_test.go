@@ -1,6 +1,11 @@
 package score
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	"github.com/makearr/Solarr/internal/identify/model"
+)
 
 func float64Ptr(value float64) *float64 { return &value }
 func stringPtr(value string) *string    { return &value }
@@ -120,5 +125,67 @@ func TestScoringRuleMatches_LyricsLanguageIsAListField(t *testing.T) {
 	}
 	if scoringRuleMatches(rule, Facts{}, nil) {
 		t.Error("a file with no stated lyrics language must not match")
+	}
+}
+
+func TestEvaluate_FreeleechAddsAScaledComponentAndNothingElseMoves(t *testing.T) {
+	profile := Profile{Compare: []string{"score"}}
+	facts := func(factor *float64) Facts { return Facts{Release: ReleaseFacts{DownloadVolumeFactor: factor}} }
+	weight := func(value float64) *float64 { return &value }
+	for _, tc := range []struct {
+		name    string
+		profile Profile
+		factor  *float64
+		want    []model.ScoreComponent
+	}{
+		{"freeleech at the default weight", profile, float64Ptr(0), []model.ScoreComponent{{Rule: "freeleech", Label: "freeleech", Delta: 1}}},
+		{"half freeleech is half the weight", profile, float64Ptr(0.5), []model.ScoreComponent{{Rule: "freeleech", Label: "freeleech", Delta: 0.5}}},
+		{"a normal download adds nothing", profile, float64Ptr(1), nil},
+		{"a download counted double is not penalised here", profile, float64Ptr(2), nil},
+		{"an indexer that does not say adds nothing", profile, nil, nil},
+		{"the profile's own weight", Profile{Compare: []string{"score"}, FreeleechScore: weight(4)}, float64Ptr(0), []model.ScoreComponent{{Rule: "freeleech", Label: "freeleech", Delta: 4}}},
+		{"a weight of zero switches it off", Profile{Compare: []string{"score"}, FreeleechScore: weight(0)}, float64Ptr(0), nil},
+	} {
+		got := Evaluate(tc.profile, facts(tc.factor), nil)
+		if !reflect.DeepEqual(got.Components, tc.want) {
+			t.Errorf("%s: components = %+v, want %+v", tc.name, got.Components, tc.want)
+		}
+	}
+}
+
+func TestEvaluate_FreeleechNeverMovesATierOrAnOutcome(t *testing.T) {
+	profile := Profile{Compare: []string{"video_codec", "score"}, Tiers: map[string][][]string{"video_codec": {{"hevc"}, {"h264"}}}}
+	free := Evaluate(profile, Facts{Release: ReleaseFacts{DownloadVolumeFactor: float64Ptr(0)}, File: FileFacts{VideoCodec: "h264"}}, nil)
+	paid := Evaluate(profile, Facts{File: FileFacts{VideoCodec: "hevc"}}, nil)
+	if free.Outcome != paid.Outcome || !reflect.DeepEqual(free.Gates, paid.Gates) {
+		t.Errorf("free %+v, paid %+v: freeleech changed a gate or the outcome", free, paid)
+	}
+	if winner, tier := model.Compare(free.Quality, paid.Quality); winner != 1 || tier != 0 {
+		t.Errorf("Compare = %d at tier %d, want the paid hevc ahead (1) decided by the codec tier (0)", winner, tier)
+	}
+	if free.Score() <= paid.Score() {
+		t.Errorf("score %v vs %v: the freeleech release has no score edge", free.Score(), paid.Score())
+	}
+}
+
+func TestValidateStrict_FreeleechScoreMustBeWithinBounds(t *testing.T) {
+	for document, wantProblems := range map[string]int{
+		`{"freeleech_score": 3}`: 0, `{"freeleech_score": 0}`: 0, `{"freeleech_score": -1}`: 1, `{"freeleech_score": 1001}`: 1,
+	} {
+		if got := ValidateStrict([]byte(document)); len(got) != wantProblems {
+			t.Errorf("%s: problems = %+v, want %d", document, got, wantProblems)
+		}
+	}
+}
+
+func TestEvaluate_AFreeleechReleaseHasTheWholeDecisionAsData(t *testing.T) {
+	got := Evaluate(Profile{Compare: []string{"score"}}, Facts{Release: ReleaseFacts{DownloadVolumeFactor: float64Ptr(0.5)}}, nil)
+	want := model.Decision{
+		Outcome:    model.OutcomeAccept,
+		Quality:    model.QualityVector{Tiers: []model.TierValue{{Dimension: "score", Label: "n/a", Detail: "tie-break is the additive score stage, not a tier"}}},
+		Components: []model.ScoreComponent{{Rule: "freeleech", Label: "freeleech", Delta: 0.5}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("decision = %+v, want %+v", got, want)
 	}
 }

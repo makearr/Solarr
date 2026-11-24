@@ -84,6 +84,9 @@ func ValidateStrict(data []byte) []Problem {
 				"score, lossless, a field name, a tiers dimension or <number field>_distance")
 		}
 	}
+	if weight := profile.FreeleechScore; weight != nil && (*weight < 0 || *weight > MaxFreeleechScore || math.IsNaN(*weight)) {
+		add("freeleech_score", fmt.Sprint(*weight), "a score between 0 and 1000")
+	}
 	for ruleIndex, rule := range profile.Scoring {
 		if rule.Score < -1000 || rule.Score > 1000 || math.IsNaN(rule.Score) {
 			add(fmt.Sprintf("scoring[%d].score", ruleIndex), fmt.Sprint(rule.Score), "a score between -1000 and 1000")

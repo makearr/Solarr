@@ -1,6 +1,7 @@
 package score
 
 import (
+	"math"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -16,6 +17,26 @@ func evaluateScoring(rules []ScoringRule, facts Facts, preferred []string) []mod
 		}
 	}
 	return components
+}
+
+// FreeleechRule is the name and label of the freeleech component in a decision's breakdown.
+const FreeleechRule = "freeleech"
+
+// evaluateFreeleech adds the weight scaled by how much of the download the indexer does not count; no component for a full-volume or unstated download.
+func evaluateFreeleech(profile Profile, facts Facts) []model.ScoreComponent {
+	factor := facts.Release.DownloadVolumeFactor
+	if factor == nil || *factor >= 1 || math.IsNaN(*factor) {
+		return nil
+	}
+	weight := DefaultFreeleechScore
+	if profile.FreeleechScore != nil {
+		weight = *profile.FreeleechScore
+	}
+	delta := weight * (1 - max(*factor, 0))
+	if delta == 0 {
+		return nil
+	}
+	return []model.ScoreComponent{{Rule: FreeleechRule, Label: FreeleechRule, Delta: delta}}
 }
 
 // scoringRuleMatches follows the *Arr Custom Format model: every required spec

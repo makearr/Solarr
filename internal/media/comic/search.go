@@ -261,7 +261,7 @@ func heldNumbers(w wanted, claim parsecomic.Claim) []int {
 // ReleaseFacts stands what a release name claims in for the facts a profile judges: its archive format, source and group.
 func ReleaseFacts(claim parsecomic.Claim, raw indexer.RawItem, impl string) score.Facts {
 	return score.Facts{
-		Release: score.ReleaseFacts{Title: raw.Title, ReleaseGroup: claim.Group, Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl)},
+		Release: score.ReleaseFacts{Title: raw.Title, ReleaseGroup: claim.Group, Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl), DownloadVolumeFactor: raw.DownloadVolumeFactor},
 		File: score.FileFacts{
 			Extension: claim.Extension, Container: claim.Extension, Source: claim.Source, ReleaseGroup: claim.Group,
 			ProperRepack: claim.Edition == "repack" || claim.Edition == "proper" || claim.Edition == "fixed",

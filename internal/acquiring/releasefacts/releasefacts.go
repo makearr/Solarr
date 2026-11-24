@@ -19,7 +19,7 @@ import (
 // FromRelease stands a release name's claims in for measured facts.
 func FromRelease(claims parsetv.Claims, releaseGroup string, raw indexer.RawItem, impl string) score.Facts {
 	facts := score.Facts{
-		Release: score.ReleaseFacts{Title: raw.Title, ReleaseGroup: releaseGroup, Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl)},
+		Release: score.ReleaseFacts{Title: raw.Title, ReleaseGroup: releaseGroup, Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl), DownloadVolumeFactor: raw.DownloadVolumeFactor},
 		File: score.FileFacts{
 			Source: Source(claims), VideoCodec: claims.VideoCodec, HDR: claims.HDR, AudioCodec: claims.AudioCodec,
 			AudioChannels: claims.AudioChannels, AudioLanguages: claims.Languages, ReleaseGroup: releaseGroup, ProperRepack: claims.Version > 1,

@@ -18,7 +18,15 @@ type Profile struct {
 	// Targets keys on a dimension name; any numeric dimension may carry one (ADR-40), and a dimension absent here keeps plain higher-is-better comparison.
 	Targets map[string][]Target `json:"targets"`
 	Scoring []ScoringRule       `json:"scoring"`
+	// FreeleechScore is what a fully free download adds to the score (half free adds half); nil means DefaultFreeleechScore, 0 switches it off.
+	FreeleechScore *float64 `json:"freeleech_score,omitempty"`
 }
+
+// DefaultFreeleechScore is small beside a language or group preference (2), and the score only ever breaks ties the tiers left open.
+const DefaultFreeleechScore = 1.0
+
+// MaxFreeleechScore bounds the editable weight like a scoring rule's score.
+const MaxFreeleechScore = 1000.0
 
 // Requirements is ADR-40 stage 1 -- every entry is evaluated, never short-circuited,
 // so a rejected candidate's UI can show everything wrong at once.

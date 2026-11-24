@@ -43,7 +43,7 @@ describe("quality rules", () => {
       buildAudioRules("", "AAC 256", {
         codecs: [["aac"]], extensions: [], containers: [["mp4"]], channels: [], rejectCodecs: [],
         bitrates: [{ codec: "aac", min: "224", ideal: "256", max: "320" }], sampleRate: null, bitDepth: null,
-        languages: { audio: [], lyrics: [], subtitle: [] }, preferredGroups: [],
+        languages: { audio: [], lyrics: [], subtitle: [] }, preferredGroups: [], freeleech: "",
       }),
     );
     expect(doc.compare).toEqual(["audio_codec", "container", "bitrate_distance", "score"]);
@@ -192,5 +192,16 @@ describe("size limits per quality", () => {
     expect(doc.require).toBeUndefined();
     expect(doc.targets).toBeUndefined();
     expect(doc.compare).toEqual(["resolution", "score"]);
+  });
+
+  it("keeps a freeleech weight through the form and drops it when emptied", () => {
+    const withWeight = '{"quality_profile":"x","compare":["score"],"freeleech_score":3}';
+    const rules = parseAudioRules(withWeight);
+    expect(rules.freeleech).toBe("3");
+    expect(JSON.parse(buildAudioRules(withWeight, "x", rules)).freeleech_score).toBe(3);
+    rules.freeleech = "";
+    expect(JSON.parse(buildAudioRules(withWeight, "x", rules)).freeleech_score).toBeUndefined();
+    rules.freeleech = "0";
+    expect(JSON.parse(buildVideoRules(withWeight, "x", { ...parseVideoRules(withWeight), freeleech: "0" })).freeleech_score).toBe(0);
   });
 });

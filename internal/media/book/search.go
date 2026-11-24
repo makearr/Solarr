@@ -149,7 +149,7 @@ var audioCodecOf = map[string]string{"m4b": "aac", "m4a": "aac", "aac": "aac", "
 // extension, and an audiobook's bitrate.
 func ReleaseFacts(format Format, info parsebook.Info, raw indexer.RawItem, impl string) score.Facts {
 	facts := score.Facts{
-		Release: score.ReleaseFacts{Title: raw.Title, ReleaseGroup: info.ReleaseGroup, Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl)},
+		Release: score.ReleaseFacts{Title: raw.Title, ReleaseGroup: info.ReleaseGroup, Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl), DownloadVolumeFactor: raw.DownloadVolumeFactor},
 		File:    score.FileFacts{ReleaseGroup: info.ReleaseGroup, ProperRepack: info.Version > 1},
 	}
 	for _, claimed := range info.Formats {

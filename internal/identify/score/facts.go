@@ -17,6 +17,8 @@ type ReleaseFacts struct {
 	Seeders      int
 	Leechers     int
 	Protocol     string // "usenet" | "torrent" | "ddl"
+	// DownloadVolumeFactor is how much of the download an indexer counts against the ratio: 0 freeleech, 0.5 half; nil when it does not say.
+	DownloadVolumeFactor *float64
 }
 
 // FileFacts mirrors library.db's media_attributes table (measured half, ADR-39) --

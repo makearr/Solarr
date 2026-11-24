@@ -10,7 +10,7 @@ func Evaluate(profile Profile, facts Facts, preferred []string) model.Decision {
 
 	gates, rejections, deferrals, outcome := evaluateGates(profile.Require, profile.Tiers, bitrate.target, bitrate.hasTarget, distances["overall_bitrate"], facts)
 	vector := buildQualityVector(profile.Compare, profile.Tiers, facts, distances)
-	components := evaluateScoring(profile.Scoring, facts, preferred)
+	components := append(evaluateScoring(profile.Scoring, facts, preferred), evaluateFreeleech(profile, facts)...)
 
 	return model.Decision{
 		Outcome:    outcome,

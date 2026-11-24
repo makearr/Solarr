@@ -452,6 +452,7 @@ function VideoRulesForm({ rules, onChange }: { rules: VideoRules; onChange: (rul
         onChange={(audioLanguages) => set({ audioLanguages })}
       />
       <PreferredGroups value={rules.preferredGroups} onChange={(preferredGroups) => set({ preferredGroups })} />
+      <FreeleechScore value={rules.freeleech} onChange={(freeleech) => set({ freeleech })} />
     </div>
   );
 }
@@ -576,6 +577,7 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
         ))}
       </fieldset>
       <PreferredGroups value={rules.preferredGroups} onChange={(preferredGroups) => set({ preferredGroups })} />
+      <FreeleechScore value={rules.freeleech} onChange={(freeleech) => set({ freeleech })} />
     </div>
   );
 }
@@ -640,6 +642,16 @@ function SizeRanges({ rules, onChange }: { rules: VideoRules; onChange: (patch: 
         A release shows its size over the episode's or film's length, so a release smaller than the minimum (starved) or larger than the maximum (bloated) is refused. One whose length is not known is not refused.
       </p>
     </fieldset>
+  );
+}
+
+function FreeleechScore({ value, onChange }: { value: string; onChange: (weight: string) => void }) {
+  return (
+    <label className={labelStyle}>
+      {t("qualityProfileEditor.freeleechScore")}
+      <input type="number" min={0} max={1000} step="any" inputMode="decimal" placeholder="1" value={value} onChange={(event) => onChange(event.target.value)} className={`${input} w-24`} />
+      <span className="text-xs text-ink-muted">{t("qualityProfileEditor.freeleechHelp")}</span>
+    </label>
   );
 }
 

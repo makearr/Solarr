@@ -561,7 +561,7 @@ func factsFromRelease(parsed parse.Result, raw indexer.RawItem, impl string) sco
 	facts := score.Facts{
 		Release: score.ReleaseFacts{
 			Title: raw.Title, ReleaseGroup: parsed.Attributes.ReleaseGroup,
-			Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl),
+			Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl), DownloadVolumeFactor: raw.DownloadVolumeFactor,
 		},
 		File: score.FileFacts{
 			AudioCodec: parsed.Attributes.Format, Lossless: parsed.Attributes.Lossless,

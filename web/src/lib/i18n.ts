@@ -847,6 +847,8 @@ const catalogue = {
   "qualityProfileEditor.useTheSuggestedLimits": "Use the suggested limits",
   "qualityProfileEditor.rankNearerThePreferred": "Rank nearer the preferred size first",
   "qualityProfileEditor.preferredReleaseGroups": "Preferred release groups",
+  "qualityProfileEditor.freeleechScore": "Freeleech bonus",
+  "qualityProfileEditor.freeleechHelp": "Added to the score of a release the indexer counts as free (half of it for half free), so it wins only between releases the quality tiers rate equal. Empty is 1; 0 switches it off.",
   "qualityProfileEditor.groupNameEnterTo": "Group name, Enter to add",
   "qualityProfileEditor.addAPreferredRelease": "Add a preferred release group",
   "qualityTargets.overAndUnderThe": "Over and under the target",

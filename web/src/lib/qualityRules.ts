@@ -33,12 +33,15 @@ export interface AudioRules {
   languages: LanguagePreferences;
   /** Release groups that rank above an otherwise equal release, as in a video profile. */
   preferredGroups: string[];
+  /** What a free download adds to the score, as typed; empty keeps the server default. */
+  freeleech: string;
 }
 
 type Target = { when?: Record<string, string>; min?: string; ideal: string; max?: string; weights?: unknown };
 type ScoringRule = { name: string; score: number; specs: { field: string; has?: string; eq?: string; required?: boolean }[] };
 type Document = {
   scoring?: ScoringRule[];
+  freeleech_score?: number;
   quality_profile?: string;
   require?: { reject_codecs?: string[]; [key: string]: unknown };
   compare?: string[];
@@ -137,6 +140,7 @@ export function parseAudioRules(json: string): AudioRules {
     bitDepth: range(doc.targets?.bit_depth?.[0]),
     languages: parseLanguages(doc),
     preferredGroups: parseGroups(doc),
+    freeleech: doc.freeleech_score === undefined ? "" : String(doc.freeleech_score),
   };
 }
 
@@ -209,8 +213,16 @@ export function buildAudioRules(json: string, name: string, rules: AudioRules): 
   scoring.push(...groupRules(rules.preferredGroups));
   if (scoring.length > 0) doc.scoring = scoring;
   else delete doc.scoring;
+  setFreeleech(doc, rules.freeleech);
 
   return JSON.stringify(doc);
+}
+
+// An empty or unreadable weight leaves the server's default in force.
+function setFreeleech(doc: Document, typed: string) {
+  const weight = typed.trim() === "" ? Number.NaN : Number(typed);
+  if (Number.isFinite(weight)) doc.freeleech_score = weight;
+  else delete doc.freeleech_score;
 }
 
 // An empty section is left out, as the shipped profiles leave out what they do not use.
@@ -248,6 +260,8 @@ export interface VideoRules {
   /** Audio languages of which at least one must be present; empty means no gate. */
   audioLanguages: string[];
   preferredGroups: string[];
+  /** What a free download adds to the score, as typed; empty keeps the server default. */
+  freeleech: string;
   /** The file types (container formats) in the order they rank. */
   containers: string[][];
   /** What the numbers aim for: kbit/s for the bitrates, frames a second for the rate; null ranks them as measured. */
@@ -332,6 +346,7 @@ export function parseVideoRules(json: string): VideoRules {
     maxResolution: doc.require?.resolution?.max ?? "",
     audioLanguages: doc.require?.audio_language?.any_of ?? [],
     preferredGroups: parseGroups(doc),
+    freeleech: doc.freeleech_score === undefined ? "" : String(doc.freeleech_score),
     containers: canonicalTiers(doc.tiers?.container ?? []),
     videoBitrate: range(doc.targets?.video_bitrate?.[0], "kbps"),
     audioBitrate: range(doc.targets?.audio_bitrate?.[0], "kbps"),
@@ -408,6 +423,7 @@ export function buildVideoRules(json: string, name: string, rules: VideoRules): 
   scoring.push(...groupRules(rules.preferredGroups));
   if (scoring.length > 0) doc.scoring = scoring;
   else delete doc.scoring;
+  setFreeleech(doc, rules.freeleech);
 
   return JSON.stringify(doc);
 }

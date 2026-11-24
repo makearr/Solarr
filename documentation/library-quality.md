@@ -52,6 +52,10 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   (resolution, codec, CRF and video bitrate weigh most; a number loses a quarter per half-octave away; a part the probe or
   release name does not state is left out). A library file shows its size against the target: the bitrate a file on the target would have (video plus audio bitrate, 1.5% container overhead, 1 kbit/s per wanted subtitle language) against its own overall bitrate, as "94% of the target", "53%, below the target" or "618% above the target", coloured green within 10% off, yellow to 25%, orange to 50%, red beyond (off is the same for a factor and its inverse: half and double are both 50%). Resolution, video and audio codec, audio and subtitle language tags carry green, yellow (right codec at another bitrate or layout, resolution in the same bracket) or red (`quality.Fits`); a missing subtitle track is never red. Insights lists how many files are in each band and the files furthest off (`GET /categories/{id}/target-size`). The gaps are on hover; a candidate's
   decision carries a zero-point `target-closeness` component. The closeness ranks nothing; the tiers below do.
+  **Freeleech** is an additive score fact: a release whose indexer reports a download volume factor below 1 (0 free, 0.5 half)
+  gets a `freeleech` component of `freeleech_score` x (1 - factor) in its decision; the profile key defaults to 1 (a language or
+  group preference is 2), 0 switches it off, and the editor has a "Freeleech bonus" field. It sits in the score, which only
+  breaks ties the tiers left open, so a free release never beats a better quality.
   **Content profiles** (migration 0064; Quality profiles > Content profiles) are what kind of material a target is for:
   video 4K, Sports, Anime, Old movies, TV series, Cartoon, CRT / VHS; audio Radio, CD, Lossless, Spoken, Spoken (mono).
   A profile carries suggested settings (resolution, CRF, encoder tune such as animation or grain, deinterlace, channels, rates)
