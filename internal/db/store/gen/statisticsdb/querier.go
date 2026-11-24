@@ -11,6 +11,8 @@ import (
 type Querier interface {
 	// Adds to what an hour already holds.
 	AddTaskHour(ctx context.Context, arg AddTaskHourParams) error
+	// Conversion savings, added to as files finish (a restore adds the negative of what it undoes).
+	AddTranscodeStat(ctx context.Context, arg AddTranscodeStatParams) error
 	// Release decisions since a time, per library and outcome.
 	AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error)
 	// Downloads, bytes and seconds per client since a time.
@@ -48,6 +50,7 @@ type Querier interface {
 	// One library's current figures of a metric.
 	ListStatRollupForCategory(ctx context.Context, arg ListStatRollupForCategoryParams) ([]StatRollup, error)
 	ListTaskHoursSince(ctx context.Context, since int64) ([]TaskHour, error)
+	ListTranscodeStatTotals(ctx context.Context) ([]ListTranscodeStatTotalsRow, error)
 	MoveHistoryToWork(ctx context.Context, arg MoveHistoryToWorkParams) error
 	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error

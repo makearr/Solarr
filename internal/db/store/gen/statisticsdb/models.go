@@ -97,3 +97,14 @@ type TaskHour struct {
 	RunMs     int64
 	Runs      int64
 }
+
+type TranscodeStat struct {
+	CategoryID    int64
+	Day           int64
+	Kind          string
+	Files         int64
+	OriginalBytes int64
+	ResultBytes   int64
+	EncodeSeconds int64
+	Failed        int64
+}
