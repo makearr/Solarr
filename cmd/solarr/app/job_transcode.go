@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/platform/comicrepack"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 
@@ -31,7 +33,7 @@ func (p *process) transcodeService() *transcoder.Service {
 		snapshot := func() settings.TranscodeGlobal { return p.cache.Snapshot().TranscodeGlobal() }
 		p.pipeline = &transcoder.Service{
 			Items: library.NewTranscodeItems(p.library, cl), Settings: transcodeSettings{cache: p.cache}, Hardware: p.transcoder,
-			Devices: p.transcoder.DeviceFor, Prober: p.transcoder, Tagger: transcodeTagger{tool: p.tool},
+			Devices: p.transcoder.DeviceFor, Prober: p.transcoder, Tagger: transcodeTagger{tool: p.tool}, Comics: transcodeComics{fsys: p.fsys},
 			Bin:      transcodeBin{RecycleBin: library.NewRecycleBin(p.library, p.fsys, cl).WithOnline(p.rootOnline)},
 			Reporter: transcodeReporter{logger: p.logger, stats: statistics.NewTranscodes(p.statistics), history: statistics.NewHistory(p.statistics), bus: p.bus},
 			Starter:  transcode.ExecStarter{Nice: mediatool.Nice{Level: 19}, IONice: mediatool.IONice{Class: 3}, Clock: cl},
@@ -48,6 +50,17 @@ func (p *process) transcodeService() *transcoder.Service {
 		}
 	})
 	return p.pipeline
+}
+
+// transcodeComics reads a comic archive's pages for the conversion's analysis.
+type transcodeComics struct{ fsys fsx.FS }
+
+func (c transcodeComics) ProbeComic(ctx context.Context, absolute string) (transcoder.ComicFacts, error) {
+	pages, err := comicrepack.Measure(ctx, c.fsys, absolute)
+	if err != nil {
+		return transcoder.ComicFacts{}, err
+	}
+	return transcoder.ComicFacts{Pages: pages.Count, MedianLong: pages.MedianLong, MedianShort: pages.MedianShort, ImageFormat: pages.Format}, nil
 }
 
 // transcodeBin adds the lookup by original path to the recycle bin.

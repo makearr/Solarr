@@ -38,7 +38,7 @@ func (s *Server) transcodeSettings(r *http.Request) (gen.TranscodeSettings, erro
 			CategoryId: row.CategoryID, Name: row.Name, MediaType: row.MediaType, Enabled: row.Enabled, Priority: int(row.Priority), Order: order, Supported: row.Supported(),
 		}
 		if target := row.Target; target != nil {
-			id, name, kind := target.ID, target.Name, gen.TranscodeLibraryTargetKind(target.TranscodeKind())
+			id, name, kind := target.ID, target.Name, gen.TranscodeLibraryTargetKind(row.Kind())
 			library.TargetId, library.TargetName, library.TargetKind = &id, &name, &kind
 		}
 		out.Libraries = append(out.Libraries, library)
@@ -133,7 +133,7 @@ func (s *Server) SetTranscodeLibrary(w http.ResponseWriter, r *http.Request, cat
 	}
 	if !current.Supported() {
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Not supported",
-			"transcoding needs a library with an audio or video quality target")
+			"transcoding needs a library with an audio, video or comics quality target")
 		return
 	}
 	row := settings.CategoryTranscode{CategoryID: categoryID, Enabled: body.Enabled, Priority: int64(body.Priority), Order: settings.TranscodeOrder(body.Order)}

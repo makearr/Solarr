@@ -1157,6 +1157,7 @@ const (
 // Defines values for TranscodeHealthKind.
 const (
 	TranscodeHealthKindAudio TranscodeHealthKind = "audio"
+	TranscodeHealthKindComic TranscodeHealthKind = "comic"
 	TranscodeHealthKindVideo TranscodeHealthKind = "video"
 )
 
@@ -1204,6 +1205,7 @@ const (
 // Defines values for TranscodeLibraryTargetKind.
 const (
 	TranscodeLibraryTargetKindAudio TranscodeLibraryTargetKind = "audio"
+	TranscodeLibraryTargetKindComic TranscodeLibraryTargetKind = "comic"
 	TranscodeLibraryTargetKindOther TranscodeLibraryTargetKind = "other"
 	TranscodeLibraryTargetKindVideo TranscodeLibraryTargetKind = "video"
 )
@@ -1527,6 +1529,7 @@ const (
 // Defines values for ResumeTranscodeKindParamsKind.
 const (
 	ResumeTranscodeKindParamsKindAudio ResumeTranscodeKindParamsKind = "audio"
+	ResumeTranscodeKindParamsKindComic ResumeTranscodeKindParamsKind = "comic"
 	ResumeTranscodeKindParamsKindVideo ResumeTranscodeKindParamsKind = "video"
 )
 
@@ -7649,13 +7652,13 @@ type TranscodeLibrary struct {
 	Order      TranscodeLibraryOrder `json:"order"`
 	Priority   int                   `json:"priority"`
 
-	// Supported True when the library has a video or audio target.
+	// Supported True when the library has a video
 	Supported bool `json:"supported"`
 
 	// TargetId The library's quality target; absent when it has none.
 	TargetId *int64 `json:"target_id"`
 
-	// TargetKind What the target converts to; 'other' (books, comics) is not supported.
+	// TargetKind What the library's files are converted as; 'other' (books) is not supported.
 	TargetKind *TranscodeLibraryTargetKind `json:"target_kind,omitempty"`
 	TargetName *string                     `json:"target_name,omitempty"`
 }
@@ -7663,7 +7666,7 @@ type TranscodeLibrary struct {
 // TranscodeLibraryOrder defines model for TranscodeLibrary.Order.
 type TranscodeLibraryOrder string
 
-// TranscodeLibraryTargetKind What the target converts to; 'other' (books, comics) is not supported.
+// TranscodeLibraryTargetKind What the library's files are converted as; 'other' (books) is not supported.
 type TranscodeLibraryTargetKind string
 
 // TranscodeLibraryRow defines model for TranscodeLibraryRow.

@@ -412,8 +412,8 @@ func (s *Server) ResumeTranscodeKind(w http.ResponseWriter, r *http.Request, kin
 	if !ok {
 		return
 	}
-	if kind != gen.ResumeTranscodeKindParamsKindVideo && kind != gen.ResumeTranscodeKindParamsKindAudio {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the kind is video or audio")
+	if kind != gen.ResumeTranscodeKindParamsKindVideo && kind != gen.ResumeTranscodeKindParamsKindAudio && kind != gen.ResumeTranscodeKindParamsKindComic {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the kind is video, audio or comic")
 		return
 	}
 	if err := pipeline.ResumeHealth(r.Context(), string(kind)); err != nil {

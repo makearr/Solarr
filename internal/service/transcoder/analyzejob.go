@@ -97,7 +97,22 @@ func (s *Service) Analyze(ctx context.Context, categoryID int64, progress *jobs.
 			return err
 		}
 		var judged []library.JudgedTranscodeItem
+		comics := one.Kind() == KindComic
 		for _, object := range page {
+			if comics != (object.Kind == filekindBook) {
+				continue
+			}
+			if comics {
+				judgement, judgeable, err := s.judgeComic(ctx, object, *one.Target)
+				if err != nil {
+					return err
+				}
+				if judgeable {
+					needed = needed || judgement.State == string(library.TranscodeNeeded)
+					judged = append(judged, judgedItem(object, categoryID, one.Target.ID, stored.Revision, KindComic, judgement))
+				}
+				continue
+			}
 			known := facts[object.MediaObjectID]
 			if !known.Measured {
 				continue
@@ -110,10 +125,7 @@ func (s *Service) Analyze(ctx context.Context, categoryID int64, progress *jobs.
 				return err
 			}
 			needed = needed || judgement.State == string(library.TranscodeNeeded)
-			judged = append(judged, library.JudgedTranscodeItem{
-				MediaObjectID: object.MediaObjectID, CategoryID: categoryID, TargetID: one.Target.ID, SetupRevision: stored.Revision, Kind: object.Kind,
-				Lane: judgement.Lane, State: library.TranscodeState(judgement.State), ReasonsJSON: judgement.ReasonsJSON, PlanJSON: judgement.PlanJSON, WarningsJSON: judgement.WarningsJSON,
-			})
+			judged = append(judged, judgedItem(object, categoryID, one.Target.ID, stored.Revision, object.Kind, judgement))
 		}
 		if err := s.Items.Judge(ctx, judged); err != nil {
 			return err
@@ -123,6 +135,16 @@ func (s *Service) Analyze(ctx context.Context, categoryID int64, progress *jobs.
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+	}
+}
+
+// filekindBook is the kind a comic archive is stored under in the library.
+const filekindBook = "book"
+
+func judgedItem(object library.ObjectToAnalyze, categoryID, targetID, revision int64, kind string, judgement Judgement) library.JudgedTranscodeItem {
+	return library.JudgedTranscodeItem{
+		MediaObjectID: object.MediaObjectID, CategoryID: categoryID, TargetID: targetID, SetupRevision: revision, Kind: kind,
+		Lane: judgement.Lane, State: library.TranscodeState(judgement.State), ReasonsJSON: judgement.ReasonsJSON, PlanJSON: judgement.PlanJSON, WarningsJSON: judgement.WarningsJSON,
 	}
 }
 

@@ -43,7 +43,7 @@ WHERE media_object_id = ?;
 -- name: SetTranscodeItemJournal :exec
 UPDATE transcode_item SET replace_stage = ?, work_path = ?, original_recycle_id = ?, updated_at = ? WHERE media_object_id = ?;
 
--- Audio and video files under the roots that were never judged, or were judged against another target or setup revision.
+-- Audio, video and book (comic) files under the roots that were never judged, or were judged against another target or setup revision.
 -- name: ListObjectsToAnalyze :many
 SELECT o.id, o.size_bytes, o.kind, lp.root_folder_id, lp.rel_path
 FROM media_object o
@@ -51,7 +51,7 @@ JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.m
 LEFT JOIN transcode_item ti ON ti.media_object_id = o.id
 WHERE o.id > sqlc.arg(after_id)
   AND lp.root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_ids)))
-  AND o.kind IN ('video', 'audio')
+  AND o.kind IN ('video', 'audio', 'book')
   AND (ti.media_object_id IS NULL OR (ti.state <> 'done' AND (ti.target_id <> sqlc.arg(target_id) OR ti.setup_revision <> sqlc.arg(setup_revision))))
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);

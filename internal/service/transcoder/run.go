@@ -166,10 +166,9 @@ func (s *Service) prepare(ctx context.Context, item library.TranscodeItem, progr
 		}
 		return nil, false, err
 	}
-	if run.source, err = s.probe(ctx, run.abs); err != nil {
+	if run.plan, err = s.planOf(ctx, run); err != nil {
 		return nil, false, err
 	}
-	run.plan = Analyze(run.source, run.target, run.setup(), run.wanted)
 	if run.plan.Verdict != Needed {
 		return nil, false, s.settleVerdict(ctx, run)
 	}
@@ -185,6 +184,18 @@ func (s *Service) prepare(ctx context.Context, item library.TranscodeItem, progr
 		return nil, false, s.release(ctx, id)
 	}
 	return run, true, nil
+}
+
+// planOf reads the file and judges it against the target and the setup.
+func (s *Service) planOf(ctx context.Context, run *fileRun) (Plan, error) {
+	if run.item.Kind == KindComic {
+		return s.comicPlan(ctx, run)
+	}
+	var err error
+	if run.source, err = s.probe(ctx, run.abs); err != nil {
+		return Plan{}, err
+	}
+	return Analyze(run.source, run.target, run.setup(), run.wanted), nil
 }
 
 // probe reads the file's streams on its disk's turn, with the conversion marker an MP4 with a cover keeps outside ffprobe's sight.
@@ -238,6 +249,9 @@ func (r *fileRun) passAt() PassSettings {
 
 // convert runs the passes of the ladder until a result is accepted, refused for good, or an error stops it.
 func (s *Service) convert(ctx context.Context, run *fileRun) error {
+	if run.item.Kind == KindComic {
+		return s.convertComic(ctx, run)
+	}
 	engines, err := s.enginesFor(run)
 	if err != nil {
 		return s.failedWith(ctx, run.item.MediaObjectID, FailureEngineUnavailable, err.Error())

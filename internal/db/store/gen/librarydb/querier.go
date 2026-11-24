@@ -879,7 +879,7 @@ type Querier interface {
 	ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]ListMoveJobsRow, error)
 	// The organisations a work is made or aired by, named.
 	ListNamedOrganisationsForWork(ctx context.Context, workID int64) ([]ListNamedOrganisationsForWorkRow, error)
-	// Audio and video files under the roots that were never judged, or were judged against another target or setup revision.
+	// Audio, video and book (comic) files under the roots that were never judged, or were judged against another target or setup revision.
 	ListObjectsToAnalyze(ctx context.Context, arg ListObjectsToAnalyzeParams) ([]ListObjectsToAnalyzeRow, error)
 	ListOldestTranscodeOriginals(ctx context.Context, limit int64) ([]ListOldestTranscodeOriginalsRow, error)
 	ListOrganisationExternalIDs(ctx context.Context, organisationID int64) ([]ListOrganisationExternalIDsRow, error)

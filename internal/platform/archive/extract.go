@@ -21,6 +21,19 @@ func Extract(ctx context.Context, fsys fsx.FS, source, destDir string, limits Li
 	if !ok {
 		return fmt.Errorf("archive: %s: unrecognised format", source)
 	}
+	return extractAs(ctx, fsys, source, destDir, limits, format)
+}
+
+// ExtractComic is Extract for a comic file: cb7 and cbt are the archives they name, which unpacking a download does not treat as archives.
+func ExtractComic(ctx context.Context, fsys fsx.FS, source, destDir string, limits Limits) error {
+	format, ok := detectComicContainer(source)
+	if !ok {
+		return fmt.Errorf("archive: %s: unrecognised format", source)
+	}
+	return extractAs(ctx, fsys, source, destDir, limits, format)
+}
+
+func extractAs(ctx context.Context, fsys fsx.FS, source, destDir string, limits Limits, format Format) error {
 	info, err := fsys.Stat(source)
 	if err != nil {
 		return fmt.Errorf("archive: stat %s: %w", source, err)

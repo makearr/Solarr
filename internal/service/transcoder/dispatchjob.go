@@ -95,7 +95,7 @@ func (s *Service) dispatchState(ctx context.Context, libraries []settings.Transc
 	}
 	now := s.Clock.Now()
 	failedAt := map[string]int64{}
-	for _, kind := range []string{KindVideo, KindAudio} {
+	for _, kind := range []string{KindVideo, KindAudio, KindComic} {
 		stored, err := s.Items.Health(ctx, kind)
 		if err != nil {
 			return state, err
@@ -121,7 +121,7 @@ func (s *Service) dispatchState(ctx context.Context, libraries []settings.Transc
 			ID: one.CategoryID, Priority: int(one.Priority), LastServed: s.lastServed(one.CategoryID),
 			Candidates: map[string][]Candidate{}, FarAway: map[string][]Candidate{},
 		}
-		kind := one.Target.TranscodeKind()
+		kind := one.Kind()
 		picks, err := s.Items.Pick(ctx, library.TranscodeOrder(one.Order), one.CategoryID, kind, pickWindow)
 		if err != nil {
 			return state, err

@@ -75,7 +75,7 @@ export function TranscodeSettings() {
 function Banners({ summary }: { summary: components["schemas"]["TranscodeSummary"] | undefined }) {
   const queryClient = useQueryClient();
   const resume = useMutation({
-    mutationFn: (kind: "video" | "audio") => ok(api.POST("/transcode/health/{kind}/resume", { params: { path: { kind } } })),
+    mutationFn: (kind: "video" | "audio" | "comic") => ok(api.POST("/transcode/health/{kind}/resume", { params: { path: { kind } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["transcode-summary"] }),
   });
   if (!summary) return null;
@@ -98,7 +98,7 @@ function Banners({ summary }: { summary: components["schemas"]["TranscodeSummary
           <p key={health.kind} role="status" className="flex flex-wrap items-center gap-3 rounded-md border border-warn p-2 text-sm">
             <span>
               {t("transcode.paused", {
-                kind: health.kind === "video" ? "Video" : "Audio",
+                kind: health.kind === "video" ? "Video" : health.kind === "comic" ? "Comic" : "Audio",
                 time: health.backoff_until ? new Date(health.backoff_until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-",
                 count: health.consecutive_failures,
                 error: health.last_error ?? "",
@@ -260,7 +260,9 @@ function LibraryRow({ library }: { library: Library }) {
       <div className="flex min-w-40 flex-1 flex-col">
         <span className="text-sm font-medium">{library.name}</span>
         <span className="text-xs text-ink-muted">
-          {library.supported && library.target_id != null ? (
+          {library.supported && library.target_kind === "comic" ? (
+            t("transcode.comicTarget")
+          ) : library.supported && library.target_id != null ? (
             <>
               {t("transcode.target")}:{" "}
               <Link to="/settings/transcode/targets/$targetId" params={{ targetId: String(library.target_id) }} className="text-accent hover:underline">

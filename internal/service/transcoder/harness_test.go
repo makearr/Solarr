@@ -274,12 +274,14 @@ type memSettings struct {
 	target  settings.QualityTarget
 	enabled bool
 	setup   func(settings.TranscodeSetup) settings.TranscodeSetup
+	// mediaType is the library's media type; empty is a music library.
+	mediaType string
 }
 
 func (f *memSettings) Global() settings.TranscodeGlobal { return f.global }
 func (f *memSettings) Libraries(context.Context) ([]settings.TranscodeLibrary, error) {
 	target := f.target
-	return []settings.TranscodeLibrary{{CategoryTranscode: settings.CategoryTranscode{CategoryID: 3, Enabled: f.enabled, Priority: 1}, Target: &target}}, nil
+	return []settings.TranscodeLibrary{{CategoryTranscode: settings.CategoryTranscode{CategoryID: 3, Enabled: f.enabled, Priority: 1}, MediaType: f.mediaType, Target: &target}}, nil
 }
 
 func (f *memSettings) Setup(context.Context, int64) (settings.StoredTranscodeSetup, error) {

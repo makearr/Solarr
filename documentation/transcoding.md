@@ -65,6 +65,19 @@ At the first dispatch after a start: a half-done replace is finished (the result
 (the original is restored from the bin), a running item with no job returns as interrupted, and work files no journal
 names are deleted. The library ends with the original or the result known and present, never neither or both.
 
+## Comics
+
+A library whose media type is comics converts as kind `comic` through the same items, dispatcher, lanes (`audio`, as the
+work is light), replace, recycle bin and restore. There is no ffmpeg run: `internal/platform/comicrepack` unpacks the
+archive (cbz, cbr, cb7, cbt) into the work folder and writes a store-only cbz with the pages in natural order and
+`ComicInfo.xml` kept; macOS and desktop litter is left out. What changes follows the target alone: a non-cbz container
+becomes cbz; pages are re-encoded to `image_format` (webp or jpg) at `image_quality` when the file's commonest page
+format differs; pages are downscaled to `page_long` x `page_short`, never upscaled, when the median page is more than
+10 percent above. A page the encoder cannot make smaller keeps its bytes. A repack that changes only pages and saves
+under 10 percent leaves the file alone (`saves_too_little`, not needed). The setup editor's video and audio switches
+do not apply. A file that is not a comic archive (a PDF) is not needed; one with no pages or an unreadable archive is
+blocked.
+
 ## Not built yet
 
 The statistics page, file lists, retry and restore actions, and the settings pages come with the API and web steps.

@@ -20,7 +20,7 @@ type Transcode struct {
 	Settings *settings.Cache
 }
 
-var transcodeKinds = []string{"video", "audio"}
+var transcodeKinds = []string{"video", "audio", "comic"}
 
 func countsView(counts map[library.TranscodeState]int64) apiserver.TranscodeCountsView {
 	return apiserver.TranscodeCountsView{

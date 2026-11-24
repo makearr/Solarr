@@ -22,6 +22,9 @@ func (s *Service) FreshPlan(ctx context.Context, mediaObjectID int64) (Judgement
 		if one.CategoryID != item.CategoryID || !one.Enabled || !one.Supported() {
 			continue
 		}
+		if one.Kind() == KindComic {
+			return Judgement{}, false, nil
+		}
 		stored, err := s.Settings.Setup(ctx, one.Target.ID)
 		if err != nil {
 			return Judgement{}, false, err

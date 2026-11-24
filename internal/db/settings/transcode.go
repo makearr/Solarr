@@ -238,10 +238,19 @@ type TranscodeLibrary struct {
 	Target    *QualityTarget
 }
 
-// Supported says the library has an audio or video target, the only kinds that are converted.
-func (l TranscodeLibrary) Supported() bool {
-	return l.Target != nil && l.Target.TranscodeKind() != "other"
+// Kind is what the library's files are converted as: video, audio, comic for a comics library, or other.
+func (l TranscodeLibrary) Kind() string {
+	switch {
+	case l.Target == nil:
+		return "other"
+	case l.MediaType == "comic":
+		return "comic"
+	}
+	return l.Target.TranscodeKind()
 }
+
+// Supported says the library has an audio, video or comics target, the only kinds that are converted.
+func (l TranscodeLibrary) Supported() bool { return l.Kind() != "other" }
 
 // TranscodeLibraries answers every library with its row and target.
 func (c *Cache) TranscodeLibraries(ctx context.Context) ([]TranscodeLibrary, error) {

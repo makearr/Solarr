@@ -211,7 +211,7 @@ JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.m
 LEFT JOIN transcode_item ti ON ti.media_object_id = o.id
 WHERE o.id > ?1
   AND lp.root_folder_id IN (SELECT value FROM json_each(?2))
-  AND o.kind IN ('video', 'audio')
+  AND o.kind IN ('video', 'audio', 'book')
   AND (ti.media_object_id IS NULL OR (ti.state <> 'done' AND (ti.target_id <> ?3 OR ti.setup_revision <> ?4)))
 ORDER BY o.id
 LIMIT ?5
@@ -233,7 +233,7 @@ type ListObjectsToAnalyzeRow struct {
 	RelPath      string
 }
 
-// Audio and video files under the roots that were never judged, or were judged against another target or setup revision.
+// Audio, video and book (comic) files under the roots that were never judged, or were judged against another target or setup revision.
 func (q *Queries) ListObjectsToAnalyze(ctx context.Context, arg ListObjectsToAnalyzeParams) ([]ListObjectsToAnalyzeRow, error) {
 	rows, err := q.db.QueryContext(ctx, listObjectsToAnalyze,
 		arg.AfterID,

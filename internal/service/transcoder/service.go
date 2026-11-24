@@ -101,8 +101,10 @@ type Service struct {
 	Settings Settings
 	Hardware Hardware
 	// Devices names the render device of a GPU engine.
-	Devices  func(engine transcode.Accel) string
-	Prober   Prober
+	Devices func(engine transcode.Accel) string
+	Prober  Prober
+	// Comics reads comic archives; without it comics libraries are not converted.
+	Comics   ComicProber
 	Tagger   Tagger
 	Bin      Bin
 	Reporter Reporter

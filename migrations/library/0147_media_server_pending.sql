@@ -151,7 +151,7 @@ CREATE TABLE transcode_item (
   media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
   -- No foreign key: the library lives in settings.db.
   category_id     INTEGER NOT NULL,
-  kind            TEXT    NOT NULL CHECK (kind IN ('video', 'audio')),
+  kind            TEXT    NOT NULL CHECK (kind IN ('video', 'audio', 'comic')),
   state           TEXT    NOT NULL CHECK (state IN ('needed', 'running', 'done', 'not_needed', 'failed', 'blocked')),
   lane            TEXT    NOT NULL DEFAULT '' CHECK (lane IN ('', 'cpu', 'gpu', 'audio')),
   -- What it was judged against; a change of either makes the row stale.
@@ -189,7 +189,7 @@ CREATE INDEX transcode_item_by_original ON transcode_item(original_recycle_id) W
 
 -- How each kind of conversion is doing, so a broken system is not mistaken for broken files.
 CREATE TABLE transcode_health (
-  kind                 TEXT PRIMARY KEY CHECK (kind IN ('video', 'audio')),
+  kind                 TEXT PRIMARY KEY CHECK (kind IN ('video', 'audio', 'comic')),
   consecutive_failures INTEGER NOT NULL DEFAULT 0,
   -- 'ok', 'probing' (trying files further away), 'backoff' (waiting until backoff_until).
   mode                 TEXT    NOT NULL DEFAULT 'ok' CHECK (mode IN ('ok', 'probing', 'backoff')),

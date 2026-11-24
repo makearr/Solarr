@@ -155,11 +155,11 @@ func TestTranscodeItems_ObjectsToAnalyzeSkipsJudgedRowsOfThisTargetAndPages(t *t
 		t.Fatalf("page = %+v, %v; want files 2 and 3 (1 is judged)", page, err)
 	}
 	next, _ := items.ObjectsToAnalyze(t.Context(), []int64{7, 8}, 9, 2, page[1].MediaObjectID, 10)
-	if len(next) != 2 || next[0].MediaObjectID != 4 || next[1].Kind != "audio" {
-		t.Errorf("next = %+v; want 4 and the audio file, never the book", next)
+	if len(next) != 3 || next[0].MediaObjectID != 4 || next[1].Kind != "audio" || next[2].Kind != "book" {
+		t.Errorf("next = %+v; want 4, the audio file and the book (a comics library judges books; the service skips them elsewhere)", next)
 	}
 	stale, _ := items.ObjectsToAnalyze(t.Context(), []int64{7}, 9, 3, 0, 10)
-	if len(stale) != 4 || stale[0].MediaObjectID != 1 {
+	if len(stale) != 5 || stale[0].MediaObjectID != 1 {
 		t.Errorf("a new revision must re-judge file 1 too: %+v", stale)
 	}
 	if other, _ := items.ObjectsToAnalyze(t.Context(), []int64{8}, 9, 2, 0, 10); len(other) != 1 || other[0].MediaObjectID != 5 {
@@ -405,7 +405,7 @@ func TestTranscodeItems_AReAnalysisLeavesAFinishedItemDone(t *testing.T) {
 	items, opened := seedTranscode(t)
 	_ = items.Judge(t.Context(), []library.JudgedTranscodeItem{judge(1, "video", library.TranscodeDone)})
 	stale, err := items.ObjectsToAnalyze(t.Context(), []int64{7}, 9, 3, 0, 10)
-	if err != nil || len(stale) != 3 || stale[0].MediaObjectID != 2 {
+	if err != nil || len(stale) != 4 || stale[0].MediaObjectID != 2 {
 		t.Errorf("a finished file is never re-selected: %+v, %v", stale, err)
 	}
 	if err := items.Judge(t.Context(), []library.JudgedTranscodeItem{judge(1, "video", library.TranscodeNotNeeded)}); err != nil {
