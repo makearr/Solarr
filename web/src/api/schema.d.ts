@@ -5451,6 +5451,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transcode/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per library counts and savings, how each kind of conversion is doing, the originals kept and the setups' warnings. Administrator only. */
+        get: operations["getTranscodeSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transcode/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Judged files by id, optionally one state, library or kind, or a path search. Administrator only. */
+        get: operations["listTranscodeItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transcode/items/{media_object_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One judged file with the plan its conversion follows. Administrator only. */
+        get: operations["getTranscodeItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transcode/items/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give failed and blocked files another chance, the listed ones or every one a filter matches, optionally with other settings; `preview` only counts. Administrator only. */
+        post: operations["retryTranscodeItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transcode/items/{media_object_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put a converted file's original back. Refused when the original was purged or something else sits at its path. Administrator only. */
+        post: operations["restoreTranscodeItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transcode/health/{kind}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a kind's backoff or probing now ("Try now"). Administrator only. */
+        post: operations["resumeTranscodeKind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transcode/hardware": {
         parameters: {
             query?: never;
@@ -12615,6 +12717,152 @@ export interface components {
             audio_filters: components["schemas"]["TranscodeAudioFilters"];
             check: components["schemas"]["TranscodeCheck"];
             ladder: components["schemas"]["TranscodeLadder"];
+        };
+        TranscodeCounts: {
+            /** Format: int64 */
+            needed: number;
+            /** Format: int64 */
+            running: number;
+            /** Format: int64 */
+            done: number;
+            /** Format: int64 */
+            not_needed: number;
+            /** Format: int64 */
+            failed: number;
+            /** Format: int64 */
+            blocked: number;
+        };
+        TranscodeSavings: {
+            /** Format: int64 */
+            files: number;
+            /** Format: int64 */
+            original_bytes: number;
+            /** Format: int64 */
+            result_bytes: number;
+            /** Format: int64 */
+            saved_bytes: number;
+            /**
+             * Format: int64
+             * @description Of the original bytes
+             */
+            saved_pct: number;
+            /** Format: int64 */
+            encode_seconds: number;
+        };
+        TranscodeLibrarySummary: {
+            /** Format: int64 */
+            category_id: number;
+            name: string;
+            enabled: boolean;
+            /** Format: int64 */
+            target_id?: number;
+            counts: components["schemas"]["TranscodeCounts"];
+            savings: components["schemas"]["TranscodeSavings"];
+            warnings?: components["schemas"]["TranscodeWarning"][];
+        };
+        TranscodeHealth: {
+            /** @enum {string} */
+            kind: "video" | "audio";
+            /** @enum {string} */
+            mode: "ok" | "probing" | "backoff";
+            /** Format: int64 */
+            consecutive_failures: number;
+            /** Format: date-time */
+            backoff_until?: string;
+            last_error?: string;
+        };
+        TranscodeSummary: {
+            /** @description The master switch. */
+            enabled: boolean;
+            libraries: components["schemas"]["TranscodeLibrarySummary"][];
+            totals: components["schemas"]["TranscodeSavings"];
+            counts: components["schemas"]["TranscodeCounts"];
+            health: components["schemas"]["TranscodeHealth"][];
+            /**
+             * Format: int64
+             * @description Bytes of converted files' originals the recycle bin still holds.
+             */
+            originals_bytes: number;
+        };
+        TranscodeReason: {
+            code: string;
+            /** @description The stream the reason is about; -1 for the file. */
+            stream: number;
+            want?: string;
+            have?: string;
+        };
+        TranscodeItem: {
+            /** Format: int64 */
+            media_object_id: number;
+            /** Format: int64 */
+            category_id: number;
+            /** @description Relative to its root folder. */
+            path: string;
+            /** @enum {string} */
+            kind: "video" | "audio";
+            /** @enum {string} */
+            state: "needed" | "running" | "done" | "not_needed" | "failed" | "blocked";
+            /** @enum {string} */
+            lane?: "" | "cpu" | "gpu" | "audio";
+            reasons: components["schemas"]["TranscodeReason"][];
+            warnings?: components["schemas"]["TranscodeReason"][];
+            /** @description What the conversion copies */
+            plan?: {
+                [key: string]: unknown;
+            };
+            /** Format: int64 */
+            attempts: number;
+            /** Format: int64 */
+            pass: number;
+            interrupted: boolean;
+            failure_code?: string;
+            last_error?: string;
+            engine?: string;
+            /** Format: int64 */
+            original_size_bytes?: number;
+            /** Format: int64 */
+            result_size_bytes?: number;
+            /** Format: int64 */
+            result_ratio_pct?: number;
+            /** Format: int64 */
+            encode_seconds?: number;
+            /** Format: date-time */
+            finished_at?: string;
+            /** @description A done file whose original the recycle bin may still hold. */
+            restorable: boolean;
+        };
+        TranscodeItemPage: {
+            items: components["schemas"]["TranscodeItem"][];
+            next_cursor?: string;
+        };
+        TranscodeRetryOverride: {
+            quality?: number;
+            /** Format: int64 */
+            video_bitrate_kbps?: number;
+            /** @enum {string} */
+            preset?: "fast" | "normal" | "slow" | "slower" | "veryslow";
+            /** @enum {string} */
+            engine?: "auto" | "software" | "qsv" | "vaapi" | "nvenc";
+        };
+        /** @description Either `ids`, or a filter (empty fields match everything) with the ids to leave out. */
+        TranscodeRetryRequest: {
+            ids?: number[];
+            /** @enum {string} */
+            state?: "failed" | "blocked";
+            /** Format: int64 */
+            category_id?: number;
+            /** @enum {string} */
+            kind?: "video" | "audio";
+            q?: string;
+            excluded_ids?: number[];
+            override?: components["schemas"]["TranscodeRetryOverride"];
+            /** @description Only count. */
+            preview?: boolean;
+        };
+        TranscodeRetryResult: {
+            /** Format: int64 */
+            count: number;
+            applied: boolean;
         };
         TranscodeWarning: {
             /** @enum {string} */
@@ -22817,6 +23065,161 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getTranscodeSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeSummary"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listTranscodeItems: {
+        parameters: {
+            query?: {
+                state?: "needed" | "running" | "done" | "not_needed" | "failed" | "blocked";
+                category_id?: number;
+                kind?: "video" | "audio";
+                /** @description Case-insensitive part of the path. */
+                q?: string;
+                /** @description From `next_cursor` of the previous page. Absent on the first page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeItemPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getTranscodeItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_object_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeItem"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    retryTranscodeItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscodeRetryRequest"];
+            };
+        };
+        responses: {
+            /** @description How many files were (or would be) touched. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeRetryResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    restoreTranscodeItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_object_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The restored item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeItem"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    resumeTranscodeKind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "video" | "audio";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The kind converts normally again. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getTranscodeHardware: {

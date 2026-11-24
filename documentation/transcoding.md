@@ -46,6 +46,13 @@ path, and rests the file as `not_needed` (reason `restored_by_user`) until a per
 subtract the conversion. A restore is refused when the original was purged or something else sits at its path, and a restart
 in the middle of one finishes it, or forgets it when nothing had moved yet.
 
+## API
+
+All administrator only: `GET /transcode/summary` (counts per library, savings, health, originals kept, setup warnings),
+`GET /transcode/items` (state, library, kind and path filters, cursor by id), `GET /transcode/items/{id}` (with the stored plan),
+`POST /transcode/items/retry` (ids or a filter minus `excluded_ids`, optional `override`, `preview` only counts),
+`POST /transcode/items/{id}/restore` (409 when the original is gone or its path is taken) and `POST /transcode/health/{kind}/resume`.
+
 ## Failures
 
 Three errors on one file end it as `failed` until retried. Three consecutive failures of different files put that kind

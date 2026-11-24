@@ -31,6 +31,7 @@ type Items interface {
 	Journalled(ctx context.Context) ([]library.TranscodeItem, error)
 	Health(ctx context.Context, kind string) (library.TranscodeHealth, error)
 	SaveHealth(ctx context.Context, health library.TranscodeHealth) error
+	List(ctx context.Context, filter library.TranscodeFilter) ([]library.TranscodeListed, error)
 	RestoreBytes(ctx context.Context, restored library.RestoredFile) error
 	OriginalsKept(ctx context.Context) (int64, error)
 	OldestOriginals(ctx context.Context, limit int64) ([]library.KeptOriginal, error)

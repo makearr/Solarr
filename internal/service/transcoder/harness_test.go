@@ -136,6 +136,26 @@ func (m *memItems) ReplaceBytes(_ context.Context, replaced library.ReplacedFile
 	return nil
 }
 
+func (m *memItems) List(_ context.Context, filter library.TranscodeFilter) ([]library.TranscodeListed, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var ids []int64
+	for id, item := range m.items {
+		if id > filter.AfterID && (filter.State == "" || item.State == filter.State) && (filter.CategoryID == 0 || item.CategoryID == filter.CategoryID) {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	if int64(len(ids)) > filter.PageSize {
+		ids = ids[:filter.PageSize]
+	}
+	out := make([]library.TranscodeListed, len(ids))
+	for i, id := range ids {
+		out[i] = library.TranscodeListed{Item: *m.items[id]}
+	}
+	return out, nil
+}
+
 func (m *memItems) RestoreBytes(_ context.Context, restored library.RestoredFile) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

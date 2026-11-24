@@ -107,6 +107,7 @@ type worksFixture struct {
 	taskHistory          *fakeTaskHistory
 	memoryCopies         *fakeMemoryCopies
 	workAdder            *fakeWorkAdder
+	transcodeItems       *fakeTranscodePipeline
 	requests             *fakeRequests
 	releaseFilters       *fakeReleaseFilters
 	arrSync              *fakeArrSync
@@ -290,6 +291,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	webhooks := &fakeWebhooks{}
 	inbound := &fakeInbound{}
 	workAdder := &fakeWorkAdder{}
+	transcodeItems := &fakeTranscodePipeline{}
 	requests := &fakeRequests{}
 	releaseFilters := &fakeReleaseFilters{}
 	arrSync := &fakeArrSync{}
@@ -351,6 +353,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		TaskHistory:          taskHistory,
 		MemoryCopies:         memoryCopies,
 		WorkAdder:            workAdder,
+		TranscodeItems:       transcodeItems,
 		Requests:             requests,
 		WorkReleaseFilters:   releaseFilters,
 		ArrSync:              arrSync,
@@ -399,7 +402,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,
 		history:       history,
 		queue:         queue,
-		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, diskManager: diskManager, taskHistory: taskHistory, memoryCopies: memoryCopies, workAdder: workAdder, requests: requests, releaseFilters: releaseFilters,
+		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, diskManager: diskManager, taskHistory: taskHistory, memoryCopies: memoryCopies, workAdder: workAdder, transcodeItems: transcodeItems, requests: requests, releaseFilters: releaseFilters,
 		arrSync: arrSync, indexerTester: indexerTester, downloaderTester: downloaderTester,
 		candidateSearcher: candidateSearcher, fsys: fsys, clock: fake,
 	}

@@ -277,6 +277,8 @@ type Config struct {
 	// Playback finds the file the built-in player opens; Transcoder converts it. Both optional: without them the player answers 503.
 	Playback   PlaybackLocator
 	Transcoder *transcode.Service
+	// TranscodeItems is the conversion pipeline behind the transcode page. Optional: nil answers 503.
+	TranscodeItems TranscodePipeline
 	// DatabaseMemory reports each database's page cache; optional.
 	DatabaseMemory DatabaseMemoryReader
 	// WorkAdder looks works up and adds them (ADR-56). Optional: nil answers 503.
@@ -462,6 +464,7 @@ type Server struct {
 	memoryCopies            MemoryCopies
 	playback                PlaybackLocator
 	transcoder              *transcode.Service
+	transcodeItems          TranscodePipeline
 	databaseMemory          DatabaseMemoryReader
 	workAdder               WorkAdder
 	importLists             ImportListSync
@@ -629,6 +632,7 @@ func New(config Config) (*Server, error) {
 		playback:                config.Playback,
 		watchState:              config.WatchState,
 		transcoder:              config.Transcoder,
+		transcodeItems:          config.TranscodeItems,
 		databaseMemory:          config.DatabaseMemory,
 		workAdder:               config.WorkAdder,
 		importLists:             config.ImportLists,
@@ -963,6 +967,12 @@ func New(config Config) (*Server, error) {
 			secured.Post("/settings/discover/libraries/{category_id}/preview", wrapped.PreviewLibraryDiscoverAutoAdd)
 			secured.Get("/transcode/hardware", server.GetTranscodeHardware)
 			secured.Post("/transcode/hardware/detect", server.DetectTranscodeHardware)
+			secured.Get("/transcode/summary", server.GetTranscodeSummary)
+			secured.Get("/transcode/items", wrapped.ListTranscodeItems)
+			secured.Post("/transcode/items/retry", server.RetryTranscodeItems)
+			secured.Get("/transcode/items/{media_object_id}", wrapped.GetTranscodeItem)
+			secured.Post("/transcode/items/{media_object_id}/restore", wrapped.RestoreTranscodeItem)
+			secured.Post("/transcode/health/{kind}/resume", wrapped.ResumeTranscodeKind)
 			secured.Get("/settings/transcode", server.GetTranscodeSettings)
 			secured.Put("/settings/transcode", server.SetTranscodeSettings)
 			secured.Put("/settings/transcode/libraries/{category_id}", wrapped.SetTranscodeLibrary)

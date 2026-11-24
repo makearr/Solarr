@@ -1072,6 +1072,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		RemoveAndBlocker: p.fileRemover(),
 		Playback:         adapters.Playback{Physical: library.NewPhysical(p.library), Cache: p.cache},
 		Transcoder:       p.transcoder,
+		TranscodeItems: adapters.Transcode{
+			Library: library.NewTranscodeItems(p.library, clock.NewSystem()), Service: p.transcodeService(), Stats: statistics.NewTranscodes(p.statistics), Settings: p.cache,
+		},
 		ImportSessions: adapters.ImportSessions{
 			Sessions: library.NewImportSessions(p.library),
 			Revert: library.NewImportRevert(

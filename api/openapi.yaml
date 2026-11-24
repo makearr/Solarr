@@ -8470,6 +8470,110 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /transcode/summary:
+    get:
+      operationId: getTranscodeSummary
+      tags: [settings]
+      summary: Per library counts and savings, how each kind of conversion is doing, the originals kept and the setups' warnings. Administrator only.
+      responses:
+        "200":
+          description: The summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeSummary" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /transcode/items:
+    get:
+      operationId: listTranscodeItems
+      tags: [settings]
+      summary: Judged files by id, optionally one state, library or kind, or a path search. Administrator only.
+      parameters:
+        - { name: state, in: query, schema: { type: string, enum: [needed, running, done, not_needed, failed, blocked] } }
+        - { name: category_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: kind, in: query, schema: { type: string, enum: [video, audio] } }
+        - { name: q, in: query, description: Case-insensitive part of the path., schema: { type: string } }
+        - { name: cursor, in: query, description: From `next_cursor` of the previous page. Absent on the first page., schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeItemPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /transcode/items/{media_object_id}:
+    get:
+      operationId: getTranscodeItem
+      tags: [settings]
+      summary: One judged file with the plan its conversion follows. Administrator only.
+      parameters:
+        - { name: media_object_id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeItem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /transcode/items/retry:
+    post:
+      operationId: retryTranscodeItems
+      tags: [settings]
+      summary: Give failed and blocked files another chance, the listed ones or every one a filter matches, optionally with other settings; `preview` only counts. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TranscodeRetryRequest" }
+      responses:
+        "200":
+          description: How many files were (or would be) touched.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeRetryResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /transcode/items/{media_object_id}/restore:
+    post:
+      operationId: restoreTranscodeItem
+      tags: [settings]
+      summary: Put a converted file's original back. Refused when the original was purged or something else sits at its path. Administrator only.
+      parameters:
+        - { name: media_object_id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The restored item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeItem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /transcode/health/{kind}/resume:
+    post:
+      operationId: resumeTranscodeKind
+      tags: [settings]
+      summary: End a kind's backoff or probing now ("Try now"). Administrator only.
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string, enum: [video, audio] } }
+      responses:
+        "204": { description: The kind converts normally again. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /transcode/hardware:
     get:
       operationId: getTranscodeHardware
@@ -16883,6 +16987,131 @@ components:
         audio_filters: { $ref: "#/components/schemas/TranscodeAudioFilters" }
         check: { $ref: "#/components/schemas/TranscodeCheck" }
         ladder: { $ref: "#/components/schemas/TranscodeLadder" }
+
+    TranscodeCounts:
+      type: object
+      required: [needed, running, done, not_needed, failed, blocked]
+      properties:
+        needed: { type: integer, format: int64 }
+        running: { type: integer, format: int64 }
+        done: { type: integer, format: int64 }
+        not_needed: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        blocked: { type: integer, format: int64 }
+
+    TranscodeSavings:
+      type: object
+      required: [files, original_bytes, result_bytes, saved_bytes, saved_pct, encode_seconds]
+      properties:
+        files: { type: integer, format: int64 }
+        original_bytes: { type: integer, format: int64 }
+        result_bytes: { type: integer, format: int64 }
+        saved_bytes: { type: integer, format: int64 }
+        saved_pct: { type: integer, format: int64, description: Of the original bytes, rounded down; 0 with nothing converted. }
+        encode_seconds: { type: integer, format: int64 }
+
+    TranscodeLibrarySummary:
+      type: object
+      required: [category_id, name, enabled, counts, savings]
+      properties:
+        category_id: { type: integer, format: int64 }
+        name: { type: string }
+        enabled: { type: boolean }
+        target_id: { type: integer, format: int64 }
+        counts: { $ref: "#/components/schemas/TranscodeCounts" }
+        savings: { $ref: "#/components/schemas/TranscodeSavings" }
+        warnings: { type: array, items: { $ref: "#/components/schemas/TranscodeWarning" } }
+
+    TranscodeHealth:
+      type: object
+      required: [kind, mode, consecutive_failures]
+      properties:
+        kind: { type: string, enum: [video, audio] }
+        mode: { type: string, enum: [ok, probing, backoff] }
+        consecutive_failures: { type: integer, format: int64 }
+        backoff_until: { type: string, format: date-time }
+        last_error: { type: string }
+
+    TranscodeSummary:
+      type: object
+      required: [enabled, libraries, totals, counts, health, originals_bytes]
+      properties:
+        enabled: { type: boolean, description: The master switch. }
+        libraries: { type: array, items: { $ref: "#/components/schemas/TranscodeLibrarySummary" } }
+        totals: { $ref: "#/components/schemas/TranscodeSavings" }
+        counts: { $ref: "#/components/schemas/TranscodeCounts" }
+        health: { type: array, items: { $ref: "#/components/schemas/TranscodeHealth" } }
+        originals_bytes: { type: integer, format: int64, description: Bytes of converted files' originals the recycle bin still holds. }
+
+    TranscodeReason:
+      type: object
+      required: [code, stream]
+      properties:
+        code: { type: string }
+        stream: { type: integer, description: The stream the reason is about; -1 for the file. }
+        want: { type: string }
+        have: { type: string }
+
+    TranscodeItem:
+      type: object
+      required: [media_object_id, category_id, kind, state, path, reasons, attempts, pass, interrupted, restorable]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        category_id: { type: integer, format: int64 }
+        path: { type: string, description: Relative to its root folder. }
+        kind: { type: string, enum: [video, audio] }
+        state: { type: string, enum: [needed, running, done, not_needed, failed, blocked] }
+        lane: { type: string, enum: ["", cpu, gpu, audio] }
+        reasons: { type: array, items: { $ref: "#/components/schemas/TranscodeReason" } }
+        warnings: { type: array, items: { $ref: "#/components/schemas/TranscodeReason" } }
+        plan: { type: object, additionalProperties: true, description: What the conversion copies, encodes and drops; only on a single item. }
+        attempts: { type: integer, format: int64 }
+        pass: { type: integer, format: int64 }
+        interrupted: { type: boolean }
+        failure_code: { type: string }
+        last_error: { type: string }
+        engine: { type: string }
+        original_size_bytes: { type: integer, format: int64 }
+        result_size_bytes: { type: integer, format: int64 }
+        result_ratio_pct: { type: integer, format: int64 }
+        encode_seconds: { type: integer, format: int64 }
+        finished_at: { type: string, format: date-time }
+        restorable: { type: boolean, description: A done file whose original the recycle bin may still hold. }
+
+    TranscodeItemPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/TranscodeItem" } }
+        next_cursor: { type: string }
+
+    TranscodeRetryOverride:
+      type: object
+      properties:
+        quality: { type: number }
+        video_bitrate_kbps: { type: integer, format: int64 }
+        preset: { type: string, enum: [fast, normal, slow, slower, veryslow] }
+        engine: { type: string, enum: [auto, software, qsv, vaapi, nvenc] }
+
+    TranscodeRetryRequest:
+      type: object
+      description: Either `ids`, or a filter (empty fields match everything) with the ids to leave out.
+      properties:
+        ids: { type: array, items: { type: integer, format: int64 } }
+        state: { type: string, enum: [failed, blocked] }
+        category_id: { type: integer, format: int64 }
+        kind: { type: string, enum: [video, audio] }
+        q: { type: string }
+        excluded_ids: { type: array, items: { type: integer, format: int64 } }
+        override: { $ref: "#/components/schemas/TranscodeRetryOverride" }
+        preview: { type: boolean, description: Only count. }
+
+    TranscodeRetryResult:
+      type: object
+      required: [count, applied]
+      properties:
+        count: { type: integer, format: int64 }
+        applied: { type: boolean }
 
     TranscodeWarning:
       type: object

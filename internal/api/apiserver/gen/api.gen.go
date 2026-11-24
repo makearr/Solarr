@@ -1154,6 +1154,43 @@ const (
 	TranscodeFilterStrengthStrong TranscodeFilterStrength = "strong"
 )
 
+// Defines values for TranscodeHealthKind.
+const (
+	TranscodeHealthKindAudio TranscodeHealthKind = "audio"
+	TranscodeHealthKindVideo TranscodeHealthKind = "video"
+)
+
+// Defines values for TranscodeHealthMode.
+const (
+	TranscodeHealthModeBackoff TranscodeHealthMode = "backoff"
+	TranscodeHealthModeOk      TranscodeHealthMode = "ok"
+	TranscodeHealthModeProbing TranscodeHealthMode = "probing"
+)
+
+// Defines values for TranscodeItemKind.
+const (
+	TranscodeItemKindAudio TranscodeItemKind = "audio"
+	TranscodeItemKindVideo TranscodeItemKind = "video"
+)
+
+// Defines values for TranscodeItemLane.
+const (
+	TranscodeItemLaneAudio TranscodeItemLane = "audio"
+	TranscodeItemLaneCpu   TranscodeItemLane = "cpu"
+	TranscodeItemLaneEmpty TranscodeItemLane = ""
+	TranscodeItemLaneGpu   TranscodeItemLane = "gpu"
+)
+
+// Defines values for TranscodeItemState.
+const (
+	TranscodeItemStateBlocked   TranscodeItemState = "blocked"
+	TranscodeItemStateDone      TranscodeItemState = "done"
+	TranscodeItemStateFailed    TranscodeItemState = "failed"
+	TranscodeItemStateNeeded    TranscodeItemState = "needed"
+	TranscodeItemStateNotNeeded TranscodeItemState = "not_needed"
+	TranscodeItemStateRunning   TranscodeItemState = "running"
+)
+
 // Defines values for TranscodeLibraryOrder.
 const (
 	TranscodeLibraryOrderAlphabetical TranscodeLibraryOrder = "alphabetical"
@@ -1179,6 +1216,36 @@ const (
 	TranscodeLibraryRowOrderNewest       TranscodeLibraryRowOrder = "newest"
 	TranscodeLibraryRowOrderOldest       TranscodeLibraryRowOrder = "oldest"
 	TranscodeLibraryRowOrderSmallest     TranscodeLibraryRowOrder = "smallest"
+)
+
+// Defines values for TranscodeRetryOverrideEngine.
+const (
+	TranscodeRetryOverrideEngineAuto     TranscodeRetryOverrideEngine = "auto"
+	TranscodeRetryOverrideEngineNvenc    TranscodeRetryOverrideEngine = "nvenc"
+	TranscodeRetryOverrideEngineQsv      TranscodeRetryOverrideEngine = "qsv"
+	TranscodeRetryOverrideEngineSoftware TranscodeRetryOverrideEngine = "software"
+	TranscodeRetryOverrideEngineVaapi    TranscodeRetryOverrideEngine = "vaapi"
+)
+
+// Defines values for TranscodeRetryOverridePreset.
+const (
+	TranscodeRetryOverridePresetFast     TranscodeRetryOverridePreset = "fast"
+	TranscodeRetryOverridePresetNormal   TranscodeRetryOverridePreset = "normal"
+	TranscodeRetryOverridePresetSlow     TranscodeRetryOverridePreset = "slow"
+	TranscodeRetryOverridePresetSlower   TranscodeRetryOverridePreset = "slower"
+	TranscodeRetryOverridePresetVeryslow TranscodeRetryOverridePreset = "veryslow"
+)
+
+// Defines values for TranscodeRetryRequestKind.
+const (
+	TranscodeRetryRequestKindAudio TranscodeRetryRequestKind = "audio"
+	TranscodeRetryRequestKindVideo TranscodeRetryRequestKind = "video"
+)
+
+// Defines values for TranscodeRetryRequestState.
+const (
+	TranscodeRetryRequestStateBlocked TranscodeRetryRequestState = "blocked"
+	TranscodeRetryRequestStateFailed  TranscodeRetryRequestState = "failed"
 )
 
 // Defines values for TranscodeSetupVersion.
@@ -1453,6 +1520,28 @@ const (
 	ListLogsParamsLevelError ListLogsParamsLevel = "error"
 	ListLogsParamsLevelInfo  ListLogsParamsLevel = "info"
 	ListLogsParamsLevelWarn  ListLogsParamsLevel = "warn"
+)
+
+// Defines values for ResumeTranscodeKindParamsKind.
+const (
+	ResumeTranscodeKindParamsKindAudio ResumeTranscodeKindParamsKind = "audio"
+	ResumeTranscodeKindParamsKindVideo ResumeTranscodeKindParamsKind = "video"
+)
+
+// Defines values for ListTranscodeItemsParamsState.
+const (
+	ListTranscodeItemsParamsStateBlocked   ListTranscodeItemsParamsState = "blocked"
+	ListTranscodeItemsParamsStateDone      ListTranscodeItemsParamsState = "done"
+	ListTranscodeItemsParamsStateFailed    ListTranscodeItemsParamsState = "failed"
+	ListTranscodeItemsParamsStateNeeded    ListTranscodeItemsParamsState = "needed"
+	ListTranscodeItemsParamsStateNotNeeded ListTranscodeItemsParamsState = "not_needed"
+	ListTranscodeItemsParamsStateRunning   ListTranscodeItemsParamsState = "running"
+)
+
+// Defines values for ListTranscodeItemsParamsKind.
+const (
+	ListTranscodeItemsParamsKindAudio ListTranscodeItemsParamsKind = "audio"
+	ListTranscodeItemsParamsKindVideo ListTranscodeItemsParamsKind = "video"
 )
 
 // Defines values for ListWantedPartsParamsView.
@@ -7363,6 +7452,16 @@ type TranscodeCheck struct {
 	WithinRange     bool `json:"within_range"`
 }
 
+// TranscodeCounts defines model for TranscodeCounts.
+type TranscodeCounts struct {
+	Blocked   int64 `json:"blocked"`
+	Done      int64 `json:"done"`
+	Failed    int64 `json:"failed"`
+	Needed    int64 `json:"needed"`
+	NotNeeded int64 `json:"not_needed"`
+	Running   int64 `json:"running"`
+}
+
 // TranscodeEncode defines model for TranscodeEncode.
 type TranscodeEncode struct {
 	AllowCpuFallback      bool                  `json:"allow_cpu_fallback"`
@@ -7458,6 +7557,67 @@ type TranscodeHardware struct {
 	Filters map[string]bool `json:"filters"`
 }
 
+// TranscodeHealth defines model for TranscodeHealth.
+type TranscodeHealth struct {
+	BackoffUntil        *time.Time          `json:"backoff_until,omitempty"`
+	ConsecutiveFailures int64               `json:"consecutive_failures"`
+	Kind                TranscodeHealthKind `json:"kind"`
+	LastError           *string             `json:"last_error,omitempty"`
+	Mode                TranscodeHealthMode `json:"mode"`
+}
+
+// TranscodeHealthKind defines model for TranscodeHealth.Kind.
+type TranscodeHealthKind string
+
+// TranscodeHealthMode defines model for TranscodeHealth.Mode.
+type TranscodeHealthMode string
+
+// TranscodeItem defines model for TranscodeItem.
+type TranscodeItem struct {
+	Attempts          int64              `json:"attempts"`
+	CategoryId        int64              `json:"category_id"`
+	EncodeSeconds     *int64             `json:"encode_seconds,omitempty"`
+	Engine            *string            `json:"engine,omitempty"`
+	FailureCode       *string            `json:"failure_code,omitempty"`
+	FinishedAt        *time.Time         `json:"finished_at,omitempty"`
+	Interrupted       bool               `json:"interrupted"`
+	Kind              TranscodeItemKind  `json:"kind"`
+	Lane              *TranscodeItemLane `json:"lane,omitempty"`
+	LastError         *string            `json:"last_error,omitempty"`
+	MediaObjectId     int64              `json:"media_object_id"`
+	OriginalSizeBytes *int64             `json:"original_size_bytes,omitempty"`
+	Pass              int64              `json:"pass"`
+
+	// Path Relative to its root folder.
+	Path string `json:"path"`
+
+	// Plan What the conversion copies
+	Plan    *map[string]interface{} `json:"plan,omitempty"`
+	Reasons []TranscodeReason       `json:"reasons"`
+
+	// Restorable A done file whose original the recycle bin may still hold.
+	Restorable      bool               `json:"restorable"`
+	ResultRatioPct  *int64             `json:"result_ratio_pct,omitempty"`
+	ResultSizeBytes *int64             `json:"result_size_bytes,omitempty"`
+	State           TranscodeItemState `json:"state"`
+	Warnings        *[]TranscodeReason `json:"warnings,omitempty"`
+}
+
+// TranscodeItemKind defines model for TranscodeItem.Kind.
+type TranscodeItemKind string
+
+// TranscodeItemLane defines model for TranscodeItem.Lane.
+type TranscodeItemLane string
+
+// TranscodeItemState defines model for TranscodeItem.State.
+type TranscodeItemState string
+
+// TranscodeItemPage defines model for TranscodeItemPage.
+type TranscodeItemPage struct {
+	Items      []TranscodeItem `json:"items"`
+	NextCursor *string         `json:"next_cursor,omitempty"`
+}
+
 // TranscodeLadder defines model for TranscodeLadder.
 type TranscodeLadder struct {
 	BitrateStepPct int     `json:"bitrate_step_pct"`
@@ -7509,6 +7669,79 @@ type TranscodeLibraryRow struct {
 
 // TranscodeLibraryRowOrder defines model for TranscodeLibraryRow.Order.
 type TranscodeLibraryRowOrder string
+
+// TranscodeLibrarySummary defines model for TranscodeLibrarySummary.
+type TranscodeLibrarySummary struct {
+	CategoryId int64               `json:"category_id"`
+	Counts     TranscodeCounts     `json:"counts"`
+	Enabled    bool                `json:"enabled"`
+	Name       string              `json:"name"`
+	Savings    TranscodeSavings    `json:"savings"`
+	TargetId   *int64              `json:"target_id,omitempty"`
+	Warnings   *[]TranscodeWarning `json:"warnings,omitempty"`
+}
+
+// TranscodeReason defines model for TranscodeReason.
+type TranscodeReason struct {
+	Code string  `json:"code"`
+	Have *string `json:"have,omitempty"`
+
+	// Stream The stream the reason is about; -1 for the file.
+	Stream int     `json:"stream"`
+	Want   *string `json:"want,omitempty"`
+}
+
+// TranscodeRetryOverride defines model for TranscodeRetryOverride.
+type TranscodeRetryOverride struct {
+	Engine           *TranscodeRetryOverrideEngine `json:"engine,omitempty"`
+	Preset           *TranscodeRetryOverridePreset `json:"preset,omitempty"`
+	Quality          *float32                      `json:"quality,omitempty"`
+	VideoBitrateKbps *int64                        `json:"video_bitrate_kbps,omitempty"`
+}
+
+// TranscodeRetryOverrideEngine defines model for TranscodeRetryOverride.Engine.
+type TranscodeRetryOverrideEngine string
+
+// TranscodeRetryOverridePreset defines model for TranscodeRetryOverride.Preset.
+type TranscodeRetryOverridePreset string
+
+// TranscodeRetryRequest Either `ids`, or a filter (empty fields match everything) with the ids to leave out.
+type TranscodeRetryRequest struct {
+	CategoryId  *int64                     `json:"category_id,omitempty"`
+	ExcludedIds *[]int64                   `json:"excluded_ids,omitempty"`
+	Ids         *[]int64                   `json:"ids,omitempty"`
+	Kind        *TranscodeRetryRequestKind `json:"kind,omitempty"`
+	Override    *TranscodeRetryOverride    `json:"override,omitempty"`
+
+	// Preview Only count.
+	Preview *bool                       `json:"preview,omitempty"`
+	Q       *string                     `json:"q,omitempty"`
+	State   *TranscodeRetryRequestState `json:"state,omitempty"`
+}
+
+// TranscodeRetryRequestKind defines model for TranscodeRetryRequest.Kind.
+type TranscodeRetryRequestKind string
+
+// TranscodeRetryRequestState defines model for TranscodeRetryRequest.State.
+type TranscodeRetryRequestState string
+
+// TranscodeRetryResult defines model for TranscodeRetryResult.
+type TranscodeRetryResult struct {
+	Applied bool  `json:"applied"`
+	Count   int64 `json:"count"`
+}
+
+// TranscodeSavings defines model for TranscodeSavings.
+type TranscodeSavings struct {
+	EncodeSeconds int64 `json:"encode_seconds"`
+	Files         int64 `json:"files"`
+	OriginalBytes int64 `json:"original_bytes"`
+	ResultBytes   int64 `json:"result_bytes"`
+	SavedBytes    int64 `json:"saved_bytes"`
+
+	// SavedPct Of the original bytes
+	SavedPct int64 `json:"saved_pct"`
+}
 
 // TranscodeSettings defines model for TranscodeSettings.
 type TranscodeSettings struct {
@@ -7579,6 +7812,20 @@ type TranscodeStreams struct {
 	RemoveUnwantedAudio     bool `json:"remove_unwanted_audio"`
 	RemoveUnwantedSubtitles bool `json:"remove_unwanted_subtitles"`
 	VideoCopyMaxPct         int  `json:"video_copy_max_pct"`
+}
+
+// TranscodeSummary defines model for TranscodeSummary.
+type TranscodeSummary struct {
+	Counts TranscodeCounts `json:"counts"`
+
+	// Enabled The master switch.
+	Enabled   bool                      `json:"enabled"`
+	Health    []TranscodeHealth         `json:"health"`
+	Libraries []TranscodeLibrarySummary `json:"libraries"`
+
+	// OriginalsBytes Bytes of converted files' originals the recycle bin still holds.
+	OriginalsBytes int64            `json:"originals_bytes"`
+	Totals         TranscodeSavings `json:"totals"`
 }
 
 // TranscodeVideoFilters defines model for TranscodeVideoFilters.
@@ -9231,6 +9478,29 @@ type MergeTagJSONBody struct {
 	IntoId int64 `json:"into_id"`
 }
 
+// ResumeTranscodeKindParamsKind defines parameters for ResumeTranscodeKind.
+type ResumeTranscodeKindParamsKind string
+
+// ListTranscodeItemsParams defines parameters for ListTranscodeItems.
+type ListTranscodeItemsParams struct {
+	State      *ListTranscodeItemsParamsState `form:"state,omitempty" json:"state,omitempty"`
+	CategoryId *int64                         `form:"category_id,omitempty" json:"category_id,omitempty"`
+	Kind       *ListTranscodeItemsParamsKind  `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Q Case-insensitive part of the path.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Cursor From `next_cursor` of the previous page. Absent on the first page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListTranscodeItemsParamsState defines parameters for ListTranscodeItems.
+type ListTranscodeItemsParamsState string
+
+// ListTranscodeItemsParamsKind defines parameters for ListTranscodeItems.
+type ListTranscodeItemsParamsKind string
+
 // CreateUserJSONBody defines parameters for CreateUser.
 type CreateUserJSONBody struct {
 	// Access The libraries the account may use. An administrator manages every one regardless.
@@ -10056,6 +10326,9 @@ type CreateTargetProfileJSONRequestBody = TargetProfile
 
 // UpdateTargetProfileJSONRequestBody defines body for UpdateTargetProfile for application/json ContentType.
 type UpdateTargetProfileJSONRequestBody = TargetProfile
+
+// RetryTranscodeItemsJSONRequestBody defines body for RetryTranscodeItems for application/json ContentType.
+type RetryTranscodeItemsJSONRequestBody = TranscodeRetryRequest
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody CreateUserJSONBody
@@ -11289,6 +11562,24 @@ type ServerInterface interface {
 	// Try every engine again and answer what was found; takes a few seconds. Administrator only.
 	// (POST /transcode/hardware/detect)
 	DetectTranscodeHardware(w http.ResponseWriter, r *http.Request)
+	// End a kind's backoff or probing now ("Try now"). Administrator only.
+	// (POST /transcode/health/{kind}/resume)
+	ResumeTranscodeKind(w http.ResponseWriter, r *http.Request, kind ResumeTranscodeKindParamsKind)
+	// Judged files by id, optionally one state, library or kind, or a path search. Administrator only.
+	// (GET /transcode/items)
+	ListTranscodeItems(w http.ResponseWriter, r *http.Request, params ListTranscodeItemsParams)
+	// Give failed and blocked files another chance, the listed ones or every one a filter matches, optionally with other settings; `preview` only counts. Administrator only.
+	// (POST /transcode/items/retry)
+	RetryTranscodeItems(w http.ResponseWriter, r *http.Request)
+	// One judged file with the plan its conversion follows. Administrator only.
+	// (GET /transcode/items/{media_object_id})
+	GetTranscodeItem(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// Put a converted file's original back. Refused when the original was purged or something else sits at its path. Administrator only.
+	// (POST /transcode/items/{media_object_id}/restore)
+	RestoreTranscodeItem(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// Per library counts and savings, how each kind of conversion is doing, the originals kept and the setups' warnings. Administrator only.
+	// (GET /transcode/summary)
+	GetTranscodeSummary(w http.ResponseWriter, r *http.Request)
 	// Every account, with its role and category grants.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -13782,6 +14073,42 @@ func (_ Unimplemented) GetTranscodeHardware(w http.ResponseWriter, r *http.Reque
 // Try every engine again and answer what was found; takes a few seconds. Administrator only.
 // (POST /transcode/hardware/detect)
 func (_ Unimplemented) DetectTranscodeHardware(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// End a kind's backoff or probing now ("Try now"). Administrator only.
+// (POST /transcode/health/{kind}/resume)
+func (_ Unimplemented) ResumeTranscodeKind(w http.ResponseWriter, r *http.Request, kind ResumeTranscodeKindParamsKind) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Judged files by id, optionally one state, library or kind, or a path search. Administrator only.
+// (GET /transcode/items)
+func (_ Unimplemented) ListTranscodeItems(w http.ResponseWriter, r *http.Request, params ListTranscodeItemsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Give failed and blocked files another chance, the listed ones or every one a filter matches, optionally with other settings; `preview` only counts. Administrator only.
+// (POST /transcode/items/retry)
+func (_ Unimplemented) RetryTranscodeItems(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One judged file with the plan its conversion follows. Administrator only.
+// (GET /transcode/items/{media_object_id})
+func (_ Unimplemented) GetTranscodeItem(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Put a converted file's original back. Refused when the original was purged or something else sits at its path. Administrator only.
+// (POST /transcode/items/{media_object_id}/restore)
+func (_ Unimplemented) RestoreTranscodeItem(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Per library counts and savings, how each kind of conversion is doing, the originals kept and the setups' warnings. Administrator only.
+// (GET /transcode/summary)
+func (_ Unimplemented) GetTranscodeSummary(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -26445,6 +26772,224 @@ func (siw *ServerInterfaceWrapper) DetectTranscodeHardware(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// ResumeTranscodeKind operation middleware
+func (siw *ServerInterfaceWrapper) ResumeTranscodeKind(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "kind" -------------
+	var kind ResumeTranscodeKindParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeTranscodeKind(w, r, kind)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTranscodeItems operation middleware
+func (siw *ServerInterfaceWrapper) ListTranscodeItems(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTranscodeItemsParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "category_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTranscodeItems(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetryTranscodeItems operation middleware
+func (siw *ServerInterfaceWrapper) RetryTranscodeItems(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryTranscodeItems(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTranscodeItem operation middleware
+func (siw *ServerInterfaceWrapper) GetTranscodeItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "media_object_id" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "media_object_id", chi.URLParam(r, "media_object_id"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "media_object_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTranscodeItem(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreTranscodeItem operation middleware
+func (siw *ServerInterfaceWrapper) RestoreTranscodeItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "media_object_id" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "media_object_id", chi.URLParam(r, "media_object_id"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "media_object_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreTranscodeItem(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTranscodeSummary operation middleware
+func (siw *ServerInterfaceWrapper) GetTranscodeSummary(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTranscodeSummary(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -29850,6 +30395,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/transcode/hardware/detect", wrapper.DetectTranscodeHardware)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/transcode/health/{kind}/resume", wrapper.ResumeTranscodeKind)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/transcode/items", wrapper.ListTranscodeItems)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/transcode/items/retry", wrapper.RetryTranscodeItems)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/transcode/items/{media_object_id}", wrapper.GetTranscodeItem)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/transcode/items/{media_object_id}/restore", wrapper.RestoreTranscodeItem)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/transcode/summary", wrapper.GetTranscodeSummary)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)
