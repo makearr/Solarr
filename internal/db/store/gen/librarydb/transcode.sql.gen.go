@@ -330,6 +330,83 @@ func (q *Queries) ListRunningTranscodeItems(ctx context.Context) ([]ListRunningT
 	return items, nil
 }
 
+const listTranscodeFacts = `-- name: ListTranscodeFacts :many
+SELECT o.id, o.size_bytes, o.duration_ms, o.width, o.height, o.video_bitrate, o.audio_bitrate, o.overall_bitrate, o.measured_attributes_id,
+       a.video_codec, a.hdr, a.audio_codec, a.audio_channels, a.bit_depth, a.languages, a.subtitles, a.frame_rate, a.scan_type, a.container, a.sample_rate
+FROM media_object o
+LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
+WHERE o.id IN (SELECT value FROM json_each(?1))
+ORDER BY o.id
+`
+
+type ListTranscodeFactsRow struct {
+	ID                   int64
+	SizeBytes            int64
+	DurationMs           sql.NullInt64
+	Width                sql.NullInt64
+	Height               sql.NullInt64
+	VideoBitrate         sql.NullInt64
+	AudioBitrate         sql.NullInt64
+	OverallBitrate       sql.NullInt64
+	MeasuredAttributesID sql.NullInt64
+	VideoCodec           sql.NullString
+	Hdr                  sql.NullString
+	AudioCodec           sql.NullString
+	AudioChannels        sql.NullString
+	BitDepth             sql.NullInt64
+	Languages            sql.NullString
+	Subtitles            sql.NullString
+	FrameRate            sql.NullFloat64
+	ScanType             sql.NullString
+	Container            sql.NullString
+	SampleRate           sql.NullInt64
+}
+
+// What the probe measured of the given files, enough for the coarse analysis; a file never measured has a NULL attribute id.
+func (q *Queries) ListTranscodeFacts(ctx context.Context, ids interface{}) ([]ListTranscodeFactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTranscodeFacts, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTranscodeFactsRow{}
+	for rows.Next() {
+		var i ListTranscodeFactsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SizeBytes,
+			&i.DurationMs,
+			&i.Width,
+			&i.Height,
+			&i.VideoBitrate,
+			&i.AudioBitrate,
+			&i.OverallBitrate,
+			&i.MeasuredAttributesID,
+			&i.VideoCodec,
+			&i.Hdr,
+			&i.AudioCodec,
+			&i.AudioChannels,
+			&i.BitDepth,
+			&i.Languages,
+			&i.Subtitles,
+			&i.FrameRate,
+			&i.ScanType,
+			&i.Container,
+			&i.SampleRate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTranscodeItems = `-- name: ListTranscodeItems :many
 SELECT ti.media_object_id, ti.category_id, ti.kind, ti.state, ti.lane, ti.target_id, ti.setup_revision, ti.reasons_json, ti.plan_json,
        ti.warnings_json, ti.override_json, ti.attempts, ti.pass, ti.interrupted, ti.failure_code, ti.last_error, ti.found_at, ti.last_run_seq,

@@ -274,3 +274,32 @@ func TestTranscodeItems_ResultJournalRunningAndHealthRoundTrip(t *testing.T) {
 }
 
 func errorsIs(err, target error) bool { return errors.Is(err, target) }
+
+func TestTranscodeItems_FactsReadTheMeasuredAttributesAndFlagAFileNeverMeasured(t *testing.T) {
+	items, opened := seedTranscode(t)
+	statements := []string{
+		`INSERT INTO media_attributes (id, attr_hash, video_codec, hdr, audio_codec, audio_channels, bit_depth, languages, subtitles, frame_rate, scan_type, container, sample_rate)
+		 VALUES (1, 'h1', 'h265', 'hdr10', 'aac', '5.1', 10, '["en","de"]', '["fr"]', 23.976, 'progressive', 'matroska,webm', 48000)`,
+		`UPDATE media_object SET measured_attributes_id = 1, duration_ms = 5000, width = 1920, height = 800, video_bitrate = 4000000, overall_bitrate = 4500000 WHERE id = 1`,
+	}
+	for _, statement := range statements {
+		if _, err := opened.WriteDB().ExecContext(t.Context(), statement); err != nil {
+			t.Fatalf("%s: %v", statement, err)
+		}
+	}
+	got, err := items.Facts(t.Context(), []int64{1, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[int64]library.ObjectFacts{
+		1: {
+			MediaObjectID: 1, SizeBytes: 300, DurationMs: 5000, Width: 1920, Height: 800, VideoBitrate: 4000000, OverallBitrate: 4500000, Measured: true,
+			VideoCodec: "h265", HDR: "hdr10", AudioCodec: "aac", AudioChannels: "5.1", ScanType: "progressive", Container: "matroska,webm",
+			BitDepth: 10, SampleRate: 48000, FrameRate: 23.976, AudioLanguages: []string{"en", "de"}, SubtitleLanguages: []string{"fr"},
+		},
+		2: {MediaObjectID: 2, SizeBytes: 100},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Facts = %+v\nwant %+v", got, want)
+	}
+}

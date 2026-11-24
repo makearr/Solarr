@@ -1,6 +1,10 @@
 package transcoder
 
 import (
+	"strconv"
+	"time"
+
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 )
@@ -34,4 +38,20 @@ func FileFromMeasured(measured mediatool.Measured, container string, sizeBytes i
 		file.Streams = append(file.Streams, transcode.Stream{Index: len(file.Streams), Type: transcode.StreamSubtitle, Codec: "subrip", Language: language})
 	}
 	return file
+}
+
+// MeasuredOf turns what the library stored of a file back into the probe's own shape; the library keeps codecs in a
+// release name's vocabulary (h265), the skip rules read either.
+func MeasuredOf(facts library.ObjectFacts) mediatool.Measured {
+	measured := mediatool.Measured{
+		FormatName: facts.Container, Duration: time.Duration(facts.DurationMs) * time.Millisecond, OverallBitrate: facts.OverallBitrate,
+		AudioBitrate: facts.AudioBitrate, VideoBitrate: facts.VideoBitrate, AudioCodec: facts.AudioCodec, VideoCodec: facts.VideoCodec,
+		SampleRate: int(facts.SampleRate), BitDepth: int(facts.BitDepth), Width: int(facts.Width), Height: int(facts.Height),
+		AudioLanguages: facts.AudioLanguages, SubtitleLanguages: facts.SubtitleLanguages, FrameRate: facts.FrameRate,
+		ScanType: facts.ScanType, HDR: facts.HDR, ChannelLayout: facts.AudioChannels,
+	}
+	if channels, err := strconv.Atoi(facts.AudioChannels); err == nil {
+		measured.Channels, measured.ChannelLayout = channels, ""
+	}
+	return measured
 }

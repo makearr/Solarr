@@ -550,3 +550,40 @@ func (t TranscodeItems) OldestOriginals(ctx context.Context, limit int64) ([]Kep
 	}
 	return out, nil
 }
+
+// ObjectFacts is what the probe measured of one file; Measured is false for a file the probe has not read yet.
+type ObjectFacts struct {
+	MediaObjectID, SizeBytes, DurationMs, Width, Height, VideoBitrate, AudioBitrate, OverallBitrate int64
+	Measured                                                                                        bool
+	VideoCodec, HDR, AudioCodec, AudioChannels, ScanType, Container                                 string
+	BitDepth, SampleRate                                                                            int64
+	FrameRate                                                                                       float64
+	// AudioLanguages and SubtitleLanguages are two-letter codes.
+	AudioLanguages, SubtitleLanguages []string
+}
+
+// Facts answers what is known of the given files, keyed by id.
+func (t TranscodeItems) Facts(ctx context.Context, ids []int64) (map[int64]ObjectFacts, error) {
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := librarydb.New(t.store.Read()).ListTranscodeFacts(ctx, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("library: transcode facts: %w", err)
+	}
+	out := make(map[int64]ObjectFacts, len(rows))
+	for _, row := range rows {
+		facts := ObjectFacts{
+			MediaObjectID: row.ID, SizeBytes: row.SizeBytes, DurationMs: row.DurationMs.Int64, Width: row.Width.Int64, Height: row.Height.Int64,
+			VideoBitrate: row.VideoBitrate.Int64, AudioBitrate: row.AudioBitrate.Int64, OverallBitrate: row.OverallBitrate.Int64,
+			Measured: row.MeasuredAttributesID.Valid, VideoCodec: row.VideoCodec.String, HDR: row.Hdr.String, AudioCodec: row.AudioCodec.String,
+			AudioChannels: row.AudioChannels.String, ScanType: row.ScanType.String, Container: row.Container.String,
+			BitDepth: row.BitDepth.Int64, SampleRate: row.SampleRate.Int64, FrameRate: row.FrameRate.Float64,
+		}
+		_ = json.Unmarshal([]byte(row.Languages.String), &facts.AudioLanguages)
+		_ = json.Unmarshal([]byte(row.Subtitles.String), &facts.SubtitleLanguages)
+		out[row.ID] = facts
+	}
+	return out, nil
+}

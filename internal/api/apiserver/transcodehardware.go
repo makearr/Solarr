@@ -2,30 +2,14 @@ package apiserver
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 )
 
-// targetCodec maps a quality target's video codec name to the encoder matrix's; false when the target names none or one that is not encoded.
-func targetCodec(name string) (transcode.Codec, bool) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "h264", "avc", "x264":
-		return transcode.CodecH264, true
-	case "h265", "hevc", "x265":
-		return transcode.CodecHEVC, true
-	case "av1":
-		return transcode.CodecAV1, true
-	case "vp9":
-		return transcode.CodecVP9, true
-	}
-	return "", false
-}
-
 // transcodeAvailability is what each engine does for a target's codec; auto is available when anything is.
 func (s *Server) transcodeAvailability(videoCodec string) []gen.TranscodeEngineAvailability {
-	codec, known := targetCodec(videoCodec)
+	codec, known := transcode.CodecNamed(videoCodec)
 	if s.transcoder == nil || !known {
 		return []gen.TranscodeEngineAvailability{{Engine: gen.TranscodeEngineAvailabilityEngine("auto"), Available: true, PresetApplies: true}}
 	}

@@ -173,3 +173,12 @@ SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS total FROM recycle_bin W
 
 -- name: ListOldestTranscodeOriginals :many
 SELECT id, media_object_id, size_bytes, recycled_at FROM recycle_bin WHERE reason = 'transcoded' AND restored_at IS NULL ORDER BY recycled_at, id LIMIT ?;
+
+-- What the probe measured of the given files, enough for the coarse analysis; a file never measured has a NULL attribute id.
+-- name: ListTranscodeFacts :many
+SELECT o.id, o.size_bytes, o.duration_ms, o.width, o.height, o.video_bitrate, o.audio_bitrate, o.overall_bitrate, o.measured_attributes_id,
+       a.video_codec, a.hdr, a.audio_codec, a.audio_channels, a.bit_depth, a.languages, a.subtitles, a.frame_rate, a.scan_type, a.container, a.sample_rate
+FROM media_object o
+LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
+WHERE o.id IN (SELECT value FROM json_each(sqlc.arg(ids)))
+ORDER BY o.id;

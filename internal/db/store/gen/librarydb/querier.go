@@ -1024,6 +1024,8 @@ type Querier interface {
 	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
 	// from these in Go, by what the file is and not by its bytes.
 	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)
+	// What the probe measured of the given files, enough for the coarse analysis; a file never measured has a NULL attribute id.
+	ListTranscodeFacts(ctx context.Context, ids interface{}) ([]ListTranscodeFactsRow, error)
 	ListTranscodeItems(ctx context.Context, arg ListTranscodeItemsParams) ([]ListTranscodeItemsRow, error)
 	// The same, only the files a wanted album holds that met no track: a file already aligned has nothing to gain from
 	// being read again, and on a first import that was half the library (live_test 35).

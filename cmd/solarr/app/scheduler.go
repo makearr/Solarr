@@ -173,6 +173,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueArrPush,
 	})
 	registry.MustRegister(jobs.Task{
+		Key: "transcode", Name: "Transcode library files", DefaultCadence: transcodeScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueTranscode,
+	})
+	registry.MustRegister(jobs.Task{
 		Key: "tag_writeback", Name: "Write tags into files", DefaultCadence: tagWritebackScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueTagWriteback,

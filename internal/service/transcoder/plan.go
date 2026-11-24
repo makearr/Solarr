@@ -81,3 +81,13 @@ func (p Plan) Lane(engine transcode.Accel) Lane {
 	}
 	return LaneGPU
 }
+
+// tenBitVideo says an encoded video stream is 10 bit, which a GPU engine must support too.
+func (p Plan) tenBitVideo() bool {
+	for _, stream := range p.Video {
+		if stream.Action == ActionEncode && stream.BitDepth >= 10 {
+			return true
+		}
+	}
+	return false
+}

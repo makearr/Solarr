@@ -72,6 +72,7 @@ import (
 	"github.com/makearr/Solarr/internal/scanning/probe"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 	"github.com/makearr/Solarr/internal/scanning/watch"
+	"github.com/makearr/Solarr/internal/service/transcoder"
 	"github.com/makearr/Solarr/migrations"
 )
 
@@ -151,6 +152,9 @@ type process struct {
 	tool mediatool.Tool
 	// transcoder converts files for the built-in player; detection runs at start.
 	transcoder *transcode.Service
+	// pipeline is the conversion pipeline, built on first use.
+	pipeline      *transcoder.Service
+	transcodeOnce sync.Once
 	// media is every media type compiled in; core asks it instead of naming one.
 	media *media.Registry
 	// recovered are the metadata providers back from an outage, waiting for the task that retries their files.
@@ -698,6 +702,9 @@ func (p *process) startJobs(ctx context.Context) error {
 		return err
 	}
 	if err := p.registerDiscoverJob(registry, executor); err != nil {
+		return err
+	}
+	if err := p.registerTranscodeJobs(registry, executor); err != nil {
 		return err
 	}
 	if err := p.registerImportJob(registry, executor); err != nil {

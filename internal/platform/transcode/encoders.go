@@ -19,6 +19,21 @@ const (
 // Codecs lists every codec in display order.
 var Codecs = []Codec{CodecH264, CodecHEVC, CodecAV1, CodecVP9}
 
+// CodecNamed maps a quality target's video codec name to the encoder matrix's; false when the target names none or one that is not encoded.
+func CodecNamed(name string) (Codec, bool) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "h264", "avc", "x264":
+		return CodecH264, true
+	case "h265", "hevc", "x265":
+		return CodecHEVC, true
+	case "av1":
+		return CodecAV1, true
+	case "vp9":
+		return CodecVP9, true
+	}
+	return "", false
+}
+
 // Engines lists the encoding engines in display order.
 var Engines = []Accel{Software, QSV, VAAPI, NVENC}
 
