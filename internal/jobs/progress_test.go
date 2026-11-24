@@ -100,3 +100,22 @@ func TestProgress_NoEstimateWithoutATotalOrHistory(t *testing.T) {
 		t.Errorf("with no total = %+v, want 10 done and no estimate", unbounded)
 	}
 }
+
+func TestProgress_TheSubjectShowsInTheRunningList(t *testing.T) {
+	queue, fake := newQueue(t)
+	running := jobs.NewRunning(fake)
+	executor := jobs.NewExecutor(queue, fake, jobs.ExecutorConfig{
+		Owner: "worker-1", LeaseTTL: time.Minute, Logger: quietLogger(), Running: running,
+	})
+	var subject string
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(_ context.Context, job jobs.Job) error {
+		job.Progress.SetSubject("track.flac")
+		subject = running.Snapshot()[0].Subject
+		return nil
+	}))
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	executor.Execute(t.Context(), claimOne(t, queue, jobs.PoolMaintenance, "worker-1"))
+	if subject != "track.flac" {
+		t.Errorf("subject = %q, want track.flac", subject)
+	}
+}

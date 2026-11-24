@@ -30,6 +30,12 @@ Three lanes (`cpu`, `gpu`, `audio`) each have a limit in Settings; a second set 
 and ffmpeg processes beyond it are paused (SIGSTOP). Pausing the `transcode` task in Settings > Scheduler stops running
 conversions (they return as interrupted, no attempt spent) and holds the queue.
 
+## Where a conversion shows
+
+Settings > Scheduler lists a running conversion with the name of its file and the share of its duration done. A finished
+one adds a `transcoded` row to the History page (file name, engine, bytes saved) and a `transcode:<id>` event on the
+library topic that the interface may use to refresh.
+
 ## Failures
 
 Three errors on one file end it as `failed` until retried. Three consecutive failures of different files put that kind

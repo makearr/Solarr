@@ -283,6 +283,7 @@ function RunningJobRow({ job, now }: { job: RunningJob; now: number }) {
     <li className="flex flex-col gap-1.5 rounded-lg border border-border-subtle bg-surface p-3">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-muted">
         <span className="text-sm font-medium text-ink">{job.name}</span>
+        {job.subject && <span className="min-w-0 max-w-full truncate text-ink" title={job.subject}>{job.subject}</span>}
         <span>{progress}</span>
         <span>running for {formatSpan(runningFor)}</span>
         <span>{job.eta_seconds != null ? `${formatSpan(job.eta_seconds)} left` : "time left unknown"}</span>

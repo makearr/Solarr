@@ -35,6 +35,18 @@ type Progress struct {
 	// lastBeat is the last sign of life, and waiting is how many callers wait for a disk turn (not hanging).
 	lastBeat time.Time
 	waiting  int
+	// subject names the one thing the job works on now (a file name); empty when the job has no single subject.
+	subject string
+}
+
+// SetSubject names what the job is working on now, for the running list.
+func (p *Progress) SetSubject(subject string) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.subject = subject
 }
 
 // Beat records a sign of life without counting any work.
@@ -135,6 +147,8 @@ type RunningJob struct {
 	Done       int64
 	// Total is 0 when the job does not know how much there is.
 	Total int64
+	// Subject is the one thing the job works on now; empty when none.
+	Subject string
 	// PerMinute is the rate over the last rateWindow, 0 until there is rateMinimum of history.
 	PerMinute float64
 	// Remaining is the time left at that rate, 0 when unknown.
@@ -220,7 +234,7 @@ func (r *Running) Snapshot() []RunningJob {
 func (p *Progress) view(now time.Time) RunningJob {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	view := RunningJob{Done: p.done, Total: p.total}
+	view := RunningJob{Done: p.done, Total: p.total, Subject: p.subject}
 	if len(p.samples) == 0 {
 		return view
 	}

@@ -22,7 +22,7 @@ func (a History) List(ctx context.Context, workID, beforeID int64, limit int) ([
 	rows := make([]apiserver.HistoryRow, len(entries))
 	for i, entry := range entries {
 		row := apiserver.HistoryRow{
-			ID: entry.ID, At: time.Unix(entry.At, 0).UTC(), Kind: strings.TrimPrefix(entry.Kind, "download."),
+			ID: entry.ID, At: time.Unix(entry.At, 0).UTC(), Kind: strings.TrimPrefix(strings.TrimPrefix(entry.Kind, "download."), "file."),
 			CategoryID: entry.CategoryID, Album: entry.WorkTitle, Artist: entry.LeadName, ReleaseTitle: entry.ReleaseTitle,
 			Indexer: entry.Indexer, Client: entry.Client, Detail: entry.Detail,
 		}

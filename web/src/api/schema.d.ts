@@ -9026,6 +9026,8 @@ export interface components {
              * @description How much there is; absent when the job does not know.
              */
             total?: number;
+            /** @description The one thing the job works on now (a file name); absent when it has no single subject. */
+            subject?: string;
             /** @description Items a minute over the last one to five minutes; absent until measured. */
             per_minute?: number;
             /**
@@ -9110,7 +9112,7 @@ export interface components {
             /** Format: date-time */
             at: string;
             /** @enum {string} */
-            kind: "grabbed" | "imported" | "failed" | "removed";
+            kind: "grabbed" | "imported" | "failed" | "removed" | "transcoded";
             /** Format: int64 */
             work_id?: number;
             album?: string;

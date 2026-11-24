@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/service/transcoder"
 )
 
@@ -30,7 +33,7 @@ func (p *process) transcodeService() *transcoder.Service {
 			Items: library.NewTranscodeItems(p.library, cl), Settings: transcodeSettings{cache: p.cache}, Hardware: p.transcoder,
 			Devices: p.transcoder.DeviceFor, Prober: p.transcoder, Tagger: transcodeTagger{tool: p.tool},
 			Bin:      transcodeBin{RecycleBin: library.NewRecycleBin(p.library, p.fsys, cl).WithOnline(p.rootOnline)},
-			Reporter: transcodeReporter{logger: p.logger, stats: statistics.NewTranscodes(p.statistics)},
+			Reporter: transcodeReporter{logger: p.logger, stats: statistics.NewTranscodes(p.statistics), history: statistics.NewHistory(p.statistics), bus: p.bus},
 			Starter:  transcode.ExecStarter{Nice: mediatool.Nice{Level: 19}, IONice: mediatool.IONice{Class: 3}, Clock: cl},
 			Slots: transcoder.NewSlots(func(playing bool) map[transcoder.Lane]int {
 				global := snapshot()
@@ -87,9 +90,14 @@ func (t transcodeTagger) Marker(ctx context.Context, file string) string {
 
 // transcodeReporter logs every finished conversion and adds it to the savings statistics.
 type transcodeReporter struct {
-	logger *slog.Logger
-	stats  statistics.Transcodes
+	logger  *slog.Logger
+	stats   statistics.Transcodes
+	history statistics.History
+	bus     *events.Bus
 }
+
+// transcodeHistoryKind is the history row of a finished conversion; the download kinds carry "download.".
+const transcodeHistoryKind = "file.transcoded"
 
 func (r transcodeReporter) Converted(ctx context.Context, converted transcoder.Converted) {
 	r.logger.InfoContext(ctx, "file converted", slog.Int64("id", converted.MediaObjectID), slog.String("engine", converted.Engine),
@@ -101,6 +109,18 @@ func (r transcodeReporter) Converted(ctx context.Context, converted transcoder.C
 	if err != nil {
 		r.logger.WarnContext(ctx, "record conversion statistics", slog.Any("error", err))
 	}
+	saved := converted.OriginalBytes - converted.ResultBytes
+	_, err = r.history.Append(ctx, statistics.HistoryEntry{
+		At: converted.At.Unix(), Kind: transcodeHistoryKind, CategoryID: converted.CategoryID,
+		ReleaseTitle: path.Base(converted.Path), Detail: fmt.Sprintf("%s, %d bytes saved", converted.Engine, saved),
+	})
+	if err != nil {
+		r.logger.WarnContext(ctx, "record conversion history", slog.Any("error", err))
+	}
+	r.bus.Publish(events.Event{
+		Topic: events.TopicLibrary, Entity: fmt.Sprintf("transcode:%d", converted.MediaObjectID), CategoryID: converted.CategoryID,
+		Kind: "converted", Data: map[string]int64{"original_bytes": converted.OriginalBytes, "result_bytes": converted.ResultBytes},
+	})
 }
 
 // transcodeSettings is the pipeline's view of the settings cache.

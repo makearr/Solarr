@@ -158,6 +158,7 @@ func (s *Service) prepare(ctx context.Context, item library.TranscodeItem, progr
 		return nil, false, s.release(ctx, id)
 	}
 	run.root, run.relPath = root, present[0].RelPath
+	progress.SetSubject(path.Base(run.relPath))
 	run.abs = path.Join(root.Path, run.relPath)
 	if run.info, err = s.FS.Stat(run.abs); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {

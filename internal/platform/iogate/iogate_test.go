@@ -223,3 +223,29 @@ func TestReader_EveryReadIsATurnAndNothingIsHeldBetweenReads(t *testing.T) {
 		t.Fatalf("a seek reads nothing and takes no turn: err %v taken %d", err, turns.taken)
 	}
 }
+
+func TestAcquire_ConversionsGoLastEvenWhenTheyWaitedFirst(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	g := newGate(fake, 1, nil)
+	held, _ := g.Acquire(context.Background(), "d", ClassImport)
+	conversion := waitFor(g, "d", ClassTranscode)
+	waitingOn(t, g, "d", 1)
+	previews := waitFor(g, "d", ClassPreviews)
+	waitingOn(t, g, "d", 2)
+
+	held()
+	select {
+	case release := <-previews:
+		release()
+	case <-conversion:
+		t.Fatal("a conversion must not overtake the previews that waited behind it")
+	case <-time.After(2 * time.Second):
+		t.Fatal("nobody got the slot")
+	}
+	select {
+	case release := <-conversion:
+		release()
+	case <-time.After(2 * time.Second):
+		t.Fatal("the conversion never got the slot")
+	}
+}

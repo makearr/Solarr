@@ -7,6 +7,7 @@ const KIND_LABEL: Record<HistoryEntry["kind"], string> = {
   imported: "Imported",
   failed: "Failed",
   removed: "Removed",
+  transcoded: "Converted",
 };
 
 const KIND_TONE: Record<HistoryEntry["kind"], string> = {
@@ -14,6 +15,7 @@ const KIND_TONE: Record<HistoryEntry["kind"], string> = {
   imported: "text-ok",
   failed: "text-danger",
   removed: "text-ink-muted",
+  transcoded: "text-accent",
 };
 
 /** What happened to a download, in the words Lidarr's history uses. */

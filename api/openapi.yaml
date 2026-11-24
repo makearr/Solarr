@@ -12762,6 +12762,9 @@ components:
           type: integer
           format: int64
           description: How much there is; absent when the job does not know.
+        subject:
+          type: string
+          description: The one thing the job works on now (a file name); absent when it has no single subject.
         per_minute:
           type: number
           description: Items a minute over the last one to five minutes; absent until measured.
@@ -12841,7 +12844,7 @@ components:
         at: { type: string, format: date-time }
         kind:
           type: string
-          enum: [grabbed, imported, failed, removed]
+          enum: [grabbed, imported, failed, removed, transcoded]
         work_id: { type: integer, format: int64 }
         album: { type: string }
         artist: { type: string }

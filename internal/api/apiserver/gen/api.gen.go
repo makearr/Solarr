@@ -375,10 +375,11 @@ const (
 
 // Defines values for HistoryEntryKind.
 const (
-	HistoryEntryKindFailed   HistoryEntryKind = "failed"
-	HistoryEntryKindGrabbed  HistoryEntryKind = "grabbed"
-	HistoryEntryKindImported HistoryEntryKind = "imported"
-	HistoryEntryKindRemoved  HistoryEntryKind = "removed"
+	HistoryEntryKindFailed     HistoryEntryKind = "failed"
+	HistoryEntryKindGrabbed    HistoryEntryKind = "grabbed"
+	HistoryEntryKindImported   HistoryEntryKind = "imported"
+	HistoryEntryKindRemoved    HistoryEntryKind = "removed"
+	HistoryEntryKindTranscoded HistoryEntryKind = "transcoded"
 )
 
 // Defines values for IdentificationAttemptOutcome.
@@ -6747,6 +6748,9 @@ type RunningJob struct {
 	// Pool The worker pool the job runs in; the scheduler screen rates CPU and IO load by it.
 	Pool      string    `json:"pool"`
 	StartedAt time.Time `json:"started_at"`
+
+	// Subject The one thing the job works on now (a file name); absent when it has no single subject.
+	Subject *string `json:"subject,omitempty"`
 
 	// Total How much there is; absent when the job does not know.
 	Total *int64 `json:"total,omitempty"`
