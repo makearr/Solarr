@@ -1,7 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -50,5 +53,19 @@ func TestUnlessSafe_RunsTheJobOnlyOutsideSafeMode(t *testing.T) {
 	running.config.SafeMode = true
 	if err := handler.Run(t.Context(), jobs.Job{}); err != nil || runs != 1 {
 		t.Fatalf("runs in safe mode = %d, %v; want still 1", runs, err)
+	}
+}
+
+func TestUnlessSafe_SaysOnceWhyItSkippedARun(t *testing.T) {
+	running := newGoldenServer(t).process
+	var out bytes.Buffer
+	running.logger = slog.New(slog.NewTextHandler(&out, nil))
+	running.config.SafeMode = true
+	handler := running.unlessSafe(jobs.HandlerFunc(func(context.Context, jobs.Job) error { return nil }))
+	if err := handler.Run(t.Context(), jobs.Job{Type: "rss.sync"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); strings.Count(got, "skipped: safe mode") != 1 || !strings.Contains(got, "job=rss.sync") {
+		t.Errorf("log = %q, want one line naming the job", got)
 	}
 }

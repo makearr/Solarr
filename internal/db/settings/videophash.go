@@ -2,6 +2,9 @@ package settings
 
 import (
 	"context"
+	"strconv"
+
+	"github.com/makearr/Solarr/internal/platform/config"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -44,6 +47,32 @@ const (
 // VideoParallelFiles is how many videos the hashing reads at once, kept within its bounds.
 func (s *Snapshot) VideoParallelFiles() int {
 	return int(min(MaxVideoParallelFiles, max(1, s.policyInt(KeyVideoParallelFiles, DefaultVideoParallelFiles))))
+}
+
+// SetVideoHashingTuning stores the parallel reads and the frame tolerance a person chose; nil keeps one. Both are checked
+// before either is written.
+func (c *Cache) SetVideoHashingTuning(ctx context.Context, cl clock.Clock, parallelFiles, frameBits *int) error {
+	var problems config.Problems
+	changes := map[string]string{}
+	if parallelFiles != nil {
+		if *parallelFiles < 1 || *parallelFiles > MaxVideoParallelFiles {
+			problems = append(problems, config.Problem{Path: KeyVideoParallelFiles, Value: strconv.Itoa(*parallelFiles), Expectation: "1 to 8"})
+		}
+		changes[KeyVideoParallelFiles] = strconv.Itoa(*parallelFiles)
+	}
+	if frameBits != nil {
+		if *frameBits < MinVideoPhashFrameBits || *frameBits > MaxVideoPhashFrameBits {
+			problems = append(problems, config.Problem{Path: KeyVideoPhashFrameBits, Value: strconv.Itoa(*frameBits), Expectation: "2 to 20"})
+		}
+		changes[KeyVideoPhashFrameBits] = strconv.Itoa(*frameBits)
+	}
+	if len(problems) > 0 {
+		return problems
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	return c.setPolicies(ctx, cl, changes)
 }
 
 // KeyVideoPreviews switches the preview pictures made from the frames the hashing reads.

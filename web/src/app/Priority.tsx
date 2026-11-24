@@ -81,7 +81,9 @@ export function Priority() {
     },
   });
 
-  if (!isTierVisible(tier, "advanced")) return null;
+  if (!isTierVisible(tier, "advanced")) {
+    return <p className="text-sm text-ink-muted">{t("settings.tierGate", { tier: "Advanced" })}</p>;
+  }
   if (priority.error !== null || !priority.data || !schedules.data) return null;
 
   return (

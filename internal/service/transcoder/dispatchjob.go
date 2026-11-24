@@ -37,6 +37,9 @@ const pickWindow = 20
 // conversions the lanes have room for. The master switch off does nothing at all.
 func (s *Service) Dispatch(ctx context.Context) error {
 	global := s.Settings.Global()
+	if s.SafeMode && global.Enabled && s.Logger != nil {
+		s.Logger.Info("skipped: safe mode", "job", string(DispatchJobType))
+	}
 	if !global.Enabled || s.SafeMode {
 		return nil
 	}

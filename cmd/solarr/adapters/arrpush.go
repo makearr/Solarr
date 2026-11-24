@@ -23,6 +23,9 @@ type PushResult = apiserver.ArrPushResult
 // Run is the job of the schedule that sends monitoring back: every connection that asked for it, one after another.
 func (a ArrSync) Run(ctx context.Context, _ jobs.Job) error {
 	if a.SafeMode {
+		if a.Logger != nil {
+			a.Logger.Info("skipped: safe mode", "job", "arr monitoring push")
+		}
 		return nil
 	}
 	instances, err := a.Cache.ArrInstances(ctx)

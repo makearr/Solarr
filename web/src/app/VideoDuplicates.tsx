@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import { t } from "@/lib/i18n";
+import { isTierVisible, useTier } from "@/lib/useTier";
 
 import { SimilarVideos } from "./SimilarVideos";
 
@@ -11,21 +12,24 @@ function HashingSwitch() {
   const saved = useQuery({ queryKey: ["video-hashing"], queryFn: () => ok(api.GET("/settings/video-hashing")) });
   const save = useMutation({
     meta: { handlesErrors: true },
-    mutationFn: (enabled: boolean) => ok(api.PUT("/settings/video-hashing", { body: { enabled } })),
+    mutationFn: (body: { enabled: boolean; parallel_files?: number; frame_bits?: number }) => ok(api.PUT("/settings/video-hashing", { body })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["video-hashing"] });
       void queryClient.invalidateQueries({ queryKey: ["similar-videos"] });
     },
   });
+  const tier = useTier();
   if (!saved.data) return null;
+  const current = saved.data;
   return (
+    <div className="flex flex-col gap-2">
     <label className="flex items-start gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
       <input
         type="checkbox"
         className="mt-0.5 size-3.5"
-        checked={saved.data.enabled}
+        checked={current.enabled}
         disabled={save.isPending}
-        onChange={(event) => save.mutate(event.target.checked)}
+        onChange={(event) => save.mutate({ enabled: event.target.checked })}
       />
       <span className="flex flex-col gap-0.5">
         <span className="font-medium">{t("videoDuplicates.hashVideosInThe")}</span>
@@ -36,6 +40,45 @@ function HashingSwitch() {
         {save.isError && <span className="text-danger">{t("importLists.refused")}</span>}
       </span>
     </label>
+    {isTierVisible(tier, "advanced") && (
+      <div className="flex flex-wrap gap-4 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
+        <label className="flex flex-col gap-1">
+          <span className="font-medium">{t("videoDuplicates.parallelFiles")}</span>
+          <input
+            type="number"
+            min={1}
+            max={8}
+            className="w-20 rounded-md border border-border-subtle bg-surface px-2 py-1"
+            defaultValue={current.parallel_files}
+            key={`parallel-${current.parallel_files}`}
+            disabled={save.isPending}
+            onBlur={(event) => {
+              const value = Number(event.target.value);
+              if (value !== current.parallel_files) save.mutate({ enabled: current.enabled, parallel_files: value });
+            }}
+          />
+          <span className="max-w-xs text-ink-muted">{t("videoDuplicates.parallelFilesHelp")}</span>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="font-medium">{t("videoDuplicates.frameBits")}</span>
+          <input
+            type="number"
+            min={2}
+            max={20}
+            className="w-20 rounded-md border border-border-subtle bg-surface px-2 py-1"
+            defaultValue={current.frame_bits}
+            key={`bits-${current.frame_bits}`}
+            disabled={save.isPending}
+            onBlur={(event) => {
+              const value = Number(event.target.value);
+              if (value !== current.frame_bits) save.mutate({ enabled: current.enabled, frame_bits: value });
+            }}
+          />
+          <span className="max-w-xs text-ink-muted">{t("videoDuplicates.frameBitsHelp")}</span>
+        </label>
+      </div>
+    )}
+    </div>
   );
 }
 

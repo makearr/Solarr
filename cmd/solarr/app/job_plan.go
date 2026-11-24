@@ -56,7 +56,13 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 			return shares, nil
 		},
 	})
-	executor.Handle(plan.HuntJobType, p.hunt)
+	// The hunt's budget is zero in safe mode, so the run does nothing; say so once per run.
+	executor.Handle(plan.HuntJobType, jobs.HandlerFunc(func(ctx context.Context, job jobs.Job) error {
+		if p.config.SafeMode {
+			p.logger.Info("skipped: safe mode", "job", string(job.Type))
+		}
+		return p.hunt.Run(ctx, job)
+	}))
 	if err := registry.Register(rss.Definition); err != nil {
 		return err
 	}

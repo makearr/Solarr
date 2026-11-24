@@ -13036,6 +13036,10 @@ export interface components {
         VideoHashing: {
             /** @description Off, no new video is hashed; hashes already stored still serve the finder. */
             enabled: boolean;
+            /** @description How many video files the background hashing reads at once (scan.video_parallel_files). Always answered; a PUT that leaves it out keeps it. 400 outside 1 to 8. */
+            parallel_files?: number;
+            /** @description How many of 64 bits may differ between two frames of one moment before they count as different pictures (scan.video_phash_frame_bits). Always answered; a PUT that leaves it out keeps it. 400 outside 2 to 20. */
+            frame_bits?: number;
         };
         /** @description The import's duplicate check (import.duplicate_check, import.duplicate_blocklist). */
         ImportDuplicates: {

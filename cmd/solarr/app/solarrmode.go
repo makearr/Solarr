@@ -58,6 +58,7 @@ func (p *process) applyModeEnv(ctx context.Context) error {
 func (p *process) unlessSafe(handler jobs.Handler) jobs.Handler {
 	return jobs.HandlerFunc(func(ctx context.Context, job jobs.Job) error {
 		if p.config.SafeMode {
+			p.logger.Info("skipped: safe mode", "job", string(job.Type))
 			return nil
 		}
 		return handler.Run(ctx, job)

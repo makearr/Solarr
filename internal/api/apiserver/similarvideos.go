@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path"
@@ -9,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // SimilarVideoRow is one video of a group that looks alike.
@@ -243,7 +245,9 @@ func (s *Server) GetVideoHashing(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdministrator(w, r) {
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, gen.VideoHashing{Enabled: s.auth.Settings.Snapshot().VideoPerceptualHash()})
+	snapshot := s.auth.Settings.Snapshot()
+	parallel, bits := snapshot.VideoParallelFiles(), snapshot.VideoPhashFrameBits()
+	writeJSON(w, s.logger, http.StatusOK, gen.VideoHashing{Enabled: snapshot.VideoPerceptualHash(), ParallelFiles: &parallel, FrameBits: &bits})
 }
 
 // SetVideoHashing turns background video hashing on or off; the next probe sweep follows it.
@@ -253,6 +257,15 @@ func (s *Server) SetVideoHashing(w http.ResponseWriter, r *http.Request) {
 	}
 	var request gen.VideoHashing
 	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with enabled") {
+		return
+	}
+	if err := s.auth.Settings.SetVideoHashingTuning(r.Context(), s.auth.Clock, request.ParallelFiles, request.FrameBits); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problems.Report("the video hashing settings", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
 		return
 	}
 	if err := s.auth.Settings.SetVideoPerceptualHash(r.Context(), s.auth.Clock, request.Enabled); err != nil {
