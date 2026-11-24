@@ -26,6 +26,7 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 		FS:                p.fsys,
 		PerceptualHashing: func() bool { return p.cache.Snapshot().VideoPerceptualHash() },
 		VideoPreviews:     func() bool { return p.cache.Snapshot().VideoPreviews() },
+		ParallelFiles:     func() int { return p.cache.Snapshot().VideoParallelFiles() },
 		PreviewsDir:       filepath.Join(p.config.Paths.ConfigDir, "previews"),
 		Clock:             clock.NewSystem(),
 		Logger:            p.logger,

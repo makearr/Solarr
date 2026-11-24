@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -782,5 +783,70 @@ func TestJob_RunFingerprintsAudioOnceAndRemembersAFileItCannotRead(t *testing.T)
 	again, err := physical.ListAudioWithoutFingerprint(t.Context(), 0, 10)
 	if err != nil || len(again) != 0 {
 		t.Errorf("files still to fingerprint = %+v, %v; want none: the unreadable one is remembered as having none", again, err)
+	}
+}
+
+// concurrentHasher answers every video and records how many hashes ran at the same moment and how often each file was read.
+type concurrentHasher struct {
+	fakeTool
+	mu      sync.Mutex
+	running int
+	peak    int
+	reads   map[string]int
+}
+
+func (h *concurrentHasher) PerceptualHash(_ context.Context, path string) (mediatool.VideoHash, error) {
+	h.mu.Lock()
+	h.running++
+	h.peak = max(h.peak, h.running)
+	h.reads[filepath.Base(path)]++
+	h.mu.Unlock()
+	time.Sleep(20 * time.Millisecond)
+	h.mu.Lock()
+	h.running--
+	h.mu.Unlock()
+	return mediatool.VideoHash{Mean: 1, Frames: []mediatool.FrameHash{{Slot: 0, Hash: 2}}}, nil
+}
+
+func TestJob_RunHashesSeveralVideosAtOnceUpToTheSetLimitAndEachOnce(t *testing.T) {
+	for _, test := range []struct {
+		workers  int
+		wantPeak int
+	}{{1, 1}, {4, 4}} {
+		opened := newLibrary(t)
+		physical := library.NewPhysical(opened)
+		root := t.TempDir()
+		var files []library.PhysicalFile
+		for index := range 12 {
+			name := fmt.Sprintf("v%02d.mkv", index)
+			if err := os.WriteFile(filepath.Join(root, name), make([]byte, 100), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			files = append(files, library.PhysicalFile{RelPath: name, SizeBytes: 100, QuickHash: name, FirstSeenAt: time.Unix(0, 0)})
+		}
+		if _, err := physical.RegisterBatch(t.Context(), 1, files); err != nil {
+			t.Fatal(err)
+		}
+		tool := &concurrentHasher{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "matroska", Duration: time.Second}}, reads: map[string]int{}}
+		job := probe.NewJob(probe.Config{
+			Physical: physical, Coverage: library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+			Roots: fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}}, Tool: tool, FS: fsx.NewOS(),
+			PerceptualHashing: func() bool { return true }, ParallelFiles: func() int { return test.workers },
+			Clock: clock.NewFakeAtEpoch(), Logger: slog.New(slog.DiscardHandler),
+		})
+		if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if len(tool.reads) != 12 {
+			t.Errorf("workers %d: %d files hashed, want 12", test.workers, len(tool.reads))
+		}
+		for name, count := range tool.reads {
+			if count != 1 {
+				t.Errorf("workers %d: %s hashed %d times, want once", test.workers, name, count)
+			}
+		}
+		if tool.peak != test.wantPeak {
+			t.Errorf("workers %d: %d files at once, want %d", test.workers, tool.peak, test.wantPeak)
+		}
 	}
 }

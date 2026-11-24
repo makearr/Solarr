@@ -48,6 +48,7 @@ The pass is a setting, `scan.video_phash` (default off), edited by an administra
 (`GET/PUT /settings/video-hashing`). Off, nothing new is hashed; hashes already stored still serve the finder, and the
 report says so (`hashing_enabled`). The tolerance is `scan.video_phash_frame_bits` (default 10, 2 to 20): the frame
 distance at the medium level; exact, high, low and lowest scale it to 0, one half, 1.3 and 1.8 times.
+`scan.video_parallel_files` (Advanced, default 1, 1 to 8) is how many videos the backfill reads at once, each already reading three moments at once. One keeps today's pace and is right for a network share; on a local disk three took a file from 1262 to 650 ms (measured). Raise it on a share only after measuring.
 
 Limits: fast action can exceed the cut threshold between neighbouring frames, which leaves a window with one frame (the
 offset tolerance is then gone for that moment); hard-coded subtitles that cover more than half a bar row crop the bar away.

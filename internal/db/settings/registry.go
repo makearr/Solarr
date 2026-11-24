@@ -181,6 +181,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  strconv.Itoa(DefaultVideoPhashFrameBits),
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyVideoParallelFiles, Kind: KindInt, Tier: TierAdvanced,
+		Name:     "Videos hashed at once",
+		HelpText: "How many video files the background hashing reads at the same time (1 to 8). One is gentle on a network share; a local disk hashes about twice as fast with three. Each file already reads three moments at once.",
+		Default:  strconv.Itoa(DefaultVideoParallelFiles),
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyHuntGaps, Kind: KindBool, Tier: TierNormal,
 		Name:     "Search for old missing items",
 		HelpText: "The automatic search also looks for missing items released before the freshness window. Off, only new releases and upgrades are searched; a search you start yourself works either way.",

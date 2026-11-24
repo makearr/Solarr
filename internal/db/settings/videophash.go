@@ -32,6 +32,20 @@ func (s *Snapshot) VideoPhashFrameBits() int {
 	return int(min(MaxVideoPhashFrameBits, max(MinVideoPhashFrameBits, s.policyInt(KeyVideoPhashFrameBits, DefaultVideoPhashFrameBits))))
 }
 
+// KeyVideoParallelFiles is how many video files the hash backfill reads at once.
+const KeyVideoParallelFiles = "scan.video_parallel_files"
+
+// Bounds of the parallel hash reads: one reads as the backfill always did; more is for a local disk, not a network share.
+const (
+	DefaultVideoParallelFiles = 1
+	MaxVideoParallelFiles     = 8
+)
+
+// VideoParallelFiles is how many videos the hashing reads at once, kept within its bounds.
+func (s *Snapshot) VideoParallelFiles() int {
+	return int(min(MaxVideoParallelFiles, max(1, s.policyInt(KeyVideoParallelFiles, DefaultVideoParallelFiles))))
+}
+
 // KeyVideoPreviews switches the preview pictures made from the frames the hashing reads.
 const KeyVideoPreviews = "scan.video_previews"
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"path"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -52,6 +53,14 @@ func (j *Job) shouldYield(ctx context.Context, started time.Time) bool {
 	return j.waiting == nil || j.waiting(ctx)
 }
 
+// parallelFiles is how many video files the hash backfills read at once.
+func (j *Job) parallelFiles() int {
+	if j.parallel == nil {
+		return 1
+	}
+	return max(1, j.parallel())
+}
+
 // Roots resolves a root folder by id. They are settings.db policy (ADR-25),
 // so the job asks rather than reading the table -- the same interface
 // internal/scanning/scan already asks of its own Roots dependency.
@@ -63,6 +72,7 @@ type Roots interface {
 // resumable batches, until none remain or the context is cancelled.
 type Job struct {
 	physical    library.Physical
+	parallel    func() int
 	coverage    library.ProbeCoverage
 	roots       Roots
 	tool        mediatool.Tool
@@ -94,6 +104,8 @@ type Config struct {
 	PreviewsDir   string
 	Clock         clock.Clock
 	Logger        *slog.Logger
+	// ParallelFiles is how many video files the hash backfills read at once; nil or below 2 reads one at a time.
+	ParallelFiles func() int
 	// OthersWaiting says whether other jobs of the pool are queued behind this one; nil means always, so the sweep yields as it always did.
 	OthersWaiting func(ctx context.Context) bool
 }
@@ -106,7 +118,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		physical: config.Physical, coverage: config.Coverage, roots: config.Roots,
-		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, previews: config.VideoPreviews, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger, waiting: config.OthersWaiting,
+		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, previews: config.VideoPreviews, parallel: config.ParallelFiles, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger, waiting: config.OthersWaiting,
 	}
 }
 
@@ -164,14 +176,14 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 			}
 		}
 	}
-	if err := j.backfill(ctx, started, oshashPass, "oshash", j.physical.ListVideoWithoutOshash, j.hashFile, request.Progress); err != nil {
+	if err := j.backfill(ctx, started, oshashPass, "oshash", j.parallelFiles(), j.physical.ListVideoWithoutOshash, j.hashFile, request.Progress); err != nil {
 		return err
 	}
 	if hashPictures {
 		list := func(ctx context.Context, afterID, pageSize int64) ([]library.UnmeasuredFile, error) {
 			return j.physical.ListVideoWithoutHashOrPreview(ctx, afterID, pageSize, previews)
 		}
-		err := j.backfill(ctx, started, phashPass, "phash", list,
+		err := j.backfill(ctx, started, phashPass, "phash", j.parallelFiles(), list,
 			func(ctx context.Context, file library.UnmeasuredFile) error {
 				return j.perceptualHash(ctx, hasher, file, previews)
 			}, request.Progress)
@@ -181,7 +193,7 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 		j.forced.Store(PicturesMode(""))
 	}
 	if fingerprinter, canFingerprint := j.tool.(AudioFingerprinter); canFingerprint {
-		err := j.backfill(ctx, started, audioFingerprintPass, "audio fingerprint", j.physical.ListAudioWithoutFingerprint,
+		err := j.backfill(ctx, started, audioFingerprintPass, "audio fingerprint", 1, j.physical.ListAudioWithoutFingerprint,
 			func(ctx context.Context, file library.UnmeasuredFile) error {
 				return j.fingerprintAudio(ctx, fingerprinter, file)
 			},
@@ -227,9 +239,10 @@ type PreviewMaker interface {
 }
 
 // backfill hashes the video files a pass still lists (the hash was not written at scan time); a file that cannot
-// be read stays unhashed and is asked again next run.
+// be read stays unhashed and is asked again next run. Up to workers files are read at once; the files are started in
+// order, so a yield waits for the running ones and the cursor then stands at the last started file.
 func (j *Job) backfill(
-	ctx context.Context, started time.Time, pass int, name string,
+	ctx context.Context, started time.Time, pass int, name string, workers int,
 	list func(context.Context, int64, int64) ([]library.UnmeasuredFile, error),
 	hash func(context.Context, library.UnmeasuredFile) error, progress *jobs.Progress,
 ) error {
@@ -237,7 +250,9 @@ func (j *Job) backfill(
 		return nil
 	}
 	afterID := j.resumeAt[pass].Swap(0)
-	hashed := 0
+	var hashed atomic.Int64
+	slots := make(chan struct{}, max(1, workers))
+	var running sync.WaitGroup
 	for {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("probe.context", string(JobType), err)
@@ -249,19 +264,27 @@ func (j *Job) backfill(
 		for _, file := range batch {
 			// A shutdown must release the job, not finish it with the files it cut short still unhashed.
 			if err := ctx.Err(); err != nil {
+				running.Wait()
 				return jobs.Retryablef("probe.context", string(JobType), err)
 			}
+			slots <- struct{}{}
 			progress.Add(1)
-			if err := hash(ctx, file); err != nil {
-				j.logger.WarnContext(ctx, name+" failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
-			} else {
-				hashed++
-			}
+			running.Add(1)
+			go func() {
+				defer func() { <-slots; running.Done() }()
+				if err := hash(ctx, file); err != nil {
+					j.logger.WarnContext(ctx, name+" failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+				} else {
+					hashed.Add(1)
+				}
+			}()
 			if j.shouldYield(ctx, started) {
+				running.Wait()
 				j.resumeAt[pass].Store(file.MediaObjectID)
-				return fmt.Errorf("probe: %d %s hashes in %s: %w", hashed, name, yieldAfter, jobs.ErrYield)
+				return fmt.Errorf("probe: %d %s hashes in %s: %w", hashed.Load(), name, yieldAfter, jobs.ErrYield)
 			}
 		}
+		running.Wait()
 		if len(batch) < batchSize {
 			return nil
 		}
