@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
@@ -79,6 +80,11 @@ type ImporterConfig struct {
 	Fingerprint func(ctx context.Context, absolutePath string) (hash mediatool.VideoHash, durationMs int64, ok bool)
 	// SameVideos are the files of a series that show the same pictures as a hash.
 	SameVideos func(ctx context.Context, workID int64, hash mediatool.VideoHash, durationMs int64) ([]int64, error)
+	// SeriesVideos loads a series' hashed files once and answers which of them show the same pictures as a hash; with it
+	// a unit of many files reads the series once. nil asks SameVideos per file.
+	SeriesVideos func(ctx context.Context, workID int64) (same func(hash mediatool.VideoHash, durationMs int64) []int64, err error)
+	// ParallelFiles is how many of a unit's files are fingerprinted at once; nil or below 2 reads one at a time.
+	ParallelFiles func() int
 	// DuplicateCheck says whether the check is on; nil leaves it on.
 	DuplicateCheck func() bool
 	// AfterPlacing is told of each series an import placed episodes of; nil is told nothing.
@@ -400,6 +406,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	// Only a unit with a single video file can take its episode from the job folder or the release name; for a
 	// season pack of obfuscated files nothing can be inferred.
 	single := countVideos(unit) == 1 || len(unit.Media) == 1
+	checks := i.prepareHeldChecks(ctx, request.SourcePath, workID, unit, single, now)
 	for _, media := range unit.Media {
 		info, ok := parsetv.ParsePath(media.RelPath, now)
 		if !ok && single {
@@ -416,7 +423,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		// The picture says which episode a file is, whatever its release named it.
 		sourceAbs := path.Join(request.SourcePath, media.RelPath)
 		replaceableHere := replaceable
-		hash, copied, err := i.heldCopy(ctx, request.CategoryID, workID, sourceAbs, detail.Episodes)
+		hash, copied, err := i.heldCopy(ctx, request.CategoryID, workID, sourceAbs, detail.Episodes, checks)
 		if err != nil {
 			return nil, err
 		}
@@ -566,19 +573,92 @@ type copyOf struct {
 	replaceable bool
 }
 
+// duplicateCheckOn says the duplicate check can run and is switched on.
+func (i Importer) duplicateCheckOn() bool {
+	return i.config.Fingerprint != nil && i.config.SameVideos != nil && (i.config.DuplicateCheck == nil || i.config.DuplicateCheck())
+}
+
+// fingerprint is one downloaded file's pictures; ok is false when they could not be read.
+type fingerprint struct {
+	hash       mediatool.VideoHash
+	durationMs int64
+	ok         bool
+}
+
+// heldChecks is what a unit's duplicate checks share: the files' pictures, read ahead several at a time, and the
+// series' held hashes, read once.
+type heldChecks struct {
+	fingerprints map[string]fingerprint
+	same         func(hash mediatool.VideoHash, durationMs int64) []int64
+}
+
+// prepareHeldChecks fingerprints the unit's files that will be checked, up to ParallelFiles at once, and loads the
+// series' hashes once; a unit of one file, or a check that is off, prepares nothing.
+func (i Importer) prepareHeldChecks(ctx context.Context, sourcePath string, workID int64, unit inspect.Unit, single bool, now time.Time) *heldChecks {
+	checks := &heldChecks{}
+	if !i.duplicateCheckOn() || len(unit.Media) < 2 {
+		return checks
+	}
+	if i.config.SeriesVideos != nil {
+		if same, err := i.config.SeriesVideos(ctx, workID); err == nil {
+			checks.same = same
+		}
+	}
+	var wanted []string
+	for _, media := range unit.Media {
+		if _, ok := parsetv.ParsePath(media.RelPath, now); ok || single {
+			wanted = append(wanted, media.RelPath)
+		}
+	}
+	checks.fingerprints = make(map[string]fingerprint, len(wanted))
+	workers := 1
+	if i.config.ParallelFiles != nil {
+		workers = max(1, i.config.ParallelFiles())
+	}
+	var mu sync.Mutex
+	var running sync.WaitGroup
+	slots := make(chan struct{}, workers)
+	for _, rel := range wanted {
+		abs := path.Join(sourcePath, rel)
+		slots <- struct{}{}
+		running.Go(func() {
+			defer func() { <-slots }()
+			var shown fingerprint
+			shown.hash, shown.durationMs, shown.ok = i.config.Fingerprint(ctx, abs)
+			mu.Lock()
+			checks.fingerprints[abs] = shown
+			mu.Unlock()
+		})
+	}
+	running.Wait()
+	return checks
+}
+
 // heldCopy reads a downloaded file's pictures and finds the file of the series that shows the same; nil when the check
 // is off, cannot read the file or finds none. hash is the file's pictures whenever they were read.
-func (i Importer) heldCopy(ctx context.Context, categoryID, workID int64, sourceAbs string, episodes []library.SeriesEpisode) (*mediatool.VideoHash, *copyOf, error) {
-	if i.config.Fingerprint == nil || i.config.SameVideos == nil || (i.config.DuplicateCheck != nil && !i.config.DuplicateCheck()) {
+func (i Importer) heldCopy(ctx context.Context, categoryID, workID int64, sourceAbs string, episodes []library.SeriesEpisode, checks *heldChecks) (*mediatool.VideoHash, *copyOf, error) {
+	if !i.duplicateCheckOn() {
 		return nil, nil, nil
 	}
-	hash, durationMs, ok := i.config.Fingerprint(ctx, sourceAbs)
+	shown, ok := checks.fingerprints[sourceAbs]
 	if !ok {
+		var found bool
+		shown.hash, shown.durationMs, found = i.config.Fingerprint(ctx, sourceAbs)
+		if !found {
+			return nil, nil, nil
+		}
+	} else if !shown.ok {
 		return nil, nil, nil
 	}
-	same, err := i.config.SameVideos(ctx, workID, hash, durationMs)
-	if err != nil {
-		return nil, nil, err
+	hash := shown.hash
+	var same []int64
+	if checks.same != nil {
+		same = checks.same(hash, shown.durationMs)
+	} else {
+		var err error
+		if same, err = i.config.SameVideos(ctx, workID, hash, shown.durationMs); err != nil {
+			return nil, nil, err
+		}
 	}
 	for _, held := range same {
 		var refs []string

@@ -8,6 +8,7 @@ import (
 	"math/bits"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -32,6 +33,9 @@ const (
 	// windowReaders is how many moments of one video are read at once: 3 halved the time per file on the NAS, while 9 only
 	// raised its read latency fivefold (measured 2026-11-09).
 	windowReaders = 3
+	// windowsPerProcess moments are read by one ffmpeg process with one input each: process start and open are half
+	// of a window's time, and the frames come out byte for byte as from separate processes.
+	windowsPerProcess = 3
 )
 
 // ErrNoFrames means the video gave too few frames to hash: a file ffmpeg cannot decode, or one with no video stream.
@@ -322,13 +326,16 @@ func (s *Subprocess) HashAndPreview(ctx context.Context, path string, previews b
 	moments := make([]moment, phashSamples)
 	var running sync.WaitGroup
 	readers := make(chan struct{}, windowReaders)
-	for sample := range phashSamples {
-		at := length * time.Duration(sample+1) / (phashSamples + 1)
-		size := cell
+	sizeOf := func(sample int) pictureSize {
 		if previews && sample == singleSlot {
-			size = display.fitted(singleBoxWidth, singleBoxHeight)
+			return display.fitted(singleBoxWidth, singleBoxHeight)
 		}
-		// A few reads overlap so a network mount's seek latency is not paid nine times in a row.
+		return cell
+	}
+	atOf := func(sample int) time.Duration { return length * time.Duration(sample+1) / (phashSamples + 1) }
+	// The moments are read in groups, one ffmpeg process per group; a few groups overlap so a network mount's seek
+	// latency is not paid nine times in a row.
+	for first := 0; first < phashSamples; first += windowsPerProcess {
 		select {
 		case readers <- struct{}{}:
 		case <-ctx.Done():
@@ -337,8 +344,20 @@ func (s *Subprocess) HashAndPreview(ctx context.Context, path string, previews b
 		}
 		running.Go(func() {
 			defer func() { <-readers }()
-			if frames, err := s.windowAt(ctx, path, at, size); err == nil {
-				moments[sample] = moment{size: size, frames: frames}
+			group := make([]int, 0, windowsPerProcess)
+			for sample := first; sample < min(first+windowsPerProcess, phashSamples); sample++ {
+				group = append(group, sample)
+			}
+			if frames, err := s.windowsAt(ctx, path, group, atOf, sizeOf(group[0]), sizeOf); err == nil {
+				for index, sample := range group {
+					moments[sample] = moment{size: sizeOf(sample), frames: frames[index]}
+				}
+				return
+			}
+			for _, sample := range group {
+				if frames, err := s.windowAt(ctx, path, atOf(sample), sizeOf(sample)); err == nil {
+					moments[sample] = moment{size: sizeOf(sample), frames: frames}
+				}
 			}
 		})
 	}
@@ -406,4 +425,48 @@ func (s *Subprocess) windowAt(ctx context.Context, path string, at time.Duration
 		frames = append(frames, output[offset:offset+bytesPerFrame])
 	}
 	return frames, nil
+}
+
+// windowsAt reads the windows of several moments in one process, as windowAt would one by one; an error, a moment
+// of another size, hardware decoding or a wrong byte count returns an error so the caller reads them singly.
+func (s *Subprocess) windowsAt(ctx context.Context, path string, group []int, atOf func(int) time.Duration, size pictureSize, sizeOf func(int) pictureSize) ([][][]byte, error) {
+	if len(group) < 2 || (s.decodeArgs != nil && len(s.decodeArgs()) > 0) {
+		return nil, errors.New("mediatool: not read together")
+	}
+	for _, sample := range group {
+		if sizeOf(sample) != size {
+			return nil, errors.New("mediatool: moments of different sizes")
+		}
+	}
+	bounded, cancel := context.WithTimeout(ctx, perFileTimeout)
+	defer cancel()
+
+	args := []string{"-v", "error", "-protocol_whitelist", "file"}
+	var graph, joined strings.Builder
+	for index, sample := range group {
+		start := max(0, atOf(sample)-windowStep*windowFrames/2)
+		args = append(args, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 3, 64), "-i", path)
+		fmt.Fprintf(&graph, "[%d:v]fps=%d,trim=end_frame=%d,scale=trunc(iw*sar):ih,setsar=1,scale=%d:%d:flags=area,format=rgb24[w%d];",
+			index, windowRate, windowFrames, size.width, size.height, index)
+		fmt.Fprintf(&joined, "[w%d]", index)
+	}
+	graph.WriteString(joined.String())
+	fmt.Fprintf(&graph, "concat=n=%d:v=1:a=0[o]", len(group))
+	args = append(args, "-an", "-sn", "-filter_complex", graph.String(), "-map", "[o]", "-f", "rawvideo", "pipe:1")
+	output, err := s.runner.Run(bounded, ffmpegBinary, args...)
+	if err != nil {
+		return nil, fmt.Errorf("mediatool: windows %s: %w", path, err)
+	}
+	bytesPerFrame := size.width * size.height * 3
+	if len(output) != len(group)*windowFrames*bytesPerFrame {
+		return nil, fmt.Errorf("mediatool: windows %s: %d bytes", path, len(output))
+	}
+	windows := make([][][]byte, len(group))
+	for index := range group {
+		for frame := range windowFrames {
+			offset := (index*windowFrames + frame) * bytesPerFrame
+			windows[index] = append(windows[index], output[offset:offset+bytesPerFrame])
+		}
+	}
+	return windows, nil
 }

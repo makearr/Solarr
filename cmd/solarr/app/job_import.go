@@ -295,7 +295,8 @@ func (p *process) tvImporter() tv.Importer {
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		TransferLadder: p.transferLadder, RenameOnImport: p.renameOnImport, GroupID: lookupGroupID, BelowCutoff: p.belowCutoff,
 		ExtraFiles: p.extraFileExtensions, SharedFiles: p.enqueueSharedFiles, AfterPlacing: p.enqueueServerFilesFor, Probe: p.probeMeasured,
-		Fingerprint: p.fingerprintVideo, SameVideos: p.sameVideos,
+		Fingerprint: p.fingerprintVideo, SameVideos: p.sameVideos, SeriesVideos: p.seriesVideos,
+		ParallelFiles:  func() int { return p.cache.Snapshot().VideoParallelFiles() },
 		DuplicateCheck: func() bool { return p.cache.Snapshot().ImportDuplicateCheck() },
 	})
 }
@@ -363,6 +364,22 @@ func (p *process) sameVideos(ctx context.Context, workID int64, hash mediatool.V
 		frames[k] = library.FrameHash{Slot: frame.Slot, Hash: frame.Hash}
 	}
 	return p.similarVideos().MatchInWork(ctx, workID, hash.Mean, frames, durationMs, library.SimilarityMedium)
+}
+
+// seriesVideos reads a series' hashed files once for every file of a unit, at the finder's default level.
+func (p *process) seriesVideos(ctx context.Context, workID int64) (func(mediatool.VideoHash, int64) []int64, error) {
+	match, err := p.similarVideos().WorkMatcher(ctx, workID, library.SimilarityMedium)
+	if err != nil {
+		return nil, err
+	}
+	return func(hash mediatool.VideoHash, durationMs int64) []int64 {
+		frames := make([]library.FrameHash, len(hash.Frames))
+		for k, frame := range hash.Frames {
+			frames[k] = library.FrameHash{Slot: frame.Slot, Hash: frame.Hash}
+		}
+		same, _ := match(hash.Mean, frames, durationMs)
+		return same
+	}, nil
 }
 
 // adultImporter is the adult module's batch importer, placing through the same steps as a movie's.

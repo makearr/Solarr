@@ -274,21 +274,42 @@ func (s SimilarVideos) addFacts(ctx context.Context, groups []SimilarGroup) erro
 // MatchInWork answers the videos of one work that show the same pictures as the given hash, by the finder's own test
 // at level (ADR-35): the import's way to tell a download is a file the work already holds.
 func (s SimilarVideos) MatchInWork(ctx context.Context, workID int64, mean uint64, frames []FrameHash, durationMs int64, level SimilarityLevel) ([]int64, error) {
+	same, err := s.WorkMatcher(ctx, workID, level)
+	if err != nil {
+		return nil, err
+	}
+	return same(mean, frames, durationMs)
+}
+
+// WorkMatcher reads a work's hashed videos once and answers, for each hash, the ones that show the same pictures.
+func (s SimilarVideos) WorkMatcher(ctx context.Context, workID int64, level SimilarityLevel) (func(mean uint64, frames []FrameHash, durationMs int64) ([]int64, error), error) {
 	rows, err := librarydb.New(s.store.Read()).ListWorkVideoHashes(ctx, librarydb.ListWorkVideoHashesParams{WorkID: workID, Version: VideoHashVersion})
 	if err != nil {
 		return nil, fmt.Errorf("library: list hashed videos of work %d: %w", workID, err)
 	}
-	var matches []int64
-	for _, row := range rows {
-		held, err := decodeFrameHashes(row.Frames)
+	type held struct {
+		id     int64
+		mean   uint64
+		ms     int64
+		frames []FrameHash
+	}
+	videos := make([]held, len(rows))
+	for index, row := range rows {
+		frames, err := decodeFrameHashes(row.Frames)
 		if err != nil {
 			return nil, err
 		}
-		if matchesHash(uint64(row.Phash.Int64), held, row.DurationMs.Int64, mean, frames, durationMs, level.MaxBits(), s.frameBitsAt(level)) {
-			matches = append(matches, row.ID)
-		}
+		videos[index] = held{id: row.ID, mean: uint64(row.Phash.Int64), ms: row.DurationMs.Int64, frames: frames}
 	}
-	return matches, nil
+	return func(mean uint64, frames []FrameHash, durationMs int64) ([]int64, error) {
+		var matches []int64
+		for _, video := range videos {
+			if matchesHash(video.mean, video.frames, video.ms, mean, frames, durationMs, level.MaxBits(), s.frameBitsAt(level)) {
+				matches = append(matches, video.id)
+			}
+		}
+		return matches, nil
+	}, nil
 }
 
 func matchesHash(heldMean uint64, held []FrameHash, heldMs int64, mean uint64, frames []FrameHash, durationMs int64, maxBits, frameBits int) bool {

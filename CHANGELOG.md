@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Importing a season pack fingerprints its files several at a time (the "Videos hashed at once" setting) and reads the series' held hashes once; the video hash backfill reads three moments of a file with one ffmpeg process instead of three.
 - Internal: the outbound limiter lost its unused token bucket, daily cap and global gate; pacing and per-host concurrency are unchanged.
 - A series refresh is skipped and retried later while TMDB, AniList or TVmaze fails, if the stored record was built from it, instead of replacing its data with the other sources' answers.
 - Video hashing can read several files at once (Settings, Advanced: "Videos hashed at once", default 1, up to 8); a local disk hashes about twice as fast with three.

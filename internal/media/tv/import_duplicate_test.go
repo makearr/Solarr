@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path"
+	"sync"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -164,3 +165,57 @@ func TestImportReplacesABelowCutoffEpisodeOfACompleteSeason(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// A season pack is fingerprinted in parallel and asks the series' held hashes once, not once per file.
+func TestImportOfAPackReadsTheSeriesHashesOnce(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	fake := clock.NewFakeAtEpoch()
+	fake.Set(addNow)
+	fsys := fsx.NewMem(fake)
+	for _, dir := range []string{"/downloads/Example.Show.S01.GRP", "/library"} {
+		if err := fsys.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var media []inspect.File
+	for _, rel := range []string{"Example.Show.S01E01.1080p.WEB-DL.H.264-GRP.mkv", "Example.Show.S01E02.1080p.WEB-DL.H.264-GRP.mkv"} {
+		file, err := fsys.Create("/downloads/Example.Show.S01.GRP/" + rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = file.Write([]byte("video " + rel))
+		_ = file.Close()
+		media = append(media, inspect.File{RelPath: "Example.Show.S01.GRP/" + rel, SizeBytes: int64(len("video " + rel)), Class: inspect.ClassMedia})
+	}
+	var mu sync.Mutex
+	fingerprints, loads, perFile := 0, 0, 0
+	reader := library.NewSeriesReader(opened)
+	free := int64(1 << 40)
+	importer := tv.NewImporter(tv.ImporterConfig{
+		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
+		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+		Categories: categories{}, Clock: fake,
+		Fingerprint: func(context.Context, string) (mediatool.VideoHash, int64, bool) {
+			mu.Lock()
+			fingerprints++
+			mu.Unlock()
+			return mediatool.VideoHash{Mean: 1, Frames: []mediatool.FrameHash{{Slot: 0, Hash: 1}}}, 1_500_000, true
+		},
+		SameVideos: func(context.Context, int64, mediatool.VideoHash, int64) ([]int64, error) { perFile++; return nil, nil },
+		SeriesVideos: func(context.Context, int64) (func(mediatool.VideoHash, int64) []int64, error) {
+			loads++
+			return func(mediatool.VideoHash, int64) []int64 { return nil }, nil
+		},
+		ParallelFiles: func() int { return 2 },
+	})
+	unit := inspect.Unit{Directory: "Example.Show.S01.GRP", Media: media}
+	result, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{1}})
+	if err != nil || result.Placements[0] == nil {
+		t.Fatalf("pack not placed: %v %+v", err, result.Decisions[0])
+	}
+	if fingerprints != 2 || loads != 1 || perFile != 0 {
+		t.Errorf("fingerprints %d, series loads %d, per-file asks %d; want 2, 1, 0", fingerprints, loads, perFile)
+	}
+}
