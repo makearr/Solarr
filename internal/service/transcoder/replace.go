@@ -15,6 +15,7 @@ import (
 const (
 	stageRecycling = "recycling"
 	stagePlacing   = "placing"
+	stageRestoring = "restoring"
 )
 
 // finish replaces the original with an accepted result: the original goes to the recycle bin, the result takes its
@@ -61,6 +62,9 @@ func (s *Service) finish(ctx context.Context, run *fileRun, result transcode.Fil
 	}
 	if err := s.succeeded(ctx, run.item.Kind); err != nil {
 		return err
+	}
+	if err := s.EnforceCap(ctx); err != nil {
+		s.Logger.Warn("transcode: enforce the originals size cap", "error", err)
 	}
 	if s.Reporter != nil {
 		s.Reporter.Converted(ctx, Converted{

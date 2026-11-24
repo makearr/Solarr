@@ -143,13 +143,14 @@ func (q *Queries) GetTranscodeItem(ctx context.Context, mediaObjectID int64) (Tr
 }
 
 const listJournalledTranscodeItems = `-- name: ListJournalledTranscodeItems :many
-SELECT media_object_id, category_id, kind, replace_stage, work_path, original_recycle_id FROM transcode_item WHERE replace_stage <> '' ORDER BY media_object_id
+SELECT media_object_id, category_id, kind, state, replace_stage, work_path, original_recycle_id FROM transcode_item WHERE replace_stage <> '' ORDER BY media_object_id
 `
 
 type ListJournalledTranscodeItemsRow struct {
 	MediaObjectID     int64
 	CategoryID        int64
 	Kind              string
+	State             string
 	ReplaceStage      string
 	WorkPath          string
 	OriginalRecycleID sql.NullInt64
@@ -168,6 +169,7 @@ func (q *Queries) ListJournalledTranscodeItems(ctx context.Context) ([]ListJourn
 			&i.MediaObjectID,
 			&i.CategoryID,
 			&i.Kind,
+			&i.State,
 			&i.ReplaceStage,
 			&i.WorkPath,
 			&i.OriginalRecycleID,

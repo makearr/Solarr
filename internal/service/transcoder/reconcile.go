@@ -2,6 +2,7 @@ package transcoder
 
 import (
 	"context"
+	"errors"
 	"path"
 	"strings"
 
@@ -45,6 +46,9 @@ func (s *Service) Reconcile(ctx context.Context) error {
 // settleJournal finishes or undoes the replace one item was in the middle of; false when its root is not reachable, so the work file must stay.
 func (s *Service) settleJournal(ctx context.Context, item library.TranscodeItem) (bool, error) {
 	id := item.MediaObjectID
+	if item.ReplaceStage == stageRestoring {
+		return s.settleRestore(ctx, item)
+	}
 	if item.State != library.TranscodeRunning {
 		return true, s.Items.SetJournal(ctx, id, "", "", item.OriginalRecycleID)
 	}
@@ -133,4 +137,32 @@ func (s *Service) cleanWorkFolders(kept map[string]bool) {
 			}
 		}
 	}
+}
+
+// settleRestore finishes a restore a restart interrupted, or clears its journal when nothing had happened yet: the converted file
+// still at its path and the original still in the bin.
+func (s *Service) settleRestore(ctx context.Context, journalled library.TranscodeItem) (bool, error) {
+	id := journalled.MediaObjectID
+	item, found, err := s.Items.Get(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if !found || item.State != library.TranscodeDone || item.OriginalRecycleID == 0 {
+		return true, s.Items.SetJournal(ctx, id, "", "", item.OriginalRecycleID)
+	}
+	root, resultRel, err := s.locate(ctx, id)
+	if errors.Is(err, ErrRootUnavailable) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	entry, err := s.Bin.Get(ctx, item.OriginalRecycleID)
+	if err != nil {
+		return true, s.Items.SetJournal(ctx, id, "", "", 0)
+	}
+	if _, there := s.FS.Lstat(path.Join(root.Path, resultRel)); there == nil && entry.RestoredAt == nil {
+		return true, s.Items.SetJournal(ctx, id, "", "", item.OriginalRecycleID)
+	}
+	return true, s.undoConversion(ctx, item, root, resultRel, entry)
 }

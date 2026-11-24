@@ -32,6 +32,10 @@ type memItems struct {
 	replaced []library.ReplacedFile
 	// stages is every journal stage written, in order.
 	stages []string
+	// bin is where the kept originals are counted.
+	bin *memBin
+	// restored is every restore the library was told of.
+	restored []library.RestoredFile
 }
 
 func newMemItems() *memItems {
@@ -128,7 +132,37 @@ func (m *memItems) ReplaceBytes(_ context.Context, replaced library.ReplacedFile
 	m.replaced = append(m.replaced, replaced)
 	m.paths[replaced.MediaObjectID] = []library.ObjectPath{{RootFolderID: replaced.RootFolderID, RelPath: replaced.NewRelPath}}
 	item.State, item.OriginalRecycleID, item.ResultSizeBytes, item.Engine = library.TranscodeDone, replaced.Result.OriginalRecycleID, replaced.Result.ResultSizeBytes, replaced.Result.Engine
+	item.OriginalSizeBytes = replaced.Result.OriginalSizeBytes
 	return nil
+}
+
+func (m *memItems) RestoreBytes(_ context.Context, restored library.RestoredFile) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	item := m.items[restored.MediaObjectID]
+	if item == nil || item.State != library.TranscodeDone {
+		return library.ErrTranscodeState
+	}
+	m.restored = append(m.restored, restored)
+	m.paths[restored.MediaObjectID] = []library.ObjectPath{{RootFolderID: restored.RootFolderID, RelPath: restored.OriginalRel}}
+	item.State, item.ReasonsJSON, item.OriginalRecycleID, item.ResultSizeBytes, item.ReplaceStage, item.WorkPath = library.TranscodeNotNeeded, restored.ReasonsJSON, 0, 0, "", ""
+	return nil
+}
+
+func (m *memItems) OriginalsKept(context.Context) (int64, error) {
+	var total int64
+	for _, original := range m.bin.keptOriginals() {
+		total += original.SizeBytes
+	}
+	return total, nil
+}
+
+func (m *memItems) OldestOriginals(_ context.Context, limit int64) ([]library.KeptOriginal, error) {
+	kept := m.bin.keptOriginals()
+	if int64(len(kept)) > limit {
+		kept = kept[:limit]
+	}
+	return kept, nil
 }
 
 func (m *memItems) pickable(categoryID int64, kind string) []library.TranscodePick {
@@ -268,6 +302,33 @@ type memBin struct {
 	fs      fsx.FS
 	mu      sync.Mutex
 	entries map[int64]library.Entry
+	last    int64
+}
+
+// keptOriginals are the unrestored entries that hold a converted file's original, oldest first.
+func (b *memBin) keptOriginals() []library.KeptOriginal {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var kept []library.KeptOriginal
+	for _, entry := range b.entries {
+		if entry.Reason == library.ReasonTranscoded && entry.RestoredAt == nil {
+			kept = append(kept, library.KeptOriginal{RecycleID: entry.ID, SizeBytes: entry.SizeBytes})
+		}
+	}
+	sort.Slice(kept, func(i, j int) bool { return kept[i].RecycleID < kept[j].RecycleID })
+	return kept
+}
+
+func (b *memBin) Purge(_ context.Context, id int64) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	entry, found := b.entries[id]
+	if !found {
+		return fmt.Errorf("no entry %d", id)
+	}
+	_ = b.fs.Remove(entry.RecycledPath)
+	delete(b.entries, id)
+	return nil
 }
 
 func (b *memBin) Put(_ context.Context, request library.PutRequest) (library.Entry, error) {
@@ -280,7 +341,8 @@ func (b *memBin) Put(_ context.Context, request library.PutRequest) (library.Ent
 	if err != nil {
 		return library.Entry{}, err
 	}
-	id := int64(len(b.entries) + 1)
+	b.last++
+	id := b.last
 	recycled := path.Join(request.RootPath, library.RecycleBinDirectory, "day", fmt.Sprintf("%d-%s", id, path.Base(request.OriginalPath)))
 	if err := b.fs.MkdirAll(path.Dir(recycled), 0o755); err != nil {
 		return library.Entry{}, err
@@ -288,7 +350,7 @@ func (b *memBin) Put(_ context.Context, request library.PutRequest) (library.Ent
 	if err := b.fs.Rename(request.OriginalPath, recycled); err != nil {
 		return library.Entry{}, err
 	}
-	entry := library.Entry{ID: id, OriginalPath: request.OriginalPath, RecycledPath: recycled, Reason: request.Reason, SizeBytes: info.Size}
+	entry := library.Entry{ID: id, OriginalPath: request.OriginalPath, RecycledPath: recycled, Reason: request.Reason, SizeBytes: info.Size, ExpiresAt: int64(request.Retain.Seconds())}
 	b.entries[id] = entry
 	return entry, nil
 }
@@ -296,13 +358,17 @@ func (b *memBin) Put(_ context.Context, request library.PutRequest) (library.Ent
 func (b *memBin) Get(_ context.Context, id int64) (library.Entry, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.entries[id], nil
+	entry, found := b.entries[id]
+	if !found {
+		return library.Entry{}, fmt.Errorf("no entry %d", id)
+	}
+	return entry, nil
 }
 
 func (b *memBin) Find(_ context.Context, originalPath string) (library.Entry, bool, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for id := int64(len(b.entries)); id > 0; id-- {
+	for id := b.last; id > 0; id-- {
 		if b.entries[id].OriginalPath == originalPath {
 			return b.entries[id], true, nil
 		}
@@ -314,7 +380,13 @@ func (b *memBin) Restore(_ context.Context, id int64) (library.Entry, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	entry := b.entries[id]
-	return entry, b.fs.Rename(entry.RecycledPath, entry.OriginalPath)
+	if err := b.fs.Rename(entry.RecycledPath, entry.OriginalPath); err != nil {
+		return entry, err
+	}
+	restoredAt := int64(1)
+	entry.RestoredAt = &restoredAt
+	b.entries[id] = entry
+	return entry, nil
 }
 
 // fakeProber answers the streams of a path from a table; a path without an entry cannot be read.
@@ -339,8 +411,15 @@ func (p *fakeProber) set(file string, found transcode.File) {
 }
 
 type recordedConversions struct {
-	mu   sync.Mutex
-	done []transcoder.Converted
+	mu       sync.Mutex
+	done     []transcoder.Converted
+	reverted []transcoder.Converted
+}
+
+func (r *recordedConversions) Reverted(_ context.Context, converted transcoder.Converted) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.reverted = append(r.reverted, converted)
 }
 
 func (r *recordedConversions) Converted(_ context.Context, converted transcoder.Converted) {
@@ -385,6 +464,7 @@ func newPipeline(t *testing.T, target settings.QualityTarget, hardware fakeHW) *
 		bin: &memBin{fs: mem}, reported: &recordedConversions{}, queue: &queuedJobs{},
 		settings: &memSettings{global: settings.TranscodeGlobal{Enabled: true, Parallel: settings.LaneLimits{CPU: 1, GPU: 2, Audio: 4}}, target: target, enabled: true},
 	}
+	p.items.bin = p.bin
 	if hardware == nil {
 		hardware = fakeHW{transcode.Software: {Working: true, TenBit: true}}
 	}

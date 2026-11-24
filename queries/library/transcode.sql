@@ -137,7 +137,7 @@ LIMIT sqlc.arg(page_size);
 SELECT media_object_id, category_id, kind, work_path, last_run_seq FROM transcode_item WHERE state = 'running' ORDER BY media_object_id;
 
 -- name: ListJournalledTranscodeItems :many
-SELECT media_object_id, category_id, kind, replace_stage, work_path, original_recycle_id FROM transcode_item WHERE replace_stage <> '' ORDER BY media_object_id;
+SELECT media_object_id, category_id, kind, state, replace_stage, work_path, original_recycle_id FROM transcode_item WHERE replace_stage <> '' ORDER BY media_object_id;
 
 -- name: CountFailedTranscodeItemsByCategory :many
 SELECT category_id, CAST(COUNT(*) AS INTEGER) AS total FROM transcode_item WHERE state = 'failed' AND target_id = ? GROUP BY category_id;

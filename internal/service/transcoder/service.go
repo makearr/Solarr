@@ -31,6 +31,9 @@ type Items interface {
 	Journalled(ctx context.Context) ([]library.TranscodeItem, error)
 	Health(ctx context.Context, kind string) (library.TranscodeHealth, error)
 	SaveHealth(ctx context.Context, health library.TranscodeHealth) error
+	RestoreBytes(ctx context.Context, restored library.RestoredFile) error
+	OriginalsKept(ctx context.Context) (int64, error)
+	OldestOriginals(ctx context.Context, limit int64) ([]library.KeptOriginal, error)
 }
 
 // Settings is where the pipeline reads its policy.
@@ -66,6 +69,7 @@ type Bin interface {
 	Put(ctx context.Context, request library.PutRequest) (library.Entry, error)
 	Get(ctx context.Context, id int64) (library.Entry, error)
 	Restore(ctx context.Context, id int64) (library.Entry, error)
+	Purge(ctx context.Context, id int64) error
 	// Find answers the newest entry that took the file at the original path, for a replace that stopped before it noted the entry.
 	Find(ctx context.Context, originalPath string) (library.Entry, bool, error)
 }
@@ -81,6 +85,8 @@ type Converted struct {
 // Reporter is told of every finished conversion; it never fails one.
 type Reporter interface {
 	Converted(ctx context.Context, converted Converted)
+	// Reverted takes a restored conversion back out of the savings: the same figures, subtracted.
+	Reverted(ctx context.Context, converted Converted)
 }
 
 // Queue is where the pipeline submits its jobs; *jobs.Queue is the real one.

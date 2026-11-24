@@ -123,6 +123,20 @@ func (r transcodeReporter) Converted(ctx context.Context, converted transcoder.C
 	})
 }
 
+// Reverted takes a restored conversion out of the savings with the same figures negated.
+func (r transcodeReporter) Reverted(ctx context.Context, converted transcoder.Converted) {
+	err := r.stats.Record(ctx, statistics.DayOf(converted.At), statistics.TranscodeDelta{
+		CategoryID: converted.CategoryID, Kind: converted.Kind, Files: -1, OriginalBytes: -converted.OriginalBytes,
+		ResultBytes: -converted.ResultBytes, EncodeSeconds: -converted.EncodeSeconds,
+	})
+	if err != nil {
+		r.logger.WarnContext(ctx, "record restored conversion statistics", slog.Any("error", err))
+	}
+	r.bus.Publish(events.Event{
+		Topic: events.TopicLibrary, Entity: fmt.Sprintf("transcode:%d", converted.MediaObjectID), CategoryID: converted.CategoryID, Kind: "restored",
+	})
+}
+
 // transcodeSettings is the pipeline's view of the settings cache.
 type transcodeSettings struct{ cache *settings.Cache }
 

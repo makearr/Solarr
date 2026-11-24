@@ -36,6 +36,16 @@ Settings > Scheduler lists a running conversion with the name of its file and th
 one adds a `transcoded` row to the History page (file name, engine, bytes saved) and a `transcode:<id>` event on the
 library topic that the interface may use to refresh.
 
+## Originals and restore
+
+The original of a converted file stays in the recycle bin for the setup's retention (Settings > Transcode > originals;
+0 days follows the library's own bin retention). When the bin holds more converted originals than the size cap, the oldest
+are purged after each conversion until it fits (0 = no cap). Restoring puts the converted file in the bin (reason
+`transcode_reverted`, the library's retention), brings the original out, gives the library the original's size, hash and
+path, and rests the file as `not_needed` (reason `restored_by_user`) until a person retries it; the savings statistics
+subtract the conversion. A restore is refused when the original was purged or something else sits at its path, and a restart
+in the middle of one finishes it, or forgets it when nothing had moved yet.
+
 ## Failures
 
 Three errors on one file end it as `failed` until retried. Three consecutive failures of different files put that kind

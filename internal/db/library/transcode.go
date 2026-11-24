@@ -275,6 +275,49 @@ func (t TranscodeItems) ReplaceBytes(ctx context.Context, replaced ReplacedFile)
 	return nil
 }
 
+// RestoredFile is a conversion undone: the original's bytes are back, and the item rests as not needed until a person retries it.
+type RestoredFile struct {
+	MediaObjectID, RootFolderID int64
+	ResultRelPath, OriginalRel  string
+	SizeBytes                   int64
+	QuickHash, ReasonsJSON      string
+}
+
+// RestoreBytes gives the file the original's size, hash and path, moves its item from done to not needed with the reasons, and clears the
+// result and the journal, all in one transaction, so a restart never sees half of it.
+func (t TranscodeItems) RestoreBytes(ctx context.Context, restored RestoredFile) error {
+	now := t.clock.Now().Unix()
+	err := t.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if err := queries.SetMediaObjectContent(ctx, librarydb.SetMediaObjectContentParams{SizeBytes: restored.SizeBytes, QuickHash: restored.QuickHash, ID: restored.MediaObjectID}); err != nil {
+			return err
+		}
+		if restored.OriginalRel != restored.ResultRelPath {
+			if _, err := queries.RelocateLibraryPath(ctx, librarydb.RelocateLibraryPathParams{
+				NewRootFolderID: restored.RootFolderID, NewRelPath: restored.OriginalRel, OldRootFolderID: restored.RootFolderID, OldRelPath: restored.ResultRelPath,
+			}); err != nil {
+				return err
+			}
+		}
+		if err := transition(ctx, queries, restored.MediaObjectID, TranscodeDone, TranscodeNotNeeded, func(item *TranscodeItem) {
+			item.Interrupted, item.FailureCode, item.LastError, item.Attempts, item.Pass = false, "", "", 0, 0
+		}, now); err != nil {
+			return err
+		}
+		if err := queries.SetTranscodeItemJudgement(ctx, librarydb.SetTranscodeItemJudgementParams{ReasonsJson: restored.ReasonsJSON, UpdatedAt: now, MediaObjectID: restored.MediaObjectID}); err != nil {
+			return err
+		}
+		if err := queries.SetTranscodeItemResult(ctx, librarydb.SetTranscodeItemResultParams{UpdatedAt: now, MediaObjectID: restored.MediaObjectID}); err != nil {
+			return err
+		}
+		return queries.SetTranscodeItemJournal(ctx, librarydb.SetTranscodeItemJournalParams{UpdatedAt: now, MediaObjectID: restored.MediaObjectID})
+	})
+	if err != nil {
+		return fmt.Errorf("library: restore the bytes of file %d: %w", restored.MediaObjectID, err)
+	}
+	return nil
+}
+
 // TranscodeResult is what a finished conversion leaves on its item.
 type TranscodeResult struct {
 	OriginalRecycleID                                                 int64
@@ -476,7 +519,7 @@ func (t TranscodeItems) Journalled(ctx context.Context) ([]TranscodeItem, error)
 	}
 	out := make([]TranscodeItem, len(rows))
 	for i, row := range rows {
-		out[i] = TranscodeItem{MediaObjectID: row.MediaObjectID, CategoryID: row.CategoryID, Kind: row.Kind, ReplaceStage: row.ReplaceStage, WorkPath: row.WorkPath, OriginalRecycleID: row.OriginalRecycleID.Int64}
+		out[i] = TranscodeItem{MediaObjectID: row.MediaObjectID, CategoryID: row.CategoryID, Kind: row.Kind, State: TranscodeState(row.State), ReplaceStage: row.ReplaceStage, WorkPath: row.WorkPath, OriginalRecycleID: row.OriginalRecycleID.Int64}
 	}
 	return out, nil
 }

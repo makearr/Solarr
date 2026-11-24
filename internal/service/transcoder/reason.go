@@ -31,6 +31,7 @@ const (
 	ReasonBelowRange       ReasonCode = "below_range"
 	ReasonRangeUnknown     ReasonCode = "range_unknown"
 	ReasonNothingToDo      ReasonCode = "nothing_to_do"
+	ReasonRestoredByUser   ReasonCode = "restored_by_user"
 )
 
 // Reasons a file is blocked.

@@ -238,7 +238,7 @@ func TestTranscodeItems_ResultJournalRunningAndHealthRoundTrip(t *testing.T) {
 	}
 	running, _ := items.Running(t.Context())
 	journalled, _ := items.Journalled(t.Context())
-	if len(running) != 1 || running[0].LastRunSeq != 4 || len(journalled) != 1 || journalled[0].ReplaceStage != "placing" || journalled[0].WorkPath != "/work/1.mp4" {
+	if len(running) != 1 || running[0].LastRunSeq != 4 || len(journalled) != 1 || journalled[0].ReplaceStage != "placing" || journalled[0].State != library.TranscodeRunning || journalled[0].WorkPath != "/work/1.mp4" {
 		t.Fatalf("running = %+v, journalled = %+v", running, journalled)
 	}
 	if _, err := opened.WriteDB().ExecContext(t.Context(), `INSERT INTO recycle_bin (id, original_path, recycled_path, reason, size_bytes, recycled_at, expires_at, media_object_id) VALUES (3, '/a', '/r/a', 'transcoded', 700, 10, 99, 1), (4, '/b', '/r/b', 'transcoded', 300, 5, 99, NULL), (5, '/c', '/r/c', 'replaced', 900, 1, 99, NULL)`); err != nil {
@@ -270,6 +270,41 @@ func TestTranscodeItems_ResultJournalRunningAndHealthRoundTrip(t *testing.T) {
 	}
 	if got, _ := items.Health(t.Context(), "video"); got != want {
 		t.Errorf("health = %+v, want %+v", got, want)
+	}
+}
+
+func TestTranscodeItems_RestoreBytesPutsTheOriginalBackAndRestsTheItemInOneTransaction(t *testing.T) {
+	items, opened := seedTranscode(t)
+	_ = items.Judge(t.Context(), []library.JudgedTranscodeItem{judge(1, "video", library.TranscodeNeeded)})
+	_ = items.Transition(t.Context(), 1, library.TranscodeNeeded, library.TranscodeRunning, nil)
+	if err := items.ReplaceBytes(t.Context(), library.ReplacedFile{
+		MediaObjectID: 1, RootFolderID: 7, OldRelPath: "show b/e1.mkv", NewRelPath: "show b/e1.mp4", SizeBytes: 120, QuickHash: "new",
+		Result: library.TranscodeResult{OriginalSizeBytes: 300, ResultSizeBytes: 120, Engine: "software", FinishedAt: 99},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = items.SetJournal(t.Context(), 1, "restoring", "", 0)
+	err := items.RestoreBytes(t.Context(), library.RestoredFile{
+		MediaObjectID: 1, RootFolderID: 7, ResultRelPath: "show b/e1.mp4", OriginalRel: "show b/e1.mkv", SizeBytes: 300, QuickHash: "old", ReasonsJSON: `[{"code":"restored_by_user","stream":-1}]`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var size int64
+	var hash, path string
+	read := opened.Read()
+	_ = read.QueryRowContext(t.Context(), `SELECT size_bytes, quick_hash FROM media_object WHERE id = 1`).Scan(&size, &hash)
+	_ = read.QueryRowContext(t.Context(), `SELECT rel_path FROM library_path WHERE media_object_id = 1`).Scan(&path)
+	item, _, _ := items.Get(t.Context(), 1)
+	if size != 300 || hash != "old" || path != "show b/e1.mkv" {
+		t.Errorf("size %d hash %q path %q, want the original's", size, hash, path)
+	}
+	if item.State != library.TranscodeNotNeeded || item.ReplaceStage != "" || item.OriginalRecycleID != 0 || item.ResultSizeBytes != 0 || item.FinishedAt != 0 || item.ReasonsJSON != `[{"code":"restored_by_user","stream":-1}]` {
+		t.Errorf("item = %+v, want a resting item with no result and no journal", item)
+	}
+	assertCountersMatchRows(t, items, opened, 1)
+	if err := items.RestoreBytes(t.Context(), library.RestoredFile{MediaObjectID: 1, RootFolderID: 7, ResultRelPath: "x", OriginalRel: "x"}); !errorsIs(err, library.ErrTranscodeState) {
+		t.Errorf("a second restore = %v, want a refusal", err)
 	}
 }
 
