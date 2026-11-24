@@ -76,3 +76,19 @@ func TestParseNameCutsASitesOwnSeasonEpisodeNumberingOutOfTheTitle(t *testing.T)
 		}
 	}
 }
+
+func TestSiteNumberingReadsTheColonAndSpacedFormsProvidersWrite(t *testing.T) {
+	for title, want := range map[string][3]any{
+		"Harbour Scene - S33:E12": {"Harbour Scene", 33, 12},
+		"Harbour Scene - S 3:E 5": {"Harbour Scene", 3, 5},
+		"Harbour Scene S4E07":     {"Harbour Scene", 4, 7},
+	} {
+		bare, season, episode, ok := parseadult.SiteNumbering(title)
+		if !ok || bare != want[0] || season != want[1] || episode != want[2] {
+			t.Errorf("%q: %q %d %d %v, want %v", title, bare, season, episode, ok, want)
+		}
+	}
+	if bare, _, _, ok := parseadult.SiteNumbering("Harbour Scene"); ok || bare != "Harbour Scene" {
+		t.Errorf("no numbering: %q %v", bare, ok)
+	}
+}

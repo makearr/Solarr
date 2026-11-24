@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Adult: a hit whose own season and episode numbering (S41:E2) differs from the file's (S41E3) is no longer taken, and a hit that agrees wins a tie between same-titled scenes.
 - Adult: a scene file named "Title - S36E29" (a studio's own season and episode numbering) is searched by the bare title, so providers find it; the numbers are kept apart from the title.
 - Adult: a library title with a quality word ("UHD", "4K", "HD", "VR", ...) is searched without it, so the exact scene is found; each hit in Review shows its date and studio, and a debug log line ("adult pick") says why a file stayed open.
 - A music release whose name states no format is downloaded and probed at import: if its files meet none of the library's quality profiles (MP3 in a lossless-only library), the release is blocklisted with that reason and the next one is grabbed.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -171,6 +172,8 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint,
 // pickCandidate chooses the one of the provider's top few that is the named scene: the same title and, where both
 // know the day, the same day. Two such hits are told apart by the day, and two on one day are one scene listed twice.
 func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, float64, bool) {
+	// A hit numbered otherwise than the file is another scene of the studio, whatever its title says.
+	candidates = slices.DeleteFunc(slices.Clone(candidates), func(candidate Candidate) bool { return numberingDiffers(candidate, info) })
 	// The title on the day wherever the provider ranks it: a studio's numbered scenes push the right day past the top.
 	// A title that only continues the file's ("Title, Scene #01") is a listing of the same scene, but the plain title is it.
 	var onTheDay, plain []Candidate
@@ -226,6 +229,24 @@ func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, flo
 	return Candidate{}, 0, false
 }
 
+// numberingDiffers says the file and the hit both carry a studio's season and episode, and they are not the same.
+func numberingDiffers(candidate Candidate, info parseadult.Info) bool {
+	if info.Season == 0 && info.Episode == 0 {
+		return false
+	}
+	_, season, episode, numbered := parseadult.SiteNumbering(candidate.Title)
+	return numbered && (season != info.Season || episode != info.Episode)
+}
+
+// numberingAgrees says the hit carries the file's own season and episode: the strongest sign two same-titled hits can give.
+func numberingAgrees(candidate Candidate, info parseadult.Info) bool {
+	if info.Season == 0 && info.Episode == 0 {
+		return false
+	}
+	_, season, episode, numbered := parseadult.SiteNumbering(candidate.Title)
+	return numbered && season == info.Season && episode == info.Episode
+}
+
 // ofStudio is the one of the same title and day that the file most plainly is: the studio it names, then the performers
 // its name ends in, then the length it has, else the provider's best ranked (one scene listed under two sites).
 func ofStudio(candidates []Candidate, info parseadult.Info) Candidate {
@@ -236,6 +257,9 @@ func ofStudio(candidates []Candidate, info parseadult.Info) Candidate {
 			score += 1000
 		}
 		score += 10 * namedIn(candidate.Performers, info.Performer)
+		if numberingAgrees(candidate, info) {
+			score += 500
+		}
 		if lengthAgrees(candidate.DurationSec, info.DurationSec) {
 			score++
 		}
@@ -285,6 +309,9 @@ func studioKey(name string) string {
 // titleMatches says two titles are the same scene's: equal, or on the same day one holding the other ("Title" and
 // "Title - Scene 3").
 func titleMatches(found, wanted string, sameDay bool) bool {
+	// Both sides are compared bare: a provider's "Title - S33:E12" and a file's "Title".
+	found, _, _, _ = parseadult.SiteNumbering(found)
+	wanted, _, _, _ = parseadult.SiteNumbering(wanted)
 	foundKey, wantedKey := NameKey(extraPrefix.ReplaceAllString(found, "")), NameKey(extraPrefix.ReplaceAllString(wanted, ""))
 	if foundKey == "" || wantedKey == "" {
 		return false
@@ -380,7 +407,7 @@ func withinDays(a, b string, n int) bool {
 // pickDiagnosis is why pickCandidate left a file open: the gate that rejected the best title match.
 type pickDiagnosis struct {
 	// Reason is one of no_candidates, title_mismatch, file_date_missing, provider_date_missing, rank_too_low,
-	// sibling_days, date_off, title_not_identical_off_day, several_named, other.
+	// sibling_days, date_off, numbering_differs, title_not_identical_off_day, several_named, other.
 	Reason string
 	// DaysOff is the gap between the file's day and the best title match's, when both are known.
 	DaysOff       int
@@ -400,13 +427,16 @@ func diagnosePick(candidates []Candidate, info parseadult.Info) pickDiagnosis {
 	for index := range candidates {
 		if titleMatches(candidates[index].Title, info.Title, true) {
 			matches++
-			if best == nil {
+			if best == nil || (numberingDiffers(*best, info) && !numberingDiffers(candidates[index], info)) {
 				best = &candidates[index]
 			}
 		}
 	}
 	if best == nil {
 		return pickDiagnosis{Reason: "title_mismatch"}
+	}
+	if numberingDiffers(*best, info) {
+		return pickDiagnosis{Reason: "numbering_differs", Rank: best.Rank, TitleMatches: matches}
 	}
 	diagnosis := pickDiagnosis{Rank: best.Rank, TitleMatches: matches,
 		StudioDiffers: info.Studio != "" && best.Studio != "" && studioKey(best.Studio) != studioKey(info.Studio)}

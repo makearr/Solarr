@@ -42,7 +42,8 @@ var (
 	// qualityWord is a resolution or format tag a person types into a library title; a provider's title has none of them.
 	qualityWord = regexp.MustCompile(`(?i)\b(?:UHD|4K|8K|FHD|FullHD|HD|VR|60fps|2160p|1080p|720p)\b`)
 	// siteNumbering is a trailing "- S36E29" (the dash optional) a studio's own numbering puts after a scene's title.
-	siteNumbering = regexp.MustCompile(`(?i)\s+(?:-\s*)?S(\d{1,3})E(\d{1,4})$`)
+	// Providers write it with a colon and sometimes spaces: "S33:E12", "S 3:E 5".
+	siteNumbering = regexp.MustCompile(`(?i)\s+(?:-\s*)?S\s*(\d{1,3})\s*:?\s*E\s*(\d{1,4})$`)
 	// bracketed is a (...) or [...] group of a title.
 	bracketed   = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]`)
 	groupSuffix = regexp.MustCompile(`-([A-Za-z0-9]{2,12})$`)
@@ -114,6 +115,13 @@ func ParseRelease(name string) (Info, bool) {
 	info.Words = tidy(rest)
 	info.Title = info.Words
 	return info, info.Words != ""
+}
+
+// SiteNumbering splits a scene title into its bare title and the season and episode a studio's own numbering gives it;
+// ok is false for a title with none, or that is only the numbering.
+func SiteNumbering(title string) (bare string, season, episode int, ok bool) {
+	bare, season, episode = withoutSiteNumbering(strings.TrimSpace(title))
+	return bare, season, episode, season > 0 || episode > 0
 }
 
 // withoutSiteNumbering cuts a trailing site numbering off a title and answers it; a title that is only the numbering stays.

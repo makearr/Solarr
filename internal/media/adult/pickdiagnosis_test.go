@@ -69,3 +69,32 @@ func TestIdentifications_CarryTheDateAndStudioOfEachHit(t *testing.T) {
 		}
 	}
 }
+
+func TestPickCandidate_AHitNumberedOtherwiseThanTheFileIsNotTaken(t *testing.T) {
+	file := parseadult.Info{Studio: "Nimbus Studio", Title: "Harbour Scene", Date: "2024-03-05", Year: 2024, Season: 41, Episode: 3}
+	wrong := hit("Harbour Scene - S41:E2", "Nimbus Studio", "2024-03-05", 0)
+	right := hit("Harbour Scene - S 41:E 3", "Nimbus Studio", "2024-03-05", 1)
+	plain := hit("Harbour Scene", "Nimbus Studio", "2024-03-05", 2)
+
+	if _, _, ok := pickCandidate([]Candidate{wrong}, file); ok {
+		t.Error("the only hit is numbered S41:E2 for a file S41E3: taken")
+	}
+	if got, _, ok := pickCandidate([]Candidate{wrong, right}, file); !ok || got.IDs != right.IDs {
+		t.Errorf("wrong then right: picked %+v (%v), want the S41:E3 hit", got.Title, ok)
+	}
+	// Same title, same day, same studio: the agreeing number breaks the tie against a hit with none.
+	if got, _, ok := pickCandidate([]Candidate{plain, right}, file); !ok || got.IDs != right.IDs {
+		t.Errorf("plain then right: picked %+v (%v), want the numbered hit that agrees", got.Title, ok)
+	}
+	// A hit with no numbering is judged as before, and a file with none ignores the hit's.
+	if got, _, ok := pickCandidate([]Candidate{plain}, file); !ok || got.IDs != plain.IDs {
+		t.Errorf("plain only: picked %+v (%v), want it", got.Title, ok)
+	}
+	bare := parseadult.Info{Studio: "Nimbus Studio", Title: "Harbour Scene", Date: "2024-03-05", Year: 2024}
+	if got, _, ok := pickCandidate([]Candidate{wrong}, bare); !ok || got.IDs != wrong.IDs {
+		t.Errorf("file without numbering: picked %+v (%v), want the hit", got.Title, ok)
+	}
+	if got := diagnosePick([]Candidate{wrong}, file); got.Reason != "numbering_differs" {
+		t.Errorf("diagnosis = %+v, want numbering_differs", got)
+	}
+}
