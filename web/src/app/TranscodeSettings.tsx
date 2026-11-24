@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { api, ok } from "@/api/client";
@@ -243,7 +244,18 @@ function LibraryRow({ library }: { library: Library }) {
     <div className={`flex flex-wrap items-end gap-4 py-2 ${library.supported ? "" : "opacity-60"}`}>
       <div className="flex min-w-40 flex-1 flex-col">
         <span className="text-sm font-medium">{library.name}</span>
-        <span className="text-xs text-ink-muted">{library.supported ? `${t("transcode.target")}: ${library.target_name ?? ""}` : t("transcode.unsupported")}</span>
+        <span className="text-xs text-ink-muted">
+          {library.supported && library.target_id != null ? (
+            <>
+              {t("transcode.target")}:{" "}
+              <Link to="/settings/transcode/targets/$targetId" params={{ targetId: String(library.target_id) }} className="text-accent hover:underline">
+                {library.target_name ?? ""}
+              </Link>
+            </>
+          ) : (
+            t("transcode.unsupported")
+          )}
+        </span>
       </div>
       <Toggle label={t("transcode.libraryOn")} checked={library.enabled} disabled={!library.supported || save.isPending} onChange={(enabled) => save.mutate({ ...row, enabled })} />
       <label className={labelStyle}>

@@ -10,6 +10,7 @@ import { Tags } from "./Tags";
 import { Categories } from "./Categories";
 import { DiscoverSettings } from "./DiscoverSettings";
 import { TranscodeSettings } from "./TranscodeSettings";
+import { TranscodeSetupForm } from "./TranscodeSetupForm";
 import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
 import { Streaming } from "./Streaming";
@@ -242,6 +243,14 @@ export function TranscodeSettingsPage() {
   return (
     <SettingsPage title="Transcode" requiredTier="normal">
       <TranscodeSettings />
+    </SettingsPage>
+  );
+}
+
+export function TranscodeSetupPage() {
+  return (
+    <SettingsPage title="Transcode" requiredTier="normal">
+      <TranscodeSetupForm />
     </SettingsPage>
   );
 }
