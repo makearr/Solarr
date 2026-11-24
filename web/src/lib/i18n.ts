@@ -554,6 +554,7 @@ const catalogue = {
   "candidates.neverOffer": "Never offer this release again",
   "dashboard.noClient": "No download client yet.",
   "dashboard.speedChart": "Download speed over the last minutes",
+  "identify.dated": "dated {date}",
   "identify.useAlbum": "Use this album",
   "identifyAs.searchFailed": "The search failed. Try again in a moment.",
   "identifyAs.leaveEmpty": "Leave both empty when the file name says which",

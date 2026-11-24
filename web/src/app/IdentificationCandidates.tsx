@@ -61,10 +61,15 @@ export function IdentificationCandidates({
                         {facts.title || candidate.external_id}
                       </a>
                     ) : (
-                      (facts.title ?? candidate.external_id ?? candidate.strategy)
+                      (facts.title ?? facts.parse ?? candidate.external_id ?? candidate.strategy)
                     )}
                   </div>
                   {facts.release_type && <div className="text-ink-muted">{facts.release_type}</div>}
+                  {(facts.date || facts.studio) && (
+                    <div className="text-ink-muted">
+                      {[facts.date && t("identify.dated", { date: facts.date }), facts.studio].filter(Boolean).join(", ")}
+                    </div>
+                  )}
                 </td>
                 <td className="px-2 py-1.5">{facts.artist}</td>
                 <td className="px-2 py-1.5 text-ink-muted">{editionSummary(facts)}</td>

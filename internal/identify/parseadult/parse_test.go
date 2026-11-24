@@ -36,3 +36,23 @@ func TestParseReleaseReadsTheGroupsDottedName(t *testing.T) {
 		t.Error("a name with no day is no scene release")
 	}
 }
+
+func TestParseNameTakesQualityWordsOutOfALibraryTitleAndKeepsWhatWasTyped(t *testing.T) {
+	for name, want := range map[string]parseadult.Info{
+		"[Nimbus Studio] Jane Placeholder Session UHD #010 (2024-03-05)": {
+			Studio: "Nimbus Studio", Title: "Jane Placeholder Session #010", Raw: "Jane Placeholder Session UHD #010", Year: 2024, Date: "2024-03-05"},
+		"[Nimbus Studio] Jane Placeholder Photoshoot (UHD #002) (2018-01-02) - Jane Placeholder": {
+			Studio: "Nimbus Studio", Title: "Jane Placeholder Photoshoot #002", Raw: "Jane Placeholder Photoshoot (UHD #002)", Year: 2018, Date: "2018-01-02", Performer: "Jane Placeholder"},
+		"[Nimbus Studio] Harbour Scene (4K) (2020-05-14)": {
+			Studio: "Nimbus Studio", Title: "Harbour Scene", Raw: "Harbour Scene (4K)", Year: 2020, Date: "2020-05-14"},
+		"[Nimbus Studio] UHD (2020-05-14)": {
+			Studio: "Nimbus Studio", Title: "UHD", Year: 2020, Date: "2020-05-14"},
+		"[Nimbus Studio] Shuttle Run (2020-05-14)": {
+			Studio: "Nimbus Studio", Title: "Shuttle Run", Year: 2020, Date: "2020-05-14"},
+	} {
+		got, ok := parseadult.ParseName(name)
+		if !ok || !reflect.DeepEqual(got, want) {
+			t.Errorf("%q: %+v (%v), want %+v", name, got, ok, want)
+		}
+	}
+}

@@ -22,6 +22,8 @@ type Info struct {
 	// Performer is the name a library file ends in after its date, when it has one.
 	Performer string
 	Group     string
+	// Raw is the title as the name typed it when quality words were taken out of Title, for display; empty otherwise.
+	Raw string
 	// DurationSec is the file's own length when it was probed; it tells apart scenes that share a title, studio and day.
 	DurationSec int
 }
@@ -34,8 +36,12 @@ var (
 	releaseName = regexp.MustCompile(`^([A-Za-z0-9]+)[. _-](\d{4}|\d{2})[. _-](\d{2})[. _-](\d{2})[. _-](.+)$`)
 	// qualityStart ends the title words of a release name.
 	qualityStart = regexp.MustCompile(`(?i)[. _-](?:2160p|1080p|720p|480p|360p|XXX|WEB(?:-?DL|RIP)?|HDRip|BluRay|MP4|MKV|H\.?26[45]|x26[45])\b`)
-	groupSuffix  = regexp.MustCompile(`-([A-Za-z0-9]{2,12})$`)
-	spaces       = regexp.MustCompile(`\s+`)
+	// qualityWord is a resolution or format tag a person types into a library title; a provider's title has none of them.
+	qualityWord = regexp.MustCompile(`(?i)\b(?:UHD|4K|8K|FHD|FullHD|HD|VR|60fps|2160p|1080p|720p)\b`)
+	// bracketed is a (...) or [...] group of a title.
+	bracketed   = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]`)
+	groupSuffix = regexp.MustCompile(`-([A-Za-z0-9]{2,12})$`)
+	spaces      = regexp.MustCompile(`\s+`)
 )
 
 // ParsePath reads a library file's path below its root: the file's name, and the studio from the folder above the
@@ -58,7 +64,11 @@ func ParsePath(relPath string) (Info, bool) {
 func ParseName(name string) (Info, bool) {
 	name = strings.TrimSpace(name)
 	if match := libraryName.FindStringSubmatch(name); match != nil {
-		info := Info{Studio: strings.TrimSpace(match[1]), Title: tidy(match[2]), Performer: tidy(match[6])}
+		raw := tidy(match[2])
+		info := Info{Studio: strings.TrimSpace(match[1]), Title: withoutQualityWords(raw), Performer: tidy(match[6])}
+		if info.Title != raw {
+			info.Raw = raw
+		}
 		info.Year, _ = strconv.Atoi(match[3])
 		if match[4] != "" {
 			info.Date = match[3] + "-" + match[4] + "-" + match[5]
@@ -98,6 +108,26 @@ func ParseRelease(name string) (Info, bool) {
 	info.Words = tidy(rest)
 	info.Title = info.Words
 	return info, info.Words != ""
+}
+
+// withoutQualityWords takes the quality tags out of a title: a bracket they empty goes, one that keeps other words
+// ("(UHD #002)") is unwrapped; a title that is only a quality word stays as typed.
+func withoutQualityWords(title string) string {
+	if !qualityWord.MatchString(title) {
+		return title
+	}
+	cleaned := bracketed.ReplaceAllStringFunc(title, func(group string) string {
+		inner := group[1 : len(group)-1]
+		if !qualityWord.MatchString(inner) {
+			return group
+		}
+		return strings.TrimSpace(qualityWord.ReplaceAllString(inner, " "))
+	})
+	cleaned = spaces.ReplaceAllString(strings.TrimSpace(qualityWord.ReplaceAllString(cleaned, " ")), " ")
+	if cleaned == "" {
+		return title
+	}
+	return cleaned
 }
 
 // tidy turns separators into spaces and drops a trailing "- Scene 3"-style tail's spacing noise.

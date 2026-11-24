@@ -92,8 +92,10 @@ func (r Resolver) ResolveKnown(ctx context.Context, categoryID int64, info parse
 		}
 	}
 	if isFilm {
+		r.logPick(info, candidates, "film_offer")
 		return 0, append([]model.Identification{film.identification()}, r.identifications(candidates)...)
 	}
+	r.logPick(info, candidates, "")
 	return 0, r.identifications(candidates)
 }
 
@@ -314,12 +316,19 @@ func (r Resolver) identifications(candidates []Candidate) []model.Identification
 		if candidate.Studio != "" {
 			detail += " (" + candidate.Studio + ")"
 		}
+		evidence := []model.MatchEvidence{{Kind: "parse", Detail: detail}}
+		if candidate.Date != "" {
+			evidence = append(evidence, model.MatchEvidence{Kind: "date", Detail: candidate.Date})
+		}
+		if candidate.Studio != "" {
+			evidence = append(evidence, model.MatchEvidence{Kind: "studio", Detail: candidate.Studio})
+		}
 		out = append(out, model.Identification{
 			Strategy:   "parse",
 			ExternalID: &model.ExternalID{Provider: provider, ExternalID: externalID, Confidence: 1 - 0.05*float64(rank)},
 			Precedence: model.PrecedenceSearched,
 			Confidence: max(0.1, 0.6-0.05*float64(rank)),
-			Evidence:   []model.MatchEvidence{{Kind: "parse", Detail: detail}},
+			Evidence:   evidence,
 		})
 	}
 	return out
@@ -366,4 +375,78 @@ func withinDays(a, b string, n int) bool {
 		return false
 	}
 	return first.Sub(second).Abs() <= time.Duration(n)*24*time.Hour
+}
+
+// pickDiagnosis is why pickCandidate left a file open: the gate that rejected the best title match.
+type pickDiagnosis struct {
+	// Reason is one of no_candidates, title_mismatch, file_date_missing, provider_date_missing, rank_too_low,
+	// sibling_days, date_off, title_not_identical_off_day, several_named, other.
+	Reason string
+	// DaysOff is the gap between the file's day and the best title match's, when both are known.
+	DaysOff       int
+	StudioDiffers bool
+	Rank          int
+	// TitleMatches is how many of the hits carry the file's title.
+	TitleMatches int
+}
+
+// diagnosePick names the gate that rejected the best title match of a file nothing was picked for.
+func diagnosePick(candidates []Candidate, info parseadult.Info) pickDiagnosis {
+	if len(candidates) == 0 {
+		return pickDiagnosis{Reason: "no_candidates"}
+	}
+	var best *Candidate
+	matches := 0
+	for index := range candidates {
+		if titleMatches(candidates[index].Title, info.Title, true) {
+			matches++
+			if best == nil {
+				best = &candidates[index]
+			}
+		}
+	}
+	if best == nil {
+		return pickDiagnosis{Reason: "title_mismatch"}
+	}
+	diagnosis := pickDiagnosis{Rank: best.Rank, TitleMatches: matches,
+		StudioDiffers: info.Studio != "" && best.Studio != "" && studioKey(best.Studio) != studioKey(info.Studio)}
+	first, firstErr := time.Parse(time.DateOnly, info.Date)
+	second, secondErr := time.Parse(time.DateOnly, best.Date)
+	if firstErr == nil && secondErr == nil {
+		diagnosis.DaysOff = int(first.Sub(second).Abs().Hours() / 24)
+	}
+	switch {
+	case info.Date == "":
+		diagnosis.Reason = "file_date_missing"
+	case best.Date == "":
+		diagnosis.Reason = "provider_date_missing"
+	case best.Date != info.Date && best.Rank >= rankedWell:
+		diagnosis.Reason = "rank_too_low"
+	case best.Date != info.Date && siblingDays(candidates, info):
+		diagnosis.Reason = "sibling_days"
+	case best.Date != info.Date && !withinDays(info.Date, best.Date, dateToleranceDays):
+		diagnosis.Reason = "date_off"
+	case best.Date != info.Date && !titleMatches(best.Title, info.Title, false):
+		diagnosis.Reason = "title_not_identical_off_day"
+	case matches > 1:
+		diagnosis.Reason = "several_named"
+	default:
+		diagnosis.Reason = "other"
+	}
+	return diagnosis
+}
+
+// logPick says at debug level why a file stayed open (SOLARR_LOG_LEVEL=debug): one line per file, the reason a field.
+func (r Resolver) logPick(info parseadult.Info, candidates []Candidate, reason string) {
+	if r.Logger == nil || !r.Logger.Enabled(context.Background(), slog.LevelDebug) {
+		return
+	}
+	diagnosis := diagnosePick(candidates, info)
+	if reason != "" {
+		diagnosis.Reason = reason
+	}
+	r.Logger.Debug("adult pick", slog.String("media_type", MediaType), slog.String("title", info.Title), slog.String("studio", info.Studio),
+		slog.String("date", info.Date), slog.String("reason", diagnosis.Reason), slog.Int("days_off", diagnosis.DaysOff),
+		slog.Bool("studio_differs", diagnosis.StudioDiffers), slog.Int("rank", diagnosis.Rank),
+		slog.Int("title_matches", diagnosis.TitleMatches), slog.Int("hits", len(candidates)))
 }
