@@ -126,3 +126,23 @@ func TestNamedIDsTakesAGoodreadsId(t *testing.T) {
 		t.Error("an empty id was taken")
 	}
 }
+
+func TestReadarrImportAddsToTheAudiobookCatalogForAnAudiobookLibrary(t *testing.T) {
+	ebooks, audiobooks := &recordingAdding{}, &recordingAdding{}
+	run := arrmap.Run{
+		Client: readarrClient(readarrShelf), Options: arrmap.Options{Monitored: true}, Progress: func(int64, int64) {},
+		Place:  func(root string) (int64, bool) { return 9, root == "/shelf/books" },
+		Record: func(context.Context, library.NewArrImportItem) error { return nil },
+		Link:   func(context.Context, string, int64, string, int64) {},
+	}
+	importer := ReadarrImport{
+		Adding:      map[string]media.Adding{"book": ebooks, "audiobook": audiobooks},
+		MediaTypeOf: func(categoryID int64) string { return map[int64]string{9: "audiobook"}[categoryID] },
+	}
+	if _, err := importer.Import(t.Context(), run); err == nil {
+		t.Log("the unnamed book is reported, as before")
+	}
+	if len(audiobooks.requests) != 1 || audiobooks.requests[0].CategoryID != 9 || len(ebooks.requests) != 0 {
+		t.Errorf("audiobook requests %+v, ebook requests %+v; want the one book in the audiobook catalog only", audiobooks.requests, ebooks.requests)
+	}
+}

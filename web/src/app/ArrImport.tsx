@@ -51,14 +51,7 @@ export function ArrImport() {
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Arr</h1>
-        <p className="text-sm leading-relaxed text-ink-muted">
-          Connect an existing Sonarr/Radarr/Lidarr/Readarr/Whisparr and choose what to bring in: its paths, what it
-          monitors (as intent, never a download), only the monitoring status of what is already here, its
-          indexers and its download clients. A connection may also send monitoring back, which is the one
-          thing Solarr ever writes to an *Arr, and is off until you turn it on. Lidarr (artists and
-          albums), Sonarr (series), Radarr (movies), Readarr (books), Whisparr (scenes, performers, studios), and Kapowarr and Mylar3 (comic series) sync today;
-          Connect Prowlarr to use its active indexers and download clients here.
-        </p>
+        <p className="text-sm leading-relaxed text-ink-muted">{t("arrImport.intro")}</p>
       </header>
 
       {instances.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
@@ -341,7 +334,7 @@ function RunSummary({ run }: { run: ArrImportRun }) {
     return (
       <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
         {run.artists_total
-          ? `Walking ${run.app === "sonarr" ? "series" : run.app === "radarr" ? "movie" : run.app === "readarr" ? "book" : run.app === "whisparr" ? "item" : run.app === "kapowarr" || run.app === "mylar3" ? "comic series" : "artist"} ${Math.min((run.artists_done ?? 0) + 1, run.artists_total)} of ${run.artists_total}.`
+          ? t("arrImport.walking", { what: t(`arrImport.walk.${run.app}`), done: Math.min((run.artists_done ?? 0) + 1, run.artists_total), total: run.artists_total })
           : "Started."}{" "}
         A real library takes a while (one call per artist or series, one pass over the movies); expand history below to watch it finish.
       </p>
@@ -351,7 +344,7 @@ function RunSummary({ run }: { run: ArrImportRun }) {
     <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
       {run.state === "DONE" && (run.app === "sonarr" || run.app === "radarr" || run.app === "readarr" || run.app === "whisparr" || run.app === "kapowarr" || run.app === "mylar3") ? (
         <>
-          {run.artists_created} {run.app === "radarr" ? "movies" : run.app === "readarr" ? "books" : run.app === "whisparr" ? "items" : "series"} added, {run.artists_matched} matched
+          {t("arrImport.added", { count: run.artists_created, what: t(`arrImport.added.${run.app}`), matched: run.artists_matched })}
           {run.items_parked > 0 ? `, ${run.items_parked} not here` : ""}
         </>
       ) : run.state === "DONE" ? (

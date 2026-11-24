@@ -17,9 +17,11 @@ import (
 // the import's mapping names. Readarr's own record (title, author, year) stands in when no source knows the book.
 type ReadarrImport struct {
 	// Adding is each book media type's add, by type: the library a book's root folder belongs to decides which.
-	Adding   map[string]media.Adding
-	Cache    *settings.Cache
-	Monitors arrmap.Monitors
+	Adding map[string]media.Adding
+	Cache  *settings.Cache
+	// MediaTypeOf answers a library's media type; nil asks the cache, and without one a library is books.
+	MediaTypeOf func(categoryID int64) string
+	Monitors    arrmap.Monitors
 }
 
 // Import walks Readarr's books.
@@ -47,7 +49,7 @@ func (r ReadarrImport) source(run arrmap.Run) arrmap.Source[arrimport.ReadarrBoo
 		},
 		Workers: 4,
 		Monitor: func(ctx context.Context, categoryID int64, book arrimport.ReadarrBook) (library.ArrImportCounts, error) {
-			workID, held, err := r.Monitors.Work(ctx, categoryID, mediaTypeOf(r.Cache, categoryID), ProviderGoodreads, book.ForeignBookID, book.Monitored)
+			workID, held, err := r.Monitors.Work(ctx, categoryID, r.mediaTypeOf(categoryID), ProviderGoodreads, book.ForeignBookID, book.Monitored)
 			if held && err == nil {
 				run.Link(ctx, arrmap.LinkBook, book.ID, "work", workID)
 			}
@@ -60,9 +62,12 @@ func (r ReadarrImport) source(run arrmap.Run) arrmap.Source[arrimport.ReadarrBoo
 }
 
 // mediaTypeOf is the media type of the library an import item belongs to: books or audiobooks.
-func mediaTypeOf(cache *settings.Cache, categoryID int64) string {
-	if cache != nil {
-		if category, ok := cache.Snapshot().Category(categoryID); ok {
+func (r ReadarrImport) mediaTypeOf(categoryID int64) string {
+	if r.MediaTypeOf != nil {
+		return r.MediaTypeOf(categoryID)
+	}
+	if r.Cache != nil {
+		if category, ok := r.Cache.Snapshot().Category(categoryID); ok {
 			return category.MediaType
 		}
 	}
@@ -86,7 +91,7 @@ func (r ReadarrImport) syncBook(ctx context.Context, run arrmap.Run, categoryID 
 	if profile, ok := r.bookProfile(categoryID, book, profileNames, run.Options.ProfileMap); ok {
 		request.ProfileID = &profile
 	}
-	adding, known := r.Adding[mediaTypeOf(r.Cache, categoryID)]
+	adding, known := r.Adding[r.mediaTypeOf(categoryID)]
 	if !known {
 		return false, errors.New("no book service for this library")
 	}
@@ -109,7 +114,7 @@ func (r ReadarrImport) syncBook(ctx context.Context, run arrmap.Run, categoryID 
 func (r ReadarrImport) bookProfile(categoryID int64, book arrimport.ReadarrBook, profileNames map[int64]string, profileMap map[int64]*int64) (int64, bool) {
 	id, mapped := profileMap[book.Author.QualityProfileID]
 	if !mapped && r.Cache != nil {
-		id = arrmap.SameNameProfile(r.Cache.Snapshot().QualityProfiles(), mediaTypeOf(r.Cache, categoryID), profileNames[book.Author.QualityProfileID])
+		id = arrmap.SameNameProfile(r.Cache.Snapshot().QualityProfiles(), r.mediaTypeOf(categoryID), profileNames[book.Author.QualityProfileID])
 	}
 	if id == nil {
 		return 0, false

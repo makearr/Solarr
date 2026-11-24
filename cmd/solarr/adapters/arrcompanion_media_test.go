@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/importing/arrmap"
@@ -202,5 +203,45 @@ func TestCompanionBook_AddsWhatReadarrLacksAndFollowsTheDialogForWhatItHolds(t *
 	}
 	if _, err := (ArrSync{}).companionBook(t.Context(), lidarrOver(&scriptedArr{answers: map[string]string{}}), "b-5", apiserver.AddedWork{Monitored: true}); err == nil {
 		t.Error("a lookup that finds nothing was not an error")
+	}
+}
+
+// Readarr's books are sent back by the same rule as every other *Arr's items: only a linked book, and only Solarr's change.
+func TestPusherBooks_SendsSolarrsMonitoringOfLinkedBooksToReadarrOnly(t *testing.T) {
+	opened := newPushLibrary(t)
+	ids, err := library.NewIdentity(opened).ResolveWorks(t.Context(), time.Unix(1_700_000_000, 0), []library.WorkLink{
+		{Provider: "goodreads", ExternalID: "b-5", Confidence: 1, Work: library.WorkIdentity{MediaType: "book", CanonicalTitle: "The Quiet Pier", SortTitle: "Quiet Pier"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired, links := library.NewDesired(opened), library.NewArrLinks(opened)
+	if _, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{WorkID: ids[0], CategoryID: 1, ProfileID: 1, Monitored: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := links.Link(t.Context(), 5, library.ArrLink{SourceKind: arrmap.LinkBook, SourceID: "11", LocalKind: "work", LocalID: ids[0]}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := links.ForInstance(t.Context(), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	arr := &scriptedArr{answers: map[string]string{
+		"/api/v1/book":    `[{"id":11,"monitored":false},{"id":12,"monitored":false}]`,
+		"/api/v1/book/11": `{"id":11,"title":"Keep","monitored":false}`,
+		"/api/v1/book/12": `{"id":12,"monitored":false}`,
+	}}
+	push := &pusher{
+		sync: ArrSync{Desired: desired, Links: links}, instanceID: 5, client: lidarrOver(arr),
+		links: map[string]map[string]library.ArrLink{arrmap.LinkBook: {stored[0].SourceID: stored[0]}},
+	}
+	if err := push.books(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(arr.writes) != 1 || !strings.HasPrefix(arr.writes[0], "PUT /api/v1/book/11 ") || !strings.Contains(arr.writes[0], `"monitored":true`) || !strings.Contains(arr.writes[0], `"title":"Keep"`) {
+		t.Errorf("writes = %v, want only book 11 written, monitored true, the rest of it kept", arr.writes)
+	}
+	if push.result.Checked != 1 || push.result.Changed != 1 {
+		t.Errorf("result = %+v, want one linked book checked and changed", push.result)
 	}
 }

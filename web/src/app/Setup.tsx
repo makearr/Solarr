@@ -243,12 +243,8 @@ function ConnectArr({
 
   return (
     <Panel
-      title="Step 3 — Import from Lidarr, Sonarr, Radarr, Readarr, Whisparr, Kapowarr or Mylar3"
-      description={
-        "Already run Lidarr, Sonarr, Radarr, Readarr, Whisparr, Kapowarr or Mylar3? Connect each one: its root folders become a library here, and " +
-        "you choose what comes in: its items with their monitoring, only the monitoring status of what is here, its " +
-        "indexers, its download clients. It can also send monitoring back, if you want."
-      }
+      title={t("setup.import.title")}
+      description={t("setup.import.description")}
     >
       {connected.length > 0 && (
         <ul className="space-y-1 text-xs">

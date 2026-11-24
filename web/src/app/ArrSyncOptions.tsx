@@ -1,4 +1,4 @@
-import { t } from "@/lib/i18n";
+import { t, type MessageKey } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
@@ -19,14 +19,14 @@ const input = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-x
 const button = "rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50";
 
 // Each app's library type, what it monitors, and an example of its root folder.
-const APP_WORDS: Partial<Record<ArrInstance["app"], { mediaType: string; monitored: string; path: string }>> = {
-  lidarr: { mediaType: "music", monitored: "Monitored artists and albums", path: "/music" },
-  sonarr: { mediaType: "tv", monitored: "Monitored series", path: "/tv" },
-  radarr: { mediaType: "movie", monitored: "Monitored movies", path: "/movies" },
-  readarr: { mediaType: "book", monitored: "Monitored books", path: "/books" },
-  whisparr: { mediaType: "adult", monitored: "Monitored scenes, performers and studios", path: "/porn" },
-  kapowarr: { mediaType: "comic", monitored: "Monitored volumes", path: "/comics" },
-  mylar3: { mediaType: "comic", monitored: "Watched comics (not paused or ended)", path: "/comics" },
+const APP_WORDS: Partial<Record<ArrInstance["app"], { mediaType: string; also?: readonly string[]; monitored: MessageKey; path: string }>> = {
+  lidarr: { mediaType: "music", monitored: "arrSyncOptions.monitored.lidarr", path: "/music" },
+  sonarr: { mediaType: "tv", monitored: "arrSyncOptions.monitored.sonarr", path: "/tv" },
+  radarr: { mediaType: "movie", monitored: "arrSyncOptions.monitored.radarr", path: "/movies" },
+  readarr: { mediaType: "book", also: ["audiobook"], monitored: "arrSyncOptions.monitored.readarr", path: "/books" },
+  whisparr: { mediaType: "adult", monitored: "arrSyncOptions.monitored.whisparr", path: "/porn" },
+  kapowarr: { mediaType: "comic", monitored: "arrSyncOptions.monitored.kapowarr", path: "/comics" },
+  mylar3: { mediaType: "comic", monitored: "arrSyncOptions.monitored.mylar3", path: "/comics" },
 };
 
 /** What one *Arr import brings in (asked 2026-09-30): its library's folders, monitored and unmonitored
@@ -147,7 +147,7 @@ export function ArrSyncOptions({
     onSuccess: onStarted,
   });
 
-  const appLibraries = (libraries.data ?? []).filter((library) => library.media_type === words.mediaType);
+  const appLibraries = (libraries.data ?? []).filter((library) => library.media_type === words.mediaType || words.also?.includes(library.media_type) === true);
   return (
     <section className="flex flex-col gap-2 rounded-md border border-border-subtle bg-canvas p-3 text-xs">
       <h3 className="font-medium text-ink">Import from {instance.name}</h3>
@@ -225,7 +225,7 @@ export function ArrSyncOptions({
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={monitored} onChange={(event) => setMonitored(event.target.checked)} />
-          <span title="Bring in what the *Arr monitors, as intent: nothing is downloaded by this.">Monitored</span>
+          <span title={`${t(words.monitored)}. ${t("arrSyncOptions.monitoredAsIntent")}`}>Monitored</span>
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={unmonitored} onChange={(event) => setUnmonitored(event.target.checked)} />
