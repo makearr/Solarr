@@ -492,6 +492,23 @@ func (r SeriesReader) ManualFields(ctx context.Context, workID int64) (map[strin
 	return Works{store: r.store}.ManualFields(ctx, workID)
 }
 
+// FieldSourcesOf is the provider names a work's refresh was built from, as the merge recorded them; empty before one did.
+func (r SeriesReader) FieldSourcesOf(ctx context.Context, workID int64) ([]string, error) {
+	fields, err := librarydb.New(r.store.Read()).ListWorkFields(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: fields of work %d: %w", workID, err)
+	}
+	for _, field := range fields {
+		if field.Field == FieldSources && field.Provider == "merge" && field.Value.Valid && field.Value.String != "" {
+			return strings.Split(field.Value.String, ","), nil
+		}
+	}
+	return nil, nil
+}
+
+// FieldSources is the work field that holds the providers a record was built from.
+const FieldSources = "sources"
+
 // PartPath is one file of a part: where it lies, and the part's title, date, runtime and one provider's id.
 type PartPath struct {
 	MediaRef, Title, Date string

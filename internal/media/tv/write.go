@@ -328,6 +328,9 @@ func fieldWrites(series Series, source string) []library.SeriesFieldWrite {
 	add("numbering_basis", orDefault(series.Basis, ProviderTVDB+":aired"))
 	// Written even when empty: a null value clears the note once the sources agree again.
 	fields = append(fields, library.SeriesFieldWrite{Field: FieldNumberingDisagrees, Provider: "merge", Value: seasonList(series.NumberingDisagrees)})
+	if len(series.Sources) > 0 {
+		fields = append(fields, library.SeriesFieldWrite{Field: library.FieldSources, Provider: "merge", Value: strings.Join(series.Sources, ",")})
+	}
 	if series.Type != "" {
 		fields = append(fields, library.SeriesFieldWrite{Field: "series_type", Provider: "detected", Value: string(series.Type)})
 	}

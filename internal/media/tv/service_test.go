@@ -428,6 +428,29 @@ func TestRefreshIsSkippedWhileSkyhookIsDownSoTheFallbacksNumbersNeverReachTheLib
 	}
 }
 
+func TestRefreshIsSkippedWhileASourceTheRecordWasBuiltFromDoesNotAnswer(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		atAdd    fakeTVmaze
+		wantSkip bool
+	}{
+		{"it contributed", fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show"}}, true},
+		{"it knew nothing", fakeTVmaze{err: tvmaze.ErrNotFound}, false},
+	} {
+		service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, test.atAdd)
+		service.Reader = library.NewSeriesReader(opened)
+		added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 3, ProfileID: 1, Monitor: tv.MonitorAll})
+		if err != nil {
+			t.Fatal(err)
+		}
+		service.TVmaze = fakeTVmaze{err: errors.New("tvmaze timed out")}
+		_, err = service.Refresh(t.Context(), tv.RefreshRequest{WorkID: added.WorkID, CategoryID: 3, ProfileID: 1})
+		if skipped := errors.Is(err, media.ErrSourceUnavailable); skipped != test.wantSkip {
+			t.Errorf("%s: Refresh err = %v, skipped %v, want skipped %v", test.name, err, skipped, test.wantSkip)
+		}
+	}
+}
+
 type fakeOMDb struct {
 	movie   omdb.Movie
 	err     error

@@ -207,6 +207,8 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 	type fetched struct {
 		series Series
 		found  bool
+		// failed is the source answering an error that is not "no such series".
+		failed bool
 	}
 	var rich Series
 	haveRich := false
@@ -221,53 +223,56 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 		func(ctx context.Context, source string) (fetched, error) {
 			switch source {
 			case settings.TVSourceTMDB:
-				series, found := s.fetchTMDB(ctx, ids, recentOnly)
-				return fetched{series, found}, nil
+				series, found, failed := s.fetchTMDB(ctx, ids, recentOnly)
+				return fetched{series: series, found: found, failed: failed}, nil
 			case settings.TVSourceAniList:
-				series, found := s.fetchAniList(ctx, ids)
-				return fetched{series, found}, nil
+				series, found, failed := s.fetchAniList(ctx, ids)
+				return fetched{series: series, found: found, failed: failed}, nil
 			case settings.TVSourceKitsu:
 				series, found := s.fetchKitsu(ctx, ids)
-				return fetched{series, found}, nil
+				return fetched{series: series, found: found}, nil
 			case settings.TVSourceMAL:
 				series, found := s.fetchMAL(ctx, ids)
-				return fetched{series, found}, nil
+				return fetched{series: series, found: found}, nil
 			case settings.TVSourceAniDB:
 				series, found := s.fetchAniDB(ctx, ids)
-				return fetched{series, found}, nil
+				return fetched{series: series, found: found}, nil
 			case settings.MovieSourceIMDb:
 				series, found := s.fetchIMDb(ctx, ids)
-				return fetched{series, found}, nil
+				return fetched{series: series, found: found}, nil
 			case settings.TVSourceOMDb:
 				series, found := s.fetchOMDb(ctx, ids)
-				return fetched{series, found}, nil
+				return fetched{series: series, found: found}, nil
 			case settings.TVSourceFanart:
 				series, found := s.fetchFanart(ctx, ids)
-				return fetched{series, found}, nil
+				return fetched{series: series, found: found}, nil
 			}
 			if strings.HasPrefix(source, settings.LocalSourcePrefix) {
 				series, found := s.fetchLocal(ctx, categoryID, source, ids)
-				return fetched{series, found}, nil
+				return fetched{series: series, found: found}, nil
 			}
 			if s.recordProvider(source) != nil {
 				series, found := s.askRecord(ctx, source, ids)
-				return fetched{series, found}, nil
+				return fetched{series: series, found: found}, nil
 			}
 			if s.TVmaze == nil {
 				return fetched{}, nil
 			}
-			show, found, rejected := s.findShow(ctx, ids)
+			show, found, rejected, failed := s.findShow(ctx, ids)
 			if rejected > 0 {
 				wrongTVmaze.Store(rejected)
 			}
 			if !found {
-				return fetched{}, nil
+				return fetched{failed: failed}, nil
 			}
-			return fetched{s.fromShow(ctx, show), true}, nil
+			return fetched{series: s.fromShow(ctx, show), found: true}, nil
 		})
 	for _, answer := range answers {
 		if answer.Err != nil {
 			s.warn(answer.Source, ids.TVDB, answer.Err)
+		}
+		if answer.Value.failed {
+			failed = append(failed, answer.Source)
 		}
 		if !answer.Value.found {
 			continue
@@ -469,23 +474,25 @@ func (s Service) fetchFanart(ctx context.Context, ids IDs) (Series, bool) {
 }
 
 // fetchAniList asks AniList for each cour of an anime Skyhook knows by AniList id; a series with none is not asked.
-func (s Service) fetchAniList(ctx context.Context, ids IDs) (Series, bool) {
+func (s Service) fetchAniList(ctx context.Context, ids IDs) (Series, bool, bool) {
 	if s.AniList == nil || len(ids.AniList) == 0 {
-		return Series{}, false
+		return Series{}, false, false
 	}
+	failed := false
 	var entries []anilist.Media
 	for _, id := range ids.AniList[:min(len(ids.AniList), maxAnimeEntries)] {
 		entry, err := s.AniList.Media(ctx, id)
 		if err != nil {
 			s.warn("anilist", id, err)
+			failed = failed || !errors.Is(err, anilist.ErrNotFound)
 			continue
 		}
 		entries = append(entries, entry)
 	}
 	if len(entries) == 0 {
-		return Series{}, false
+		return Series{}, false, failed
 	}
-	return FromAniList(entries), true
+	return FromAniList(entries), true, failed
 }
 
 // completeIDs finds TheTVDB's id from TMDB's when only that is known, so a series added from TMDB still gets Skyhook's
@@ -593,9 +600,9 @@ func (s Service) bridgeIDs(ctx context.Context, ids IDs, order []string) IDs {
 
 // fetchTMDB asks TMDB for the series and every season's guest stars; TMDB's own id is found from TheTVDB's or IMDb's
 // when Skyhook did not carry it.
-func (s Service) fetchTMDB(ctx context.Context, ids IDs, recentOnly bool) (Series, bool) {
+func (s Service) fetchTMDB(ctx context.Context, ids IDs, recentOnly bool) (Series, bool, bool) {
 	if s.TMDB == nil || !s.TMDB.Configured() {
-		return Series{}, false
+		return Series{}, false, false
 	}
 	id := ids.TMDB
 	if id == 0 && ids.TVDB > 0 {
@@ -609,12 +616,12 @@ func (s Service) fetchTMDB(ctx context.Context, ids IDs, recentOnly bool) (Serie
 		}
 	}
 	if id == 0 {
-		return Series{}, false
+		return Series{}, false, false
 	}
 	series, err := s.TMDB.Series(ctx, id)
 	if err != nil {
 		s.warn("tmdb", id, err)
-		return Series{}, false
+		return Series{}, false, !errors.Is(err, tmdb.ErrNotFound)
 	}
 	newest := 0
 	for _, entry := range series.Seasons {
@@ -631,7 +638,7 @@ func (s Service) fetchTMDB(ctx context.Context, ids IDs, recentOnly bool) (Serie
 		wanted = append(wanted, entry.SeasonNumber)
 	}
 	seasons := s.fetchSeasons(ctx, id, wanted)
-	return FromTMDB(series, seasons, ""), true
+	return FromTMDB(series, seasons, ""), true, false
 }
 
 // seasonWorkers is how many of a series' seasons are asked of TMDB at once; its bucket still paces the calls.
@@ -749,7 +756,7 @@ func guardEpisodeCredits(credits []Credit, episodes []Episode) []Credit {
 
 // findShow asks TVmaze for the series; an id another provider supplied is trusted only while the show's own TheTVDB and
 // IMDb ids agree (Skyhook lists the 2013 "Sua and XavpaRov" as TVmaze's id for its 2022 sequel), else rejected is that id.
-func (s Service) findShow(ctx context.Context, ids IDs) (show tvmaze.Show, found bool, rejected int64) {
+func (s Service) findShow(ctx context.Context, ids IDs) (show tvmaze.Show, found bool, rejected int64, failed bool) {
 	var err error
 	switch {
 	case ids.TVmaze > 0:
@@ -757,22 +764,23 @@ func (s Service) findShow(ctx context.Context, ids IDs) (show tvmaze.Show, found
 		if err == nil && contradicts(show, ids) {
 			rejected = ids.TVmaze
 			if ids.TVDB == 0 {
-				return tvmaze.Show{}, false, rejected
+				return tvmaze.Show{}, false, rejected, false
 			}
 			show, err = s.TVmaze.LookupTVDB(ctx, ids.TVDB)
 		}
 	case ids.TVDB > 0:
 		show, err = s.TVmaze.LookupTVDB(ctx, ids.TVDB)
 	default:
-		return tvmaze.Show{}, false, 0
+		return tvmaze.Show{}, false, 0, false
 	}
 	if err != nil {
-		if !errors.Is(err, tvmaze.ErrNotFound) {
+		failed = !errors.Is(err, tvmaze.ErrNotFound)
+		if failed {
 			s.warn("tvmaze", firstNonZero(ids.TVmaze, ids.TVDB), err)
 		}
-		return tvmaze.Show{}, false, rejected
+		return tvmaze.Show{}, false, rejected, failed
 	}
-	return show, true, rejected
+	return show, true, rejected, false
 }
 
 // contradicts is a TVmaze show naming a TheTVDB or IMDb id other than the one the series is known by.
@@ -968,6 +976,16 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	// Skyhook sets the aired numbering: a refresh built on the fallback's numbers would add parts under other numbers.
 	if slices.Contains(series.Failed, sourceSkyhook) {
 		return AddResult{}, fmt.Errorf("tv: refresh of work %d skipped, %s did not answer: %w", request.WorkID, sourceSkyhook, media.ErrSourceUnavailable)
+	}
+	// A source the stored record was built from that does not answer would drop what only it supplied.
+	builtFrom, err := s.Reader.FieldSourcesOf(ctx, request.WorkID)
+	if err != nil {
+		return AddResult{}, err
+	}
+	for _, source := range series.Failed {
+		if slices.Contains(builtFrom, source) {
+			return AddResult{}, fmt.Errorf("tv: refresh of work %d skipped, %s did not answer: %w", request.WorkID, source, media.ErrSourceUnavailable)
+		}
 	}
 	s.addAltTitles(ctx, &series, request.CategoryID, true)
 	manual, err := s.Reader.ManualFields(ctx, request.WorkID)
