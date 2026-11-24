@@ -144,7 +144,7 @@ func (a Prowlarr) UseInstanceIndexers(ctx context.Context, instanceID int64, pro
 // InstanceDownloadClients reads one *Arr's download clients.
 func (a Prowlarr) InstanceDownloadClients(ctx context.Context, instanceID int64) ([]apiserver.ArrDownloadClientRow, error) {
 	instance, key, err := a.connection(ctx, instanceID,
-		settings.ArrAppProwlarr, settings.ArrAppLidarr, settings.ArrAppSonarr, settings.ArrAppRadarr, settings.ArrAppWhisparr)
+		settings.ArrAppProwlarr, settings.ArrAppLidarr, settings.ArrAppSonarr, settings.ArrAppRadarr, settings.ArrAppWhisparr, settings.ArrAppReadarr)
 	if err != nil {
 		return nil, err
 	}

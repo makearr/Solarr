@@ -96,8 +96,8 @@ interface ConnectOutcome {
   rootFolderErrors: string[];
 }
 
-// Where an app's content comes from; Readarr connects for later, its import is not built.
-const SYNCS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "whisparr", "kapowarr", "mylar3"];
+// Where an app's content comes from.
+const SYNCS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr", "kapowarr", "mylar3"];
 
 function ConnectArr({
   onSkip,
@@ -243,12 +243,11 @@ function ConnectArr({
 
   return (
     <Panel
-      title="Step 3 — Import from Lidarr, Sonarr, Radarr, Whisparr, Kapowarr or Mylar3"
+      title="Step 3 — Import from Lidarr, Sonarr, Radarr, Readarr, Whisparr, Kapowarr or Mylar3"
       description={
-        "Already run Lidarr, Sonarr, Radarr, Whisparr, Kapowarr or Mylar3? Connect each one: its root folders become a library here, and " +
+        "Already run Lidarr, Sonarr, Radarr, Readarr, Whisparr, Kapowarr or Mylar3? Connect each one: its root folders become a library here, and " +
         "you choose what comes in: its items with their monitoring, only the monitoring status of what is here, its " +
-        "indexers, its download clients. It can also send monitoring back, if you want. Readarr can be connected " +
-        "now; its import comes later."
+        "indexers, its download clients. It can also send monitoring back, if you want."
       }
     >
       {connected.length > 0 && (

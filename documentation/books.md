@@ -107,5 +107,5 @@ the missing ones.
 
 ## Not built
 
-OPF or metadata.json files beside a book, and import from Readarr. A monitored series does not yet add a book published
+OPF or metadata.json files beside a book, and the author monitoring Readarr has. Import from Readarr is in `documentation/arr-import.md`. A monitored series does not yet add a book published
 after it was monitored (no periodic pass, as for films).

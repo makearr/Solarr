@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/importing/arrmap"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -156,5 +158,49 @@ func TestCompanionScene_PicksTheSceneWithTheProvidersIdAndAddsOrFollowsTheDialog
 	none := &scriptedArr{answers: map[string]string{"/api/v3/movie/lookup": `[{"foreignId":"stash:other"}]`}}
 	if _, err := (ArrSync{}).companionScene(t.Context(), lidarrOver(none).Whisparr(), "wanted", apiserver.AddedWork{Title: "A", Monitored: true}); err == nil || none.joined() != "" {
 		t.Errorf("error %v, writes %q; want an error and no write when no result has the id", err, none.joined())
+	}
+}
+
+func TestMediaTarget_SendsABookNamedByGoodreadsToReadarrAndNoOtherBook(t *testing.T) {
+	got, ok := mediaTarget(apiserver.AddedWork{Kind: "book", Provider: "goodreads", ExternalID: "b-5"})
+	if !ok || got.app != settings.ArrAppReadarr || got.ref != "b-5" || got.linkKind != arrmap.LinkBook {
+		t.Errorf("target = %+v, %v", got, ok)
+	}
+	if _, ok := mediaTarget(apiserver.AddedWork{Kind: "book", Provider: "openlibrary", ExternalID: "OL1W"}); ok {
+		t.Error("a book named by another provider was sent to Readarr")
+	}
+}
+
+func TestCompanionBook_AddsWhatReadarrLacksAndFollowsTheDialogForWhatItHolds(t *testing.T) {
+	shelf := map[string]string{
+		"/api/v1/author":      `[{"id":1,"qualityProfileId":2,"metadataProfileId":3,"rootFolderPath":"/shelf"}]`,
+		"/api/v1/book/lookup": `[{"foreignBookId":"b-5","author":{"foreignAuthorId":"a-1"}}]`,
+	}
+	arr := &scriptedArr{answers: shelf}
+	id, err := (ArrSync{}).companionBook(t.Context(), lidarrOver(arr), "b-5", apiserver.AddedWork{Monitored: true, Search: true})
+	if err != nil || id != 5 {
+		t.Fatalf("id %d, error %v", id, err)
+	}
+	for _, want := range []string{"POST /api/v1/book", `"monitored":true`, `"searchForNewBook":true`, `"qualityProfileId":2`, `"metadataProfileId":3`, `"rootFolderPath":"/shelf"`} {
+		if !strings.Contains(arr.joined(), want) {
+			t.Errorf("writes = %s, want %s", arr.joined(), want)
+		}
+	}
+
+	held := &scriptedArr{answers: map[string]string{"/api/v1/book/lookup": `[{"id":7,"foreignBookId":"b-5"}]`, "/api/v1/book/7": `{"id":7}`}}
+	if id, err := (ArrSync{}).companionBook(t.Context(), lidarrOver(held), "b-5", apiserver.AddedWork{Monitored: true, Search: true}); err != nil || id != 7 {
+		t.Fatalf("held: id %d, error %v", id, err)
+	}
+	for _, want := range []string{"PUT /api/v1/book/7", `"name":"BookSearch"`, `"bookIds":[7]`} {
+		if !strings.Contains(held.joined(), want) {
+			t.Errorf("held writes = %s, want %s", held.joined(), want)
+		}
+	}
+	quiet := &scriptedArr{answers: map[string]string{"/api/v1/book/lookup": `[{"id":7}]`}}
+	if _, err := (ArrSync{}).companionBook(t.Context(), lidarrOver(quiet), "b-5", apiserver.AddedWork{}); err != nil || quiet.joined() != "" {
+		t.Errorf("an unmonitored add wrote %q (%v), want nothing", quiet.joined(), err)
+	}
+	if _, err := (ArrSync{}).companionBook(t.Context(), lidarrOver(&scriptedArr{answers: map[string]string{}}), "b-5", apiserver.AddedWork{Monitored: true}); err == nil {
+		t.Error("a lookup that finds nothing was not an error")
 	}
 }

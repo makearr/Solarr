@@ -259,6 +259,8 @@ func mediaTarget(added apiserver.AddedWork) (mediaRef, bool) {
 		return mediaRef{settings.ArrAppLidarr, added.ExternalID, arrmap.LinkAlbum}, true
 	case added.Kind == "artist" && added.Provider == "musicbrainz:artist":
 		return mediaRef{settings.ArrAppLidarr, added.ExternalID, arrmap.LinkArtist}, true
+	case (added.Kind == "book" || added.Kind == "audiobook") && added.Provider == "goodreads":
+		return mediaRef{settings.ArrAppReadarr, added.ExternalID, arrmap.LinkBook}, true
 	case (added.Kind == "adult" || added.Kind == "scene") && (added.Provider == "stashdb" || added.Provider == "theporndb"):
 		return mediaRef{settings.ArrAppWhisparr, added.ExternalID, arrmap.LinkScene}, true
 	}
@@ -277,9 +279,12 @@ func (a ArrSync) companionMedia(ctx context.Context, added apiserver.AddedWork, 
 	}
 	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
 	var arrID int64
-	if target.app == settings.ArrAppLidarr {
+	switch target.app {
+	case settings.ArrAppLidarr:
 		arrID, err = a.companionMusic(ctx, client, target, added)
-	} else {
+	case settings.ArrAppReadarr:
+		arrID, err = a.companionBook(ctx, client, target.ref, added)
+	default:
 		arrID, err = a.companionScene(ctx, client.Whisparr(), target.ref, added)
 	}
 	if err != nil {
@@ -287,6 +292,74 @@ func (a ArrSync) companionMedia(ctx context.Context, added apiserver.AddedWork, 
 	}
 	local := library.ArrLink{SourceKind: target.linkKind, SourceID: strconv.FormatInt(arrID, 10), LocalKind: "work", LocalID: added.WorkID}
 	return a.Links.Link(ctx, instance.ID, local)
+}
+
+// companionBook monitors a book at Readarr and has it search, adding it first when Readarr lacks it. Readarr finds a book
+// by its Goodreads work id, the id a book is named by here.
+func (a ArrSync) companionBook(ctx context.Context, client arrimport.LidarrClient, ref string, added apiserver.AddedWork) (int64, error) {
+	readarr := client.Readarr()
+	resource, id, found, err := readarr.LookupBook(ctx, ref)
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 0, errors.New("the Readarr does not know it")
+	}
+	if id != 0 {
+		if !added.Monitored {
+			return id, nil
+		}
+		if err := readarr.SetMonitored(ctx, "/api/v1/book", id, true); err != nil {
+			return 0, err
+		}
+		if !added.Search {
+			return id, nil
+		}
+		return id, readarr.SearchBook(ctx, id)
+	}
+	defaults, err := a.readarrDefaults(ctx, readarr)
+	if err != nil {
+		return 0, err
+	}
+	defaults.Monitored, defaults.Search = added.Monitored, added.Monitored && added.Search
+	return readarr.AddBook(ctx, resource, defaults)
+}
+
+// readarrDefaults are the profiles and root folder most of Readarr's authors use, else its first of each.
+func (a ArrSync) readarrDefaults(ctx context.Context, readarr arrimport.ReadarrClient) (arrimport.AddDefaults, error) {
+	authors, err := readarr.Authors(ctx)
+	if err != nil {
+		return arrimport.AddDefaults{}, err
+	}
+	qualities, metadatas, roots := map[int64]int{}, map[int64]int{}, map[string]int{}
+	for _, author := range authors {
+		qualities[author.QualityProfileID]++
+		metadatas[author.MetadataProfileID]++
+		roots[author.RootFolderPath]++
+	}
+	defaults := arrimport.AddDefaults{QualityProfileID: mostUsed(qualities), MetadataProfileID: mostUsed(metadatas), RootFolderPath: mostUsed(roots)}
+	if defaults.QualityProfileID == 0 {
+		known, err := readarr.QualityProfiles(ctx)
+		if err != nil || len(known) == 0 {
+			return defaults, errors.Join(err, errors.New("the Readarr has no quality profile to add with"))
+		}
+		defaults.QualityProfileID = known[0].ID
+	}
+	if defaults.MetadataProfileID == 0 {
+		known, err := readarr.MetadataProfiles(ctx)
+		if err != nil || len(known) == 0 {
+			return defaults, errors.Join(err, errors.New("the Readarr has no metadata profile to add with"))
+		}
+		defaults.MetadataProfileID = known[0].ID
+	}
+	if defaults.RootFolderPath == "" {
+		folders, err := readarr.RootFolders(ctx)
+		if err != nil || len(folders) == 0 {
+			return defaults, errors.Join(err, errors.New("the Readarr has no root folder to add into"))
+		}
+		defaults.RootFolderPath = folders[0].Path
+	}
+	return defaults, nil
 }
 
 // companionMusic monitors an artist or album at Lidarr and has it search, adding it first when Lidarr lacks it.

@@ -116,6 +116,8 @@ func (a ArrSync) PushMonitoring(ctx context.Context, instanceID int64) (apiserve
 		err = push.movies(ctx)
 	case settings.ArrAppWhisparr:
 		err = push.whisparr(ctx)
+	case settings.ArrAppReadarr:
+		err = push.books(ctx)
 	default:
 		err = push.artists(ctx)
 	}
@@ -216,6 +218,19 @@ func (p *pusher) series(ctx context.Context) error {
 	var failures []error
 	for _, one := range series {
 		failures = append(failures, p.send(ctx, arrmap.LinkSeries, one.ID, one.Monitored, "/api/v3/series", sonarr.SetMonitored))
+	}
+	return errors.Join(failures...)
+}
+
+func (p *pusher) books(ctx context.Context) error {
+	readarr := p.client.Readarr()
+	books, err := readarr.Books(ctx)
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, book := range books {
+		failures = append(failures, p.send(ctx, arrmap.LinkBook, book.ID, book.Monitored, "/api/v1/book", readarr.SetMonitored))
 	}
 	return errors.Join(failures...)
 }

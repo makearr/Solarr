@@ -24,7 +24,7 @@ export function ArrConnectionTools({ instanceId, app }: { instanceId: number; ap
   return (
     <div className="flex flex-col gap-3 border-t border-border-subtle pt-2">
       {app === "prowlarr" && <ProwlarrSync instanceId={instanceId} />}
-      {app !== "prowlarr" && app !== "readarr" && <ArrPull instanceId={instanceId} app={app} />}
+      {app !== "prowlarr" && <ArrPull instanceId={instanceId} app={app} />}
       {app === "prowlarr" && <UseIndexers instanceId={instanceId} />}
       {(app === "prowlarr" || app === "lidarr") && <UseDownloadClients instanceId={instanceId} app={app} />}
     </div>

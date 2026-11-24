@@ -23,6 +23,7 @@ const APP_WORDS: Partial<Record<ArrInstance["app"], { mediaType: string; monitor
   lidarr: { mediaType: "music", monitored: "Monitored artists and albums", path: "/music" },
   sonarr: { mediaType: "tv", monitored: "Monitored series", path: "/tv" },
   radarr: { mediaType: "movie", monitored: "Monitored movies", path: "/movies" },
+  readarr: { mediaType: "book", monitored: "Monitored books", path: "/books" },
   whisparr: { mediaType: "adult", monitored: "Monitored scenes, performers and studios", path: "/porn" },
   kapowarr: { mediaType: "comic", monitored: "Monitored volumes", path: "/comics" },
   mylar3: { mediaType: "comic", monitored: "Watched comics (not paused or ended)", path: "/comics" },
