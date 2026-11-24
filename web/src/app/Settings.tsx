@@ -9,6 +9,7 @@ import { Blocklist } from "./Blocklist";
 import { Tags } from "./Tags";
 import { Categories } from "./Categories";
 import { DiscoverSettings } from "./DiscoverSettings";
+import { TranscodeSettings } from "./TranscodeSettings";
 import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
 import { Streaming } from "./Streaming";
@@ -233,6 +234,14 @@ export function DiscoverSettingsPage() {
   return (
     <SettingsPage title="Discover" requiredTier="normal">
       <DiscoverSettings />
+    </SettingsPage>
+  );
+}
+
+export function TranscodeSettingsPage() {
+  return (
+    <SettingsPage title="Transcode" requiredTier="normal">
+      <TranscodeSettings />
     </SettingsPage>
   );
 }

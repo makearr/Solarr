@@ -74,6 +74,7 @@ export const SETTINGS: Section = {
     { label: "Discover", path: "/settings/discover", tier: "normal", administrator: true },
     { label: "Providers", path: "/settings/providers", tier: "advanced", administrator: true },
     { label: "Quality", path: "/quality-profiles", tier: "normal", administrator: true },
+    { label: "Transcode", path: "/settings/transcode", tier: "normal", administrator: true },
     { label: "Player", path: "/settings/player", tier: "normal", administrator: true },
     { label: "Network", path: "/settings/network", tier: "advanced", administrator: true },
     { label: "Scheduler", path: "/settings/scheduler", tier: "normal", administrator: true },
