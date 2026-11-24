@@ -145,3 +145,59 @@ CREATE TABLE recommendation_auto_add (
   PRIMARY KEY (category_id, kind, provider, external_id)
 ) WITHOUT ROWID;
 CREATE INDEX recommendation_auto_add_by_day ON recommendation_auto_add(category_id, added_at);
+
+-- One row per audio or video file that transcoding judged; the state is what the pipeline reads and the counters mirror.
+CREATE TABLE transcode_item (
+  media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
+  -- No foreign key: the library lives in settings.db.
+  category_id     INTEGER NOT NULL,
+  kind            TEXT    NOT NULL CHECK (kind IN ('video', 'audio')),
+  state           TEXT    NOT NULL CHECK (state IN ('needed', 'running', 'done', 'not_needed', 'failed', 'blocked')),
+  lane            TEXT    NOT NULL DEFAULT '' CHECK (lane IN ('', 'cpu', 'gpu', 'audio')),
+  -- What it was judged against; a change of either makes the row stale.
+  target_id       INTEGER NOT NULL,
+  setup_revision  INTEGER NOT NULL,
+  -- Structured reasons (code, stream, want, have) for the state, the plan of a conversion, and its warnings.
+  reasons_json    TEXT    NOT NULL DEFAULT '',
+  plan_json       TEXT    NOT NULL DEFAULT '',
+  warnings_json   TEXT    NOT NULL DEFAULT '',
+  -- A person's retry settings (quality, bitrate, preset, engine); empty is the setup's.
+  override_json   TEXT    NOT NULL DEFAULT '',
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  pass            INTEGER NOT NULL DEFAULT 0,
+  interrupted     INTEGER NOT NULL DEFAULT 0 CHECK (interrupted IN (0, 1)),
+  failure_code    TEXT    NOT NULL DEFAULT '',
+  last_error      TEXT    NOT NULL DEFAULT '',
+  -- Order of discovery, and the run that touched it last (never the same item twice in a row).
+  found_at        INTEGER NOT NULL,
+  last_run_seq    INTEGER NOT NULL DEFAULT 0,
+  -- The replace journal: what a restart must finish or undo.
+  replace_stage   TEXT    NOT NULL DEFAULT '' CHECK (replace_stage IN ('', 'recycling', 'placing', 'restoring')),
+  work_path       TEXT    NOT NULL DEFAULT '',
+  -- The result.
+  original_recycle_id INTEGER REFERENCES recycle_bin(id) ON DELETE SET NULL,
+  original_size_bytes INTEGER NOT NULL DEFAULT 0,
+  result_size_bytes   INTEGER NOT NULL DEFAULT 0,
+  result_ratio_pct    INTEGER NOT NULL DEFAULT 0,
+  engine              TEXT    NOT NULL DEFAULT '',
+  encode_seconds      INTEGER NOT NULL DEFAULT 0,
+  finished_at         INTEGER,
+  updated_at          INTEGER NOT NULL
+);
+CREATE INDEX transcode_item_by_state ON transcode_item(state, category_id, media_object_id);
+CREATE INDEX transcode_item_by_original ON transcode_item(original_recycle_id) WHERE original_recycle_id IS NOT NULL;
+
+-- How each kind of conversion is doing, so a broken system is not mistaken for broken files.
+CREATE TABLE transcode_health (
+  kind                 TEXT PRIMARY KEY CHECK (kind IN ('video', 'audio')),
+  consecutive_failures INTEGER NOT NULL DEFAULT 0,
+  -- 'ok', 'probing' (trying files further away), 'backoff' (waiting until backoff_until).
+  mode                 TEXT    NOT NULL DEFAULT 'ok' CHECK (mode IN ('ok', 'probing', 'backoff')),
+  probes_left          INTEGER NOT NULL DEFAULT 0,
+  backoff_step         INTEGER NOT NULL DEFAULT 0,
+  backoff_until        INTEGER,
+  -- The file that failed last: the same file failing again says nothing new about the system.
+  last_failed_id       INTEGER NOT NULL DEFAULT 0,
+  last_error           TEXT    NOT NULL DEFAULT '',
+  run_seq              INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;

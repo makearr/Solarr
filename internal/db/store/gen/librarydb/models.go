@@ -1022,6 +1022,49 @@ type TitleSearch struct {
 	MediaType string
 }
 
+type TranscodeHealth struct {
+	Kind                string
+	ConsecutiveFailures int64
+	Mode                string
+	ProbesLeft          int64
+	BackoffStep         int64
+	BackoffUntil        sql.NullInt64
+	LastFailedID        int64
+	LastError           string
+	RunSeq              int64
+}
+
+type TranscodeItem struct {
+	MediaObjectID     int64
+	CategoryID        int64
+	Kind              string
+	State             string
+	Lane              string
+	TargetID          int64
+	SetupRevision     int64
+	ReasonsJson       string
+	PlanJson          string
+	WarningsJson      string
+	OverrideJson      string
+	Attempts          int64
+	Pass              int64
+	Interrupted       int64
+	FailureCode       string
+	LastError         string
+	FoundAt           int64
+	LastRunSeq        int64
+	ReplaceStage      string
+	WorkPath          string
+	OriginalRecycleID sql.NullInt64
+	OriginalSizeBytes int64
+	ResultSizeBytes   int64
+	ResultRatioPct    int64
+	Engine            string
+	EncodeSeconds     int64
+	FinishedAt        sql.NullInt64
+	UpdatedAt         int64
+}
+
 type VideoFrameHash struct {
 	MediaObjectID    int64
 	Frames           []byte

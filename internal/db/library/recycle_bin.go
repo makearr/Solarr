@@ -31,6 +31,9 @@ const (
 	ReasonFailedImport  Reason = "failed_import"
 	// ReasonImported is a source archive whose contents are in the library.
 	ReasonImported Reason = "imported"
+	// ReasonTranscoded is the original of a file that was converted; ReasonTranscodeReverted the converted file a restore put aside.
+	ReasonTranscoded        Reason = "transcoded"
+	ReasonTranscodeReverted Reason = "transcode_reverted"
 )
 
 // ErrAlreadyRestored reports that a recycle bin entry was already restored

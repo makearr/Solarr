@@ -142,6 +142,7 @@ type Querier interface {
 	CountEditionFiles(ctx context.Context, editionID sql.NullInt64) (int64, error)
 	CountEnabledSubscriptionsForSubject(ctx context.Context, arg CountEnabledSubscriptionsForSubjectParams) (int64, error)
 	CountEnabledSubscriptionsWithoutLibrary(ctx context.Context) (int64, error)
+	CountFailedTranscodeItemsByCategory(ctx context.Context, targetID int64) ([]CountFailedTranscodeItemsByCategoryRow, error)
 	// The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
 	// work_date of kind on or after the cutoff. Distinct since a work can carry
 	// more than one region's own date row for the same kind.
@@ -198,6 +199,8 @@ type Querier interface {
 	CountRunningArrImports(ctx context.Context, instanceID int64) (int64, error)
 	CountStaleProbes(ctx context.Context, arg CountStaleProbesParams) (int64, error)
 	CountStaleVideoProbes(ctx context.Context, arg CountStaleVideoProbesParams) (int64, error)
+	// The truth a counter is corrected against.
+	CountTranscodeItemsByState(ctx context.Context, categoryID int64) ([]CountTranscodeItemsByStateRow, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
@@ -554,6 +557,8 @@ type Querier interface {
 	// The tag tree: genre trees, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
 	GetTag(ctx context.Context, id int64) (Tag, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
+	GetTranscodeHealth(ctx context.Context, kind string) (TranscodeHealth, error)
+	GetTranscodeItem(ctx context.Context, mediaObjectID int64) (TranscodeItem, error)
 	// One entry, for the manual resolve action -- confirming a candidate needs the
 	// file's own root_folder_id (to link work_root_folder), which the ranked
 	// candidates list alone does not carry.
@@ -843,6 +848,7 @@ type Querier interface {
 	// The SET items of works with a monitored part whose time or day is recent or still ahead: what a
 	// season owes may change, or have changed, without anything being written to it.
 	ListItemsWithPartsComingOut(ctx context.Context, arg ListItemsWithPartsComingOutParams) ([]ListItemsWithPartsComingOutRow, error)
+	ListJournalledTranscodeItems(ctx context.Context) ([]ListJournalledTranscodeItemsRow, error)
 	ListLinkableCollectionIDs(ctx context.Context) ([]ListLinkableCollectionIDsRow, error)
 	// Every franchise collection of every media type with the ids it is known by, for the pass that links collections across libraries.
 	ListLinkableCollections(ctx context.Context) ([]ListLinkableCollectionsRow, error)
@@ -872,6 +878,9 @@ type Querier interface {
 	ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]ListMoveJobsRow, error)
 	// The organisations a work is made or aired by, named.
 	ListNamedOrganisationsForWork(ctx context.Context, workID int64) ([]ListNamedOrganisationsForWorkRow, error)
+	// Audio and video files under the roots that were never judged, or were judged against another target or setup revision.
+	ListObjectsToAnalyze(ctx context.Context, arg ListObjectsToAnalyzeParams) ([]ListObjectsToAnalyzeRow, error)
+	ListOldestTranscodeOriginals(ctx context.Context, limit int64) ([]ListOldestTranscodeOriginalsRow, error)
 	ListOrganisationExternalIDs(ctx context.Context, organisationID int64) ([]ListOrganisationExternalIDsRow, error)
 	ListOrganisationLinksOfType(ctx context.Context, mediaType string) ([]ListOrganisationLinksOfTypeRow, error)
 	// "Monitor this studio and everything beneath it" needs the whole subtree, and
@@ -962,6 +971,7 @@ type Querier interface {
 	// Newest first, cursor on id (Invariant 32). A zero user_id or an empty state does not filter.
 	ListRequests(ctx context.Context, arg ListRequestsParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
+	ListRunningTranscodeItems(ctx context.Context) ([]ListRunningTranscodeItemsRow, error)
 	// Other files with the same bytes (size and head and tail sample) as each of a work's files.
 	ListSameBytesPeersForWork(ctx context.Context, workID int64) ([]ListSameBytesPeersForWorkRow, error)
 	// Every same-broadcast link of a media type, once from each side.
@@ -1014,6 +1024,7 @@ type Querier interface {
 	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
 	// from these in Go, by what the file is and not by its bytes.
 	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)
+	ListTranscodeItems(ctx context.Context, arg ListTranscodeItemsParams) ([]ListTranscodeItemsRow, error)
 	// The same, only the files a wanted album holds that met no track: a file already aligned has nothing to gain from
 	// being read again, and on a first import that was half the library (live_test 35).
 	ListUnalignedWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListUnalignedWorkFileLocationsRow, error)
@@ -1249,6 +1260,14 @@ type Querier interface {
 	NoteMissingRecount(ctx context.Context, arg NoteMissingRecountParams) error
 	// Pause, resume and cancel say how many rows changed so a job in the wrong state is told apart from a missing one.
 	PauseMoveJob(ctx context.Context, id int64) (int64, error)
+	PickNeededAlphabetical(ctx context.Context, arg PickNeededAlphabeticalParams) ([]PickNeededAlphabeticalRow, error)
+	// The far end of the alphabet outside one top-level folder: a probe after failures must not land next to the files that failed.
+	PickNeededFarAway(ctx context.Context, arg PickNeededFarAwayParams) ([]PickNeededFarAwayRow, error)
+	PickNeededFound(ctx context.Context, arg PickNeededFoundParams) ([]PickNeededFoundRow, error)
+	PickNeededLargest(ctx context.Context, arg PickNeededLargestParams) ([]PickNeededLargestRow, error)
+	PickNeededNewest(ctx context.Context, arg PickNeededNewestParams) ([]PickNeededNewestRow, error)
+	PickNeededOldest(ctx context.Context, arg PickNeededOldestParams) ([]PickNeededOldestRow, error)
+	PickNeededSmallest(ctx context.Context, arg PickNeededSmallestParams) ([]PickNeededSmallestRow, error)
 	PinOffDefaultProfiles(ctx context.Context, arg PinOffDefaultProfilesParams) (int64, error)
 	PresentPathsAtRootLevel(ctx context.Context, rootFolderID int64) ([]PresentPathsAtRootLevelRow, error)
 	// Direct and deeper children of a directory, by the (root_folder_id, rel_path) index range: prefix is "dir/" and
@@ -1328,6 +1347,8 @@ type Querier interface {
 	// distinguish "already stopped/never running" (0 rows) from "now stopping".
 	RequestImportSessionCancel(ctx context.Context, id int64) (int64, error)
 	ResetDesiredItemsForWork(ctx context.Context, workID int64) error
+	// A setup save is a new chance: every failed item of the target starts again.
+	ResetFailedTranscodeItems(ctx context.Context, arg ResetFailedTranscodeItemsParams) error
 	// A later placement (todo 4.9's ManualCommitter, an "assign a category
 	// later" or "commit what was held" action reaching a unit that turned out
 	// to belong to a pack) moves that one member from QUEUED to RESOLVED --
@@ -1460,6 +1481,10 @@ type Querier interface {
 	SetSeasonPartsMonitored(ctx context.Context, arg SetSeasonPartsMonitoredParams) error
 	SetTagName(ctx context.Context, arg SetTagNameParams) error
 	SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error
+	SetTranscodeItemJournal(ctx context.Context, arg SetTranscodeItemJournalParams) error
+	SetTranscodeItemResult(ctx context.Context, arg SetTranscodeItemResultParams) error
+	// The mutable pipeline fields: everything a transition may change except the judged plan and the result.
+	SetTranscodeItemState(ctx context.Context, arg SetTranscodeItemStateParams) error
 	SetVideoFrameHashes(ctx context.Context, arg SetVideoFrameHashesParams) error
 	SetVideoPreview(ctx context.Context, arg SetVideoPreviewParams) error
 	SetWorkCertification(ctx context.Context, arg SetWorkCertificationParams) error
@@ -1491,6 +1516,8 @@ type Querier interface {
 	// The global counterpart to RecycledBytesForRoot, for the config.max_bytes
 	// guard (section 10.8) -- a budget across every root, not one at a time.
 	SumRecycledBytes(ctx context.Context) (int64, error)
+	// The originals kept in the recycle bin after a conversion, for the size cap.
+	SumTranscodeOriginals(ctx context.Context) (int64, error)
 	// Re-observing a known path proves it is still present, and clears any earlier
 	// missing mark (section 10.4): a file coming back is exactly the case this exists
 	// for.
@@ -1540,6 +1567,10 @@ type Querier interface {
 	UpsertRecommendation(ctx context.Context, arg UpsertRecommendationParams) (int64, error)
 	UpsertRecommendationFeedItem(ctx context.Context, arg UpsertRecommendationFeedItemParams) error
 	UpsertSimilarReport(ctx context.Context, arg UpsertSimilarReportParams) error
+	UpsertTranscodeHealth(ctx context.Context, arg UpsertTranscodeHealthParams) error
+	// Transcoding: what was judged per file, how each kind is doing, and the picks the dispatcher makes. Column lists follow table order.
+	// A judged row keeps its attempts, pass and result; a running one is not touched.
+	UpsertTranscodeItem(ctx context.Context, arg UpsertTranscodeItemParams) error
 	// F29: the manual identification queue (migration 0014). Column lists follow table
 	// order, or sqlc stops reusing models.
 	// A file marked "not media" is never queued again, nor one that already belongs to a work: a
