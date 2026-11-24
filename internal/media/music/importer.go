@@ -81,7 +81,18 @@ func (i Importer) InspectTags(ctx context.Context, root string, relPaths []strin
 	if len(audio) == 0 {
 		return nil, nil
 	}
-	return buildInspectTagGrouper(ctx, i.config.Tool, root, audio, i.inspected.put)
+	unreadable := 0
+	remember := func(absolute string, probe mediatool.Probe) {
+		if probe.Err != nil {
+			unreadable++
+		}
+		i.inspected.put(absolute, probe)
+	}
+	grouper, err := buildInspectTagGrouper(ctx, i.config.Tool, root, audio, remember)
+	if unreadable > 0 {
+		i.logger.Warn("music: files whose tags could not be read stay untagged for grouping", "root", root, "files", unreadable)
+	}
+	return grouper, err
 }
 
 // probesFor reads the tags of the files, asking the tool only for those the inspection did not already read.
