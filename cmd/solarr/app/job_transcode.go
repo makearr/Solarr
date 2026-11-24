@@ -12,6 +12,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/service/transcoder"
@@ -29,7 +30,7 @@ func (p *process) transcodeService() *transcoder.Service {
 			Items: library.NewTranscodeItems(p.library, cl), Settings: transcodeSettings{cache: p.cache}, Hardware: p.transcoder,
 			Devices: p.transcoder.DeviceFor, Prober: p.transcoder, Tagger: transcodeTagger{tool: p.tool},
 			Bin:      transcodeBin{RecycleBin: library.NewRecycleBin(p.library, p.fsys, cl).WithOnline(p.rootOnline)},
-			Reporter: transcodeReporter{logger: p.logger},
+			Reporter: transcodeReporter{logger: p.logger, stats: statistics.NewTranscodes(p.statistics)},
 			Starter:  transcode.ExecStarter{Nice: mediatool.Nice{Level: 19}, IONice: mediatool.IONice{Class: 3}, Clock: cl},
 			Slots: transcoder.NewSlots(func(playing bool) map[transcoder.Lane]int {
 				global := snapshot()
@@ -84,12 +85,22 @@ func (t transcodeTagger) Marker(ctx context.Context, file string) string {
 	return probes[0].Tags.First(transcoder.MarkerTag)
 }
 
-// transcodeReporter logs every finished conversion.
-type transcodeReporter struct{ logger *slog.Logger }
+// transcodeReporter logs every finished conversion and adds it to the savings statistics.
+type transcodeReporter struct {
+	logger *slog.Logger
+	stats  statistics.Transcodes
+}
 
 func (r transcodeReporter) Converted(ctx context.Context, converted transcoder.Converted) {
 	r.logger.InfoContext(ctx, "file converted", slog.Int64("id", converted.MediaObjectID), slog.String("engine", converted.Engine),
 		slog.Int64("from_bytes", converted.OriginalBytes), slog.Int64("to_bytes", converted.ResultBytes), slog.Int64("seconds", converted.EncodeSeconds))
+	err := r.stats.Record(ctx, statistics.DayOf(converted.At), statistics.TranscodeDelta{
+		CategoryID: converted.CategoryID, Kind: converted.Kind, Files: 1, OriginalBytes: converted.OriginalBytes,
+		ResultBytes: converted.ResultBytes, EncodeSeconds: converted.EncodeSeconds,
+	})
+	if err != nil {
+		r.logger.WarnContext(ctx, "record conversion statistics", slog.Any("error", err))
+	}
 }
 
 // transcodeSettings is the pipeline's view of the settings cache.

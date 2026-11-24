@@ -17,3 +17,5 @@ A job that checkpoints its own work (the sweeps skip what is already done) conti
 ## Where it lives
 
 `jobs.db`, migration 0008: `task_pause (scope, paused_at)` - `scope` is a task key or `*` - and `job_task (job_id, task_key)`. A pause survives a restart; `jobs.Pauses.Load` reads it at start-up. `ClaimJobs` skips jobs whose task is paused, so no dispatcher state is involved.
+
+Pausing the `transcode` task also stops running conversions: ffmpeg is ended, the output deleted, and the file returns to the queue as interrupted without spending an attempt.

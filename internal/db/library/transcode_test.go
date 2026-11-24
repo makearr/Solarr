@@ -334,3 +334,28 @@ func TestTranscodeItems_ReplaceBytesGivesTheObjectItsNewBytesAndPathAndFinishesT
 	}
 	assertCountersMatchRows(t, items, opened, 1)
 }
+
+func TestTranscodeItems_AFailedFileJudgedAgainstANewSetupRevisionStartsOverButTheSameRevisionKeepsItsAttempts(t *testing.T) {
+	items, _ := seedTranscode(t)
+	if err := items.Judge(t.Context(), []library.JudgedTranscodeItem{judge(1, "video", library.TranscodeNeeded)}); err != nil {
+		t.Fatal(err)
+	}
+	_ = items.Transition(t.Context(), 1, library.TranscodeNeeded, library.TranscodeRunning, nil)
+	_ = items.Transition(t.Context(), 1, library.TranscodeRunning, library.TranscodeFailed, func(item *library.TranscodeItem) {
+		item.Attempts, item.Pass, item.FailureCode = 3, 2, "error"
+	})
+	if err := items.Judge(t.Context(), []library.JudgedTranscodeItem{judge(1, "video", library.TranscodeNeeded)}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := items.Get(t.Context(), 1); got.Attempts != 3 || got.Pass != 2 {
+		t.Errorf("same revision: attempts %d pass %d, want 3 and 2 kept", got.Attempts, got.Pass)
+	}
+	again := judge(1, "video", library.TranscodeNeeded)
+	again.SetupRevision = 3
+	if err := items.Judge(t.Context(), []library.JudgedTranscodeItem{again}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := items.Get(t.Context(), 1); got.Attempts != 0 || got.Pass != 0 || got.FailureCode != "" || got.State != library.TranscodeNeeded {
+		t.Errorf("new revision: %+v, want needed with attempts, pass and failure cleared", got)
+	}
+}

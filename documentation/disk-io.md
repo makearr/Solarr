@@ -19,3 +19,7 @@ Solarr shares each disk between the work that wants it, and leaves an idle disk 
 **Hanging jobs.** A job with a disk class is watched (`jobs.Watchdog`, `executor.runWatched`). Its signs of life are a unit of progress counted, and taking or giving back a disk turn; time spent waiting for a turn is not quiet time. A job quiet for longer than the greater of its class's floor and ten times its mean time per unit is cancelled and fails with `jobs.StalledError`, which the queue retries after the class's restart delay instead of its backoff (two attempts beyond the job's own `MaxAttempts`). A handler stuck in a read that cannot be interrupted is abandoned after 30 s so its worker is free; it may still be running, which the log says. Restart delays: import 15 s, rename 30 s, tag write-back and drain 60 s, scan, probe, statistics and recycle bin 5 min, thumbnails and hashes 15 min. Floors (`stallPolicies` in `cmd/solarr/app/diskio.go`): 20 to 60 minutes, generous because a copy of a large file reports nothing until it ends.
 
 Not gated: ffmpeg's reads for a converted stream (ionice only), and metadata, search and acquisition jobs, which touch no library disk.
+
+## Transcoding
+
+`transcode.file` has the last disk class (after previews). The job itself takes no turn; the stream probe of the source and of the result each take one through `iogate.OnDisk`. ffmpeg reads and writes outside the gate under `ionice` idle. The watchdog treats a conversion as hung after 60 minutes without a progress report (ffmpeg itself is ended after 10 minutes of silence).

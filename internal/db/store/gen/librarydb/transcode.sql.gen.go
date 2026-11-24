@@ -1113,6 +1113,9 @@ INSERT INTO transcode_item (media_object_id, category_id, kind, state, lane, tar
                             found_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (media_object_id) DO UPDATE SET
+  attempts = CASE WHEN transcode_item.setup_revision <> excluded.setup_revision OR transcode_item.target_id <> excluded.target_id THEN 0 ELSE transcode_item.attempts END,
+  pass = CASE WHEN transcode_item.setup_revision <> excluded.setup_revision OR transcode_item.target_id <> excluded.target_id THEN 0 ELSE transcode_item.pass END,
+  failure_code = CASE WHEN transcode_item.setup_revision <> excluded.setup_revision OR transcode_item.target_id <> excluded.target_id THEN '' ELSE transcode_item.failure_code END,
   category_id = excluded.category_id,
   kind = excluded.kind,
   state = excluded.state,
