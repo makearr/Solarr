@@ -463,7 +463,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/metadata/wikidata", "internal/acquiring/cutoff", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/acquiring/releasefacts", "internal/acquiring/rss",
 		"internal/db/statistics", "internal/db/store/gen/librarydb", "internal/identify/parsetv", "internal/identify/score",
 	},
-	"internal/media/book": {"internal/metadata/bookbrainz", "internal/metadata/specprovider", "internal/mediaserver", "internal/metadata/internetarchive", "internal/platform/mediatool", "internal/identify/titlekey", "internal/identify/bookmeta", "internal/platform/iogate", "internal/platform/httpx", "internal/platform/filekind",
+	"internal/media/book": {"internal/importing/arrimport", "internal/importing/arrmap", "internal/metadata/bookbrainz", "internal/metadata/specprovider", "internal/mediaserver", "internal/metadata/internetarchive", "internal/platform/mediatool", "internal/identify/titlekey", "internal/identify/bookmeta", "internal/platform/iogate", "internal/platform/httpx", "internal/platform/filekind",
 		"internal/media/works", "internal/db/store/gen/librarydb", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
 		"internal/identify/parsebook", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
 		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media",

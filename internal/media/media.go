@@ -274,8 +274,10 @@ type AddRequest struct {
 
 // Fallback names a work from another app's own record (an *Arr import), with its other ids by provider.
 type Fallback struct {
-	Title       string
-	Year        int
+	Title string
+	Year  int
+	// Author is the writer of a book or the artist of a record, when the other app names one.
+	Author      string
 	ExternalIDs map[string]string
 }
 

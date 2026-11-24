@@ -166,6 +166,7 @@ const (
 	LinkAlbum     = "album"
 	LinkSeries    = "series"
 	LinkMovie     = "movie"
+	LinkBook      = "book"
 	LinkScene     = "scene"
 	LinkPerformer = "performer"
 	LinkStudio    = "studio"

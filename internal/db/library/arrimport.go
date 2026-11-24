@@ -26,6 +26,7 @@ const (
 	ArrImportItemAlbum  = "album"
 	ArrImportItemSeries = "series"
 	ArrImportItemMovie  = "movie"
+	ArrImportItemBook   = "book"
 )
 
 // ArrImportCounts is a run's own outcome tally, recorded once at Finish.

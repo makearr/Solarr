@@ -90,6 +90,7 @@ func (s catalogSource) Add(ctx context.Context, request works.Add) (media.AddRes
 		return media.AddResult{}, fmt.Errorf("%w: %s %q is not a book id", media.ErrInvalidAdd, request.Provider, request.ExternalID)
 	}
 	var fallback *Book
+	var hint Hint
 	if request.Fallback != nil {
 		known := ids
 		for provider, id := range request.Fallback.ExternalIDs {
@@ -97,11 +98,15 @@ func (s catalogSource) Add(ctx context.Context, request works.Add) (media.AddRes
 				known = Merge(Book{IDs: known}, Book{IDs: more}).IDs
 			}
 		}
+		hint = Hint{Title: request.Fallback.Title, Author: request.Fallback.Author}
 		fallback = &Book{IDs: known, Title: request.Fallback.Title, Year: request.Fallback.Year}
+		if request.Fallback.Author != "" {
+			fallback.Credits = []Credit{{Name: request.Fallback.Author, Role: RoleAuthor}}
+		}
 	}
 	result, err := s.service.Add(ctx, AddRequest{
 		IDs: ids, CategoryID: request.CategoryID, ProfileID: request.ProfileID, Monitor: MonitorOption(request.Option),
-		AddedBy: request.AddedBy, Fallback: fallback,
+		AddedBy: request.AddedBy, Fallback: fallback, Hint: hint,
 	})
 	if errors.Is(err, ErrNoSource) {
 		return media.AddResult{}, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)

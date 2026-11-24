@@ -404,6 +404,8 @@ func (f Format) NamedIDs(provider, externalID string) (IDs, bool) {
 		return IDs{GoogleBooks: externalID}, externalID != ""
 	case ProviderHardcover:
 		return IDs{Hardcover: externalID}, externalID != ""
+	case ProviderGoodreads:
+		return IDs{Goodreads: externalID}, externalID != ""
 	case ProviderITunes:
 		return IDs{ITunes: externalID}, externalID != "" && f.ByFolder
 	case ProviderFantLab:

@@ -1314,6 +1314,10 @@ func (p *process) arrImporters() map[settings.ArrApp]arrmap.Importer {
 		settings.ArrAppWhisparr: adult.WhisparrImport{
 			Adding: p.adultCatalog(), Organisations: library.NewOrganisations(p.library), Monitors: monitors,
 		},
+		settings.ArrAppReadarr: book.ReadarrImport{
+			Adding: map[string]media.Adding{book.Ebook.MediaType: p.bookCatalog(book.Ebook), book.Audiobook.MediaType: p.bookCatalog(book.Audiobook)},
+			Cache:  p.cache, Monitors: monitors,
+		},
 		settings.ArrAppKapowarr: comic.ManagerImport{App: settings.ArrAppKapowarr, Adding: p.comicCatalog(), Monitors: monitors},
 		settings.ArrAppMylar:    comic.ManagerImport{App: settings.ArrAppMylar, Adding: p.comicCatalog(), Monitors: monitors},
 	}
