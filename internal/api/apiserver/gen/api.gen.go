@@ -9888,6 +9888,9 @@ type SetWorkReleaseFiltersJSONBody = []ReleaseFilter
 
 // RemoveWorkJSONBody defines parameters for RemoveWork.
 type RemoveWorkJSONBody struct {
+	// CancelDownloads Take the work's running downloads out of their clients first, so a download that finishes later does not bring the title back.
+	CancelDownloads *bool `json:"cancel_downloads,omitempty"`
+
 	// DeleteFiles Also move every file of this album into the recycle bin.
 	DeleteFiles *bool `json:"delete_files,omitempty"`
 

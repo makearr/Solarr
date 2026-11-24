@@ -10256,6 +10256,10 @@ paths:
                   type: boolean
                   default: false
                   description: Also move every file of this album into the recycle bin.
+                cancel_downloads:
+                  type: boolean
+                  default: false
+                  description: Take the work's running downloads out of their clients first, so a download that finishes later does not bring the title back.
                 exclude:
                   type: boolean
                   default: false

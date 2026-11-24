@@ -25368,6 +25368,11 @@ export interface operations {
                      */
                     delete_files?: boolean;
                     /**
+                     * @description Take the work's running downloads out of their clients first, so a download that finishes later does not bring the title back.
+                     * @default false
+                     */
+                    cancel_downloads?: boolean;
+                    /**
                      * @description Do not add it back: follows and import lists leave it out, and so does the scan of a type whose scan honours exclusions (TV), which removes the work although its files stay.
                      * @default false
                      */

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -648,5 +649,29 @@ func TestBulkSetWorkMonitored_EmptySelectionIsRefused(t *testing.T) {
 	}
 	if fixture.worksMonitor.bulkCalls != 0 {
 		t.Errorf("bulkCalls = %d, want 0", fixture.worksMonitor.bulkCalls)
+	}
+}
+
+func TestRemoveWork_CancelDownloadsTakesOnlyThatWorksDownloadsOutOfTheirClients(t *testing.T) {
+	for _, cancel := range []bool{false, true} {
+		fixture := newWorksFixture(t)
+		fixture.createUser(t, "admin", settings.RoleAdmin)
+		cookies := fixture.signIn(t, "admin")
+		three, four := int64(3), int64(4)
+		fixture.queue.rows = []apiserver.QueueRow{{ID: 1, WorkID: &three}, {ID: 2, WorkID: &four}, {ID: 5, WorkID: nil}}
+		body := `{"delete_files":true}`
+		if cancel {
+			body = `{"delete_files":true,"cancel_downloads":true}`
+		}
+		if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/remove", body)); recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+		}
+		want := []string(nil)
+		if cancel {
+			want = []string{"download 1"}
+		}
+		if !reflect.DeepEqual(fixture.queue.removed, want) {
+			t.Errorf("cancel %v: removed %v, want %v", cancel, fixture.queue.removed, want)
+		}
 	}
 }

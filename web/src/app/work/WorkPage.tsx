@@ -235,7 +235,7 @@ function WorkHeader({
   });
   const remove = useMutation({
     meta: { handlesErrors: true },
-    mutationFn: () => ok(api.POST("/works/{id}/remove", { params: { path: { id: work.id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude } })),
+    mutationFn: () => ok(api.POST("/works/{id}/remove", { params: { path: { id: work.id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude, cancel_downloads: true } })),
     onSuccess: (result) => {
       setRemoving(false);
       invalidateWorkLists(queryClient, work.id);

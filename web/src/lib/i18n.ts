@@ -139,7 +139,7 @@ const catalogue = {
   "work.noParts": "No {parts} are known yet.",
   "work.notWanted": "Nothing of this {work} is wanted.",
   "work.remove.title": "Remove {title}",
-  "work.remove.consequence": "The {work} leaves the library. Its files stay on disk unless you also delete them.",
+  "work.remove.consequence": "The {work} leaves the library. Its running downloads are cancelled. Its files stay on disk unless you also delete them.",
   "work.remove.deleteFiles": "Also delete the files (to the recycle bin)",
   "work.merge.heldTwice": "This {work} is held twice:",
   "work.merge.sameRelease": "is the same release.",

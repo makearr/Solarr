@@ -469,7 +469,7 @@ function BulkBar({
       let failed = 0;
       for (const [index, id] of explicitIds.entries()) {
         setProgress(`${index + 1} of ${explicitIds.length}`);
-        const { error } = await api.POST("/works/{id}/remove", { params: { path: { id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude } });
+        const { error } = await api.POST("/works/{id}/remove", { params: { path: { id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude, cancel_downloads: true } });
         if (error) failed++;
       }
       setProgress(failed > 0 ? `${failed} could not be changed` : undefined);

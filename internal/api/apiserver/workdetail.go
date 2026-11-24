@@ -1028,8 +1028,9 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	// An absent body means "stop wanting it, keep the files" -- what this
 	// endpoint has always done, so an old caller is unchanged.
 	var body struct {
-		DeleteFiles bool `json:"delete_files"`
-		Exclude     bool `json:"exclude"`
+		DeleteFiles     bool `json:"delete_files"`
+		Exclude         bool `json:"exclude"`
+		CancelDownloads bool `json:"cancel_downloads"`
 	}
 	if r.Body != nil {
 		if err := decodeOptionalJSONBody(w, r, &body); err != nil {
@@ -1038,6 +1039,13 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 		}
 	}
 
+	// Before the removal: a download still running would import into the title once it is gone and add it back.
+	if body.CancelDownloads && s.queue != nil {
+		if err := s.cancelDownloadsOf(r.Context(), id); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+	}
 	result, err := s.worksMonitor.RemoveWork(r.Context(), id, body.DeleteFiles, body.Exclude)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1192,4 +1200,21 @@ func (s *Server) GetWorkFileDetails(w http.ResponseWriter, r *http.Request, id i
 		files[index] = gen.WorkFileDetail{MediaObjectId: detail.MediaObjectID, Paths: paths, SameBytes: int64(detail.SameBytes), SamePicture: int64(detail.SamePicture)}
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.WorkFileDetails{Files: files})
+}
+
+// cancelDownloadsOf takes every download of a work out of its client, without blocklisting the release.
+func (s *Server) cancelDownloadsOf(ctx context.Context, workID int64) error {
+	snapshot, err := s.queue.List(ctx, nil)
+	if err != nil {
+		return err
+	}
+	for _, row := range snapshot.Rows {
+		if row.WorkID == nil || *row.WorkID != workID {
+			continue
+		}
+		if err := s.queue.Remove(ctx, row.ID, false); err != nil && !errors.Is(err, ErrQueueItemNotRemovable) {
+			return err
+		}
+	}
+	return nil
 }
