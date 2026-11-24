@@ -327,3 +327,22 @@ func TestRunFile_WithoutTheCPUFallbackAFailedGPUStepEndsTheRunAndABrokenEngineFa
 		t.Errorf("item = %+v, want failed with engine_unavailable", item)
 	}
 }
+
+func TestFreshPlan_ReadsTheFileNowAndLeavesRunningAndFinishedItemsAlone(t *testing.T) {
+	p := musicPipeline(t)
+	needed(p, 1, "Album/t1.flac", false)
+	fresh, ok, err := p.svc.FreshPlan(context.Background(), 1)
+	if err != nil || !ok || fresh.State != "needed" || fresh.PlanJSON == "" {
+		t.Fatalf("fresh = %+v, %v, %v; want a needed plan from the file as it is now", fresh, ok, err)
+	}
+	p.prober.set("/lib/Album/t1.flac", m4aResult(800_000))
+	if fresh, ok, _ = p.svc.FreshPlan(context.Background(), 1); !ok || fresh.State != "not_needed" {
+		t.Errorf("after the file changed: %+v, %v; want not_needed", fresh, ok)
+	}
+	for _, state := range []library.TranscodeState{library.TranscodeRunning, library.TranscodeDone} {
+		p.items.items[1].State = state
+		if _, ok, _ := p.svc.FreshPlan(context.Background(), 1); ok {
+			t.Errorf("state %s got a fresh plan; want the stored one", state)
+		}
+	}
+}

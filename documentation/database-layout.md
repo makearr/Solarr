@@ -61,8 +61,8 @@ Everything else is `library.db`. Applying that test:
 `library_path`, `media_attributes`), desired state (`desired_item`, `desired_item_file`,
 `hunt_queue`, `counter`), acquisition (`candidate`, `acquisition`, `blocklisted_release`,
 `recycleBin`), people and organisations (`person`, `credit`, `organisation`), tags,
-subscriptions, collections, `artwork` and learned reputation. The statistics page's figures (`stat_rollup`, and the
-discography coverage in it) are measured from `library.db` by the statistics job and stored in `statistics.db`.
+subscriptions, collections, `artwork`, learned reputation and the conversion pipeline (`transcode_item`, one row per judged file with its state, plan and result; `transcode_health`, the failure streak per kind). The statistics page's figures (`stat_rollup`, and the
+discography coverage in it) are measured from `library.db` by the statistics job and stored in `statistics.db`; so are the conversions and bytes saved per day (`transcode_stat`).
 
 People, credits, tags, collections, counters and reputation are **library data, not settings**.
 `credit` alone runs to hundreds of thousands of rows at the ADR-22 design scale, and `counter`

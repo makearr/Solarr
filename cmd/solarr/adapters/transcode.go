@@ -151,6 +151,11 @@ func (a Transcode) Item(ctx context.Context, id int64) (apiserver.TranscodeItemV
 		relPath = paths[0].RelPath
 	}
 	view := itemView(item, relPath)
+	if fresh, ok, err := a.Service.FreshPlan(ctx, id); err != nil {
+		return apiserver.TranscodeItemView{}, false, err
+	} else if ok {
+		view.ReasonsJSON, view.PlanJSON, view.WarningsJSON = fresh.ReasonsJSON, fresh.PlanJSON, fresh.WarningsJSON
+	}
 	if view.Restorable {
 		expiries, err := a.Library.OriginalExpiries(ctx, []int64{item.OriginalRecycleID})
 		if err != nil {
