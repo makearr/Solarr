@@ -17034,7 +17034,7 @@ components:
 
     TranscodeSummary:
       type: object
-      required: [enabled, libraries, totals, counts, health, originals_bytes]
+      required: [enabled, libraries, totals, counts, health, originals_bytes, originals_count, disk_full_roots]
       properties:
         enabled: { type: boolean, description: The master switch. }
         libraries: { type: array, items: { $ref: "#/components/schemas/TranscodeLibrarySummary" } }
@@ -17042,6 +17042,9 @@ components:
         counts: { $ref: "#/components/schemas/TranscodeCounts" }
         health: { type: array, items: { $ref: "#/components/schemas/TranscodeHealth" } }
         originals_bytes: { type: integer, format: int64, description: Bytes of converted files' originals the recycle bin still holds. }
+        originals_count: { type: integer, format: int64 }
+        originals_next_expiry: { type: string, format: date-time, description: When the first kept original expires; absent when none is kept. }
+        disk_full_roots: { type: integer, format: int64, description: Library folders conversion is holding back from for want of free space or because they are not writable. }
 
     TranscodeReason:
       type: object
@@ -17077,6 +17080,7 @@ components:
         encode_seconds: { type: integer, format: int64 }
         finished_at: { type: string, format: date-time }
         restorable: { type: boolean, description: A done file whose original the recycle bin may still hold. }
+        restorable_until: { type: string, format: date-time, description: When the kept original expires; only on a restorable file. }
 
     TranscodeItemPage:
       type: object
@@ -17117,7 +17121,7 @@ components:
       type: object
       required: [code]
       properties:
-        code: { type: string, enum: [quality_differs_from_target, checks_off, range_unknown] }
+        code: { type: string, enum: [quality_differs_from_target, checks_off, range_unknown, bitrate_outside_range, results_outside_range] }
         value: { type: string, description: The number that triggered it, when there is one. }
 
     TranscodeEngineAvailability:

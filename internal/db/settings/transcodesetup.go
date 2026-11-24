@@ -321,6 +321,8 @@ const (
 	WarnQualityDiffersFromTarget TranscodeWarningCode = "quality_differs_from_target"
 	WarnChecksOff                TranscodeWarningCode = "checks_off"
 	WarnRangeUnknown             TranscodeWarningCode = "range_unknown"
+	WarnBitrateOutsideRange      TranscodeWarningCode = "bitrate_outside_range"
+	WarnResultsOutsideRange      TranscodeWarningCode = "results_outside_range"
 )
 
 // TranscodeWarning is one warning with the number that raised it, when there is one.
@@ -344,7 +346,36 @@ func TranscodeWarnings(setup TranscodeSetup, target QualityTarget) []TranscodeWa
 	if (video && target.VideoBitrateKbps == nil) || (!video && target.BitrateKbps == nil) {
 		warnings = append(warnings, TranscodeWarning{Code: WarnRangeUnknown})
 	}
+	if video && setup.Encode.RateMode == RateBitrate && setup.Encode.VideoBitrateKbps > 0 && target.VideoBitrateKbps != nil {
+		low, high := bitrateRange(*target.VideoBitrateKbps, target.TolerancePct)
+		if setup.Encode.VideoBitrateKbps < low || setup.Encode.VideoBitrateKbps > high {
+			warnings = append(warnings, TranscodeWarning{Code: WarnBitrateOutsideRange, Value: strconv.FormatInt(setup.Encode.VideoBitrateKbps, 10)})
+		}
+	}
 	return warnings
+}
+
+// MinFinishedForResultsWarning is how many converted files must exist before their median counts as evidence about the setup.
+const MinFinishedForResultsWarning = 10
+
+// TranscodeResultsWarning is the warning when the median of finished files' result-to-target bitrate ratios (percent) lies outside the target's range.
+func TranscodeResultsWarning(ratiosPct []int64, target QualityTarget) (TranscodeWarning, bool) {
+	if len(ratiosPct) < MinFinishedForResultsWarning {
+		return TranscodeWarning{}, false
+	}
+	sorted := slices.Clone(ratiosPct)
+	slices.Sort(sorted)
+	median := sorted[len(sorted)/2]
+	low, high := bitrateRange(100, target.TolerancePct)
+	if median >= low && median <= high {
+		return TranscodeWarning{}, false
+	}
+	return TranscodeWarning{Code: WarnResultsOutsideRange, Value: strconv.FormatInt(median, 10)}, true
+}
+
+// bitrateRange is the target bitrate widened by the tolerance each way.
+func bitrateRange(target, tolerancePct int64) (low, high int64) {
+	return target * (100 - tolerancePct) / 100, target * (100 + tolerancePct) / 100
 }
 
 // TranscodeKind says what a target converts to: video, audio, or other for what transcoding does not cover (books, comics).

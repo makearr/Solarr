@@ -127,3 +127,7 @@ A stop copies the RAM databases first, then waits up to `workers.shutdown_grace`
 the log ("job still running at shutdown; abandoned") and left to the next start to reclaim.
 
 See [memory-copies.md](memory-copies.md) for the risks, the 20% room rule and the memory guard.
+
+## GPU devices for conversion
+
+Transcoding uses VAAPI or QSV when the container sees a render node: pass `--device /dev/dri` and add the render group (`--group-add <gid of /dev/dri/renderD128>`; also `video` where the node is group video). Settings > Transcode > Hardware shows what was found and which codecs each engine really encoded in a test; without a device the GPU engines are greyed with the reason and software encoding is used. NVENC needs an ffmpeg build the image does not ship.

@@ -67,6 +67,11 @@ func (a Transcode) Summary(ctx context.Context) (apiserver.TranscodeSummaryView,
 		if stored, err := a.Settings.TranscodeSetup(ctx, one.Target.ID); err == nil {
 			view.Warnings = settings.TranscodeWarnings(stored.Setup, *one.Target)
 		}
+		if ratios, err := a.Library.DoneRatios(ctx, one.CategoryID); err == nil {
+			if warning, ok := settings.TranscodeResultsWarning(ratios, *one.Target); ok {
+				view.Warnings = append(view.Warnings, warning)
+			}
+		}
 		out.Libraries = append(out.Libraries, view)
 	}
 	for _, kind := range transcodeKinds {
@@ -83,6 +88,14 @@ func (a Transcode) Summary(ctx context.Context) (apiserver.TranscodeSummaryView,
 	if out.OriginalsBytes, err = a.Library.OriginalsKept(ctx); err != nil {
 		return apiserver.TranscodeSummaryView{}, err
 	}
+	var nextExpiry int64
+	if out.OriginalsCount, nextExpiry, err = a.Library.OriginalsHeld(ctx); err != nil {
+		return apiserver.TranscodeSummaryView{}, err
+	}
+	if nextExpiry != 0 {
+		out.OriginalsNextExpiry = time.Unix(nextExpiry, 0)
+	}
+	out.DiskFullRoots = a.Service.BlockedRoots()
 	return out, nil
 }
 
@@ -104,8 +117,19 @@ func (a Transcode) Items(ctx context.Context, query apiserver.TranscodeItemsQuer
 		return nil, err
 	}
 	views := make([]apiserver.TranscodeItemView, len(listed))
+	var recycleIDs []int64
 	for i, one := range listed {
 		views[i] = itemView(one.Item, one.RelPath)
+		if views[i].Restorable {
+			recycleIDs = append(recycleIDs, one.Item.OriginalRecycleID)
+		}
+	}
+	expiries, err := a.Library.OriginalExpiries(ctx, recycleIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i, one := range listed {
+		a.markRestorable(&views[i], one.Item.OriginalRecycleID, expiries)
 	}
 	return views, nil
 }
@@ -123,7 +147,27 @@ func (a Transcode) Item(ctx context.Context, id int64) (apiserver.TranscodeItemV
 	if len(paths) > 0 {
 		relPath = paths[0].RelPath
 	}
-	return itemView(item, relPath), true, nil
+	view := itemView(item, relPath)
+	if view.Restorable {
+		expiries, err := a.Library.OriginalExpiries(ctx, []int64{item.OriginalRecycleID})
+		if err != nil {
+			return apiserver.TranscodeItemView{}, false, err
+		}
+		a.markRestorable(&view, item.OriginalRecycleID, expiries)
+	}
+	return view, true, nil
+}
+
+// markRestorable dates the restore window, or withdraws it when the bin no longer holds the original.
+func (Transcode) markRestorable(view *apiserver.TranscodeItemView, recycleID int64, expiries map[int64]int64) {
+	if !view.Restorable {
+		return
+	}
+	expiry, kept := expiries[recycleID]
+	view.Restorable = kept
+	if kept {
+		view.RestorableUntil = time.Unix(expiry, 0)
+	}
 }
 
 func (a Transcode) Retry(ctx context.Context, query apiserver.TranscodeRetryQuery) (int64, error) {

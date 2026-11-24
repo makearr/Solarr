@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -30,7 +31,7 @@ func (f *fakeTranscodePipeline) Summary(context.Context) (apiserver.TranscodeSum
 		Counts:         apiserver.TranscodeCountsView{Needed: 3, Done: 2},
 		Libraries:      []apiserver.TranscodeLibraryView{{CategoryID: 4, Name: "Songs", TargetID: 35, Enabled: true, Warnings: []settings.TranscodeWarning{{Code: settings.WarnChecksOff}}}},
 		Health:         []apiserver.TranscodeHealthView{{Kind: "video", Mode: "ok"}, {Kind: "audio", Mode: "backoff", ConsecutiveFailures: 3, LastError: "boom"}},
-		OriginalsBytes: 600,
+		OriginalsBytes: 600, OriginalsCount: 3, OriginalsNextExpiry: time.Unix(5000, 0), DiskFullRoots: 2,
 	}, nil
 }
 
@@ -76,7 +77,7 @@ func transcodeItemsFixture(t *testing.T) (worksFixture, []*http.Cookie) {
 	for id := int64(1); id <= 3; id++ {
 		fixture.transcodeItems.items = append(fixture.transcodeItems.items, apiserver.TranscodeItemView{
 			MediaObjectID: id, CategoryID: 4, Path: "Album/t.flac", Kind: "audio", State: "done", Lane: "audio",
-			ReasonsJSON: `[{"code":"audio_codec","stream":0,"want":"aac","have":"flac"}]`, PlanJSON: `{"container":"m4a"}`, Restorable: true, FinishedAt: 100,
+			ReasonsJSON: `[{"code":"audio_codec","stream":0,"want":"aac","have":"flac"}]`, PlanJSON: `{"container":"m4a"}`, Restorable: true, RestorableUntil: time.Unix(7000, 0), FinishedAt: 100,
 		})
 	}
 	return fixture, fixture.signIn(t, "admin")
@@ -122,6 +123,9 @@ func TestTranscodeItems_SummaryAndPagesAndOneItem(t *testing.T) {
 	recorder = fixture.do(authedGet(t, cookies, "/api/v1/transcode/items?limit=2&cursor="+*first.NextCursor))
 	if err := json.Unmarshal(recorder.Body.Bytes(), &second); err != nil || len(second.Items) != 1 || second.NextCursor != nil || second.Items[0].MediaObjectId != 3 {
 		t.Errorf("page 2 = %+v, %v; want the third item alone and no next page", second, err)
+	}
+	if first.Items[0].RestorableUntil == nil || first.Items[0].RestorableUntil.Unix() != 7000 || summary.OriginalsCount != 3 || summary.OriginalsNextExpiry.Unix() != 5000 || summary.DiskFullRoots != 2 {
+		t.Errorf("dates and notices: %+v %+v", first.Items[0].RestorableUntil, summary)
 	}
 	if first.Items[0].Reasons[0].Have == nil || *first.Items[0].Reasons[0].Have != "flac" || !first.Items[0].Restorable {
 		t.Errorf("item = %+v, want the structured reason", first.Items[0])

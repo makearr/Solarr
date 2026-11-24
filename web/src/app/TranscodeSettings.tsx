@@ -62,8 +62,9 @@ export function TranscodeSettings() {
       </p>
       {sum && <Statistics summary={sum} />}
       <LibrariesCard libraries={settings.data?.libraries ?? []} />
+      {sum && <TargetsCard summary={sum} libraries={settings.data?.libraries ?? []} />}
       {global && <ParallelCard global={global} onSave={(next) => saveGlobal.mutate(next)} busy={saveGlobal.isPending} />}
-      {global && <OriginalsCard global={global} held={sum?.originals_bytes ?? 0} onSave={(next) => saveGlobal.mutate(next)} busy={saveGlobal.isPending} />}
+      {global && <OriginalsCard global={global} held={sum?.originals_bytes ?? 0} count={sum?.originals_count ?? 0} nextExpiry={sum?.originals_next_expiry} onSave={(next) => saveGlobal.mutate(next)} busy={saveGlobal.isPending} />}
       <HardwareCard />
     </div>
   );
@@ -84,6 +85,11 @@ function Banners({ summary }: { summary: components["schemas"]["TranscodeSummary
           {library.name}: {tOr(`transcode.warning.${warning.code}`, warning.code).replace("{value}", warning.value ?? "")}
         </p>
       ))}
+      {summary.disk_full_roots > 0 && (
+        <p role="status" className="rounded-md border border-warn p-2 text-sm">
+          {t("transcode.diskFull", { count: summary.disk_full_roots })}
+        </p>
+      )}
       {summary.health
         .filter((health) => health.mode !== "ok")
         .map((health) => (
@@ -338,7 +344,33 @@ function ParallelCard({ global, onSave, busy }: { global: Global; onSave: (next:
   );
 }
 
-function OriginalsCard({ global, held, onSave, busy }: { global: Global; held: number; onSave: (next: Global) => void; busy: boolean }) {
+function TargetsCard({ summary, libraries }: { summary: components["schemas"]["TranscodeSummary"]; libraries: Library[] }) {
+  const targets = new Map<number, { name: string; warnings: number }>();
+  for (const library of summary.libraries) {
+    if (library.target_id == null) continue;
+    const name = libraries.find((row) => row.target_id === library.target_id)?.target_name ?? library.name;
+    const known = targets.get(library.target_id) ?? { name, warnings: 0 };
+    known.warnings = Math.max(known.warnings, (library.warnings ?? []).length);
+    targets.set(library.target_id, known);
+  }
+  if (targets.size === 0) return null;
+  return (
+    <Card title={t("transcode.targets")} help={t("transcode.targetsHelp")}>
+      <div className="flex flex-col divide-y divide-border-subtle text-sm">
+        {[...targets].map(([id, one]) => (
+          <div key={id} className="flex flex-wrap items-center justify-between gap-3 py-1.5">
+            <Link to="/settings/transcode/targets/$targetId" params={{ targetId: String(id) }} className="text-accent hover:underline">
+              {one.name}
+            </Link>
+            <span className={one.warnings > 0 ? "text-danger" : "text-ink-muted"}>{one.warnings > 0 ? t("transcode.targetWarnings", { count: one.warnings }) : t("transcode.targetDefault")}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function OriginalsCard({ global, held, count, nextExpiry, onSave, busy }: { global: Global; held: number; count: number; nextExpiry: string | undefined; onSave: (next: Global) => void; busy: boolean }) {
   const [days, setDays] = useState(String(global.originals_retain_days));
   const [cap, setCap] = useState(String(global.originals_cap_gb));
   useEffect(() => {
@@ -346,7 +378,7 @@ function OriginalsCard({ global, held, onSave, busy }: { global: Global; held: n
     setCap(String(global.originals_cap_gb));
   }, [global.originals_retain_days, global.originals_cap_gb]);
   return (
-    <Card title={t("transcode.originals")} help={t("transcode.originalsHelp", { size: formatSize(held) })}>
+    <Card title={t("transcode.originals")} help={[t("transcode.originalsHelp", { size: formatSize(held) }), nextExpiry ? t("transcode.originalsNext", { count, date: new Date(nextExpiry).toLocaleDateString() }) : ""].filter(Boolean).join(" ")}>
       <div className="flex flex-wrap items-end gap-4">
         <label className={labelStyle}>
           {t("transcode.retainDays")}

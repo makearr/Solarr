@@ -141,6 +141,10 @@ dependencies; depending on the array closed and reopened the event stream on eve
 
 `Discover.tsx` is the poster wall of one library at a time (tabs, list/kind/genre/title filters in the search params, `?hidden=1` for what you hid). The wall is virtualised by rows of cards (the column count follows the width), Load more asks the next cursor page and, past the end of the pool, `POST /discover/more`. `DiscoverRow.tsx` is the dashboard row; `DiscoverSettings.tsx` the settings with `TermChips` for exclusions and the auto-add preview dialog.
 
+## Transcode
+
+`TranscodeSettings.tsx` (`/settings/transcode`) holds the switch with its banners (setup warnings, backoff with Try now, folders short of space), the pipeline table whose numbers link into the file list, savings, libraries, a Target qualities card (each target's warning count, linking to its editor), lane limits, originals (bytes, count, first expiry) and the hardware table. `TranscodeSetupForm.tsx` (`/settings/transcode/targets/$targetId`) edits one target's setup; engines the machine lacks are greyed with the reason. `TranscodeFiles.tsx` (`/settings/transcode/files`) is the virtualised file list with Retry, Retry with... (count first), Restore original (with the date the original is kept until) and the plan dialog. At the expert tier a work's file list shows "Converted by Solarr" with the same Restore (`TranscodedLine` in `work/FileExpert.tsx`, administrators only). All of it reads the `/transcode/*` API and refreshes on the `transcode:<id>` library event.
+
 ## Components
 
 Radix primitives, added per component as one is needed, styled with the existing Tailwind. The

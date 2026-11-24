@@ -174,6 +174,16 @@ ON CONFLICT (kind) DO UPDATE SET
 -- name: SumTranscodeOriginals :one
 SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS total FROM recycle_bin WHERE reason = 'transcoded' AND restored_at IS NULL;
 
+-- name: CountTranscodeOriginals :one
+SELECT COUNT(*) AS kept, CAST(COALESCE(MIN(expires_at), 0) AS INTEGER) AS next_expiry FROM recycle_bin WHERE reason = 'transcoded' AND restored_at IS NULL;
+
+-- name: ListTranscodeOriginalExpiries :many
+SELECT id, expires_at FROM recycle_bin WHERE id IN (sqlc.slice('recycle_ids')) AND restored_at IS NULL;
+
+-- The newest converted files' result-to-target ratios, the evidence for the "results outside the range" warning.
+-- name: ListTranscodeDoneRatios :many
+SELECT result_ratio_pct FROM transcode_item WHERE category_id = ? AND state = 'done' AND result_ratio_pct > 0 ORDER BY finished_at DESC, media_object_id DESC LIMIT 500;
+
 -- name: ListOldestTranscodeOriginals :many
 SELECT id, media_object_id, size_bytes, recycled_at FROM recycle_bin WHERE reason = 'transcoded' AND restored_at IS NULL ORDER BY recycled_at, id LIMIT ?;
 

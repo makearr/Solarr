@@ -260,3 +260,28 @@ func TestTranscodeWarningsNameWhereASetupMissesItsTarget(t *testing.T) {
 		t.Errorf("warnings = %+v, want %+v", got, want)
 	}
 }
+
+func TestTranscodeWarningsBitrateAndResultsOutsideTheRange(t *testing.T) {
+	bitrate := int64(2000)
+	target := settings.QualityTarget{MediaType: "video", VideoCodec: "hevc", VideoBitrateKbps: &bitrate, TolerancePct: 20}
+	setup := settings.DefaultTranscodeSetup(target)
+	setup.Encode.RateMode, setup.Encode.VideoBitrateKbps = settings.RateBitrate, 2300
+	if got := settings.TranscodeWarnings(setup, target); len(got) != 0 {
+		t.Errorf("inside = %+v", got)
+	}
+	setup.Encode.VideoBitrateKbps = 2500
+	want := []settings.TranscodeWarning{{Code: settings.WarnBitrateOutsideRange, Value: "2500"}}
+	if got := settings.TranscodeWarnings(setup, target); !reflect.DeepEqual(got, want) {
+		t.Errorf("above = %+v", got)
+	}
+	high := []int64{150, 150, 150, 150, 150, 150, 150, 150, 150, 90}
+	if got, ok := settings.TranscodeResultsWarning(high, target); !ok || got != (settings.TranscodeWarning{Code: settings.WarnResultsOutsideRange, Value: "150"}) {
+		t.Errorf("results = %+v %v", got, ok)
+	}
+	if _, ok := settings.TranscodeResultsWarning(high[:9], target); ok {
+		t.Error("nine files are too few to judge")
+	}
+	if _, ok := settings.TranscodeResultsWarning([]int64{95, 100, 105, 110, 90, 100, 100, 100, 100, 100}, target); ok {
+		t.Error("a median inside the range warned")
+	}
+}

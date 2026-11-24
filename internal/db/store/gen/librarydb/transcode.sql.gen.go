@@ -8,6 +8,7 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const countFailedTranscodeItemsByCategory = `-- name: CountFailedTranscodeItemsByCategory :many
@@ -75,6 +76,22 @@ func (q *Queries) CountTranscodeItemsByState(ctx context.Context, categoryID int
 		return nil, err
 	}
 	return items, nil
+}
+
+const countTranscodeOriginals = `-- name: CountTranscodeOriginals :one
+SELECT COUNT(*) AS kept, CAST(COALESCE(MIN(expires_at), 0) AS INTEGER) AS next_expiry FROM recycle_bin WHERE reason = 'transcoded' AND restored_at IS NULL
+`
+
+type CountTranscodeOriginalsRow struct {
+	Kept       int64
+	NextExpiry int64
+}
+
+func (q *Queries) CountTranscodeOriginals(ctx context.Context) (CountTranscodeOriginalsRow, error) {
+	row := q.db.QueryRowContext(ctx, countTranscodeOriginals)
+	var i CountTranscodeOriginalsRow
+	err := row.Scan(&i.Kept, &i.NextExpiry)
+	return i, err
 }
 
 const getTranscodeHealth = `-- name: GetTranscodeHealth :one
@@ -332,6 +349,34 @@ func (q *Queries) ListRunningTranscodeItems(ctx context.Context) ([]ListRunningT
 	return items, nil
 }
 
+const listTranscodeDoneRatios = `-- name: ListTranscodeDoneRatios :many
+SELECT result_ratio_pct FROM transcode_item WHERE category_id = ? AND state = 'done' AND result_ratio_pct > 0 ORDER BY finished_at DESC, media_object_id DESC LIMIT 500
+`
+
+// The newest converted files' result-to-target ratios, the evidence for the "results outside the range" warning.
+func (q *Queries) ListTranscodeDoneRatios(ctx context.Context, categoryID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listTranscodeDoneRatios, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var result_ratio_pct int64
+		if err := rows.Scan(&result_ratio_pct); err != nil {
+			return nil, err
+		}
+		items = append(items, result_ratio_pct)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTranscodeFacts = `-- name: ListTranscodeFacts :many
 SELECT o.id, o.size_bytes, o.duration_ms, o.width, o.height, o.video_bitrate, o.audio_bitrate, o.overall_bitrate, o.measured_attributes_id,
        a.video_codec, a.hdr, a.audio_codec, a.audio_channels, a.bit_depth, a.languages, a.subtitles, a.frame_rate, a.scan_type, a.container, a.sample_rate
@@ -515,6 +560,48 @@ func (q *Queries) ListTranscodeItems(ctx context.Context, arg ListTranscodeItems
 			&i.RootFolderID,
 			&i.RelPath,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTranscodeOriginalExpiries = `-- name: ListTranscodeOriginalExpiries :many
+SELECT id, expires_at FROM recycle_bin WHERE id IN (/*SLICE:recycle_ids*/?) AND restored_at IS NULL
+`
+
+type ListTranscodeOriginalExpiriesRow struct {
+	ID        int64
+	ExpiresAt int64
+}
+
+func (q *Queries) ListTranscodeOriginalExpiries(ctx context.Context, recycleIds []int64) ([]ListTranscodeOriginalExpiriesRow, error) {
+	query := listTranscodeOriginalExpiries
+	var queryParams []interface{}
+	if len(recycleIds) > 0 {
+		for _, v := range recycleIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:recycle_ids*/?", strings.Repeat(",?", len(recycleIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:recycle_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTranscodeOriginalExpiriesRow{}
+	for rows.Next() {
+		var i ListTranscodeOriginalExpiriesRow
+		if err := rows.Scan(&i.ID, &i.ExpiresAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -257,6 +257,12 @@ func TestTranscodeItems_ResultJournalRunningAndHealthRoundTrip(t *testing.T) {
 	if kept, _ := items.OriginalsKept(t.Context()); kept != 1000 {
 		t.Errorf("kept = %d, want the two transcoded originals", kept)
 	}
+	if count, next, _ := items.OriginalsHeld(t.Context()); count != 2 || next != 99 {
+		t.Errorf("held = %d next %d, want the two transcoded originals expiring at 99", count, next)
+	}
+	if expiries, _ := items.OriginalExpiries(t.Context(), []int64{3, 5, 77}); !reflect.DeepEqual(expiries, map[int64]int64{3: 99, 5: 99}) {
+		t.Errorf("expiries = %v", expiries)
+	}
 	if oldest, _ := items.OldestOriginals(t.Context(), 1); len(oldest) != 1 || oldest[0].RecycleID != 4 {
 		t.Errorf("oldest = %+v", oldest)
 	}

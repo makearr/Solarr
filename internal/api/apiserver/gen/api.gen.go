@@ -1271,9 +1271,11 @@ const (
 
 // Defines values for TranscodeWarningCode.
 const (
+	TranscodeWarningCodeBitrateOutsideRange      TranscodeWarningCode = "bitrate_outside_range"
 	TranscodeWarningCodeChecksOff                TranscodeWarningCode = "checks_off"
 	TranscodeWarningCodeQualityDiffersFromTarget TranscodeWarningCode = "quality_differs_from_target"
 	TranscodeWarningCodeRangeUnknown             TranscodeWarningCode = "range_unknown"
+	TranscodeWarningCodeResultsOutsideRange      TranscodeWarningCode = "results_outside_range"
 )
 
 // Defines values for TransferMethod.
@@ -7596,7 +7598,10 @@ type TranscodeItem struct {
 	Reasons []TranscodeReason       `json:"reasons"`
 
 	// Restorable A done file whose original the recycle bin may still hold.
-	Restorable      bool               `json:"restorable"`
+	Restorable bool `json:"restorable"`
+
+	// RestorableUntil When the kept original expires; only on a restorable file.
+	RestorableUntil *time.Time         `json:"restorable_until,omitempty"`
 	ResultRatioPct  *int64             `json:"result_ratio_pct,omitempty"`
 	ResultSizeBytes *int64             `json:"result_size_bytes,omitempty"`
 	State           TranscodeItemState `json:"state"`
@@ -7818,14 +7823,21 @@ type TranscodeStreams struct {
 type TranscodeSummary struct {
 	Counts TranscodeCounts `json:"counts"`
 
+	// DiskFullRoots Library folders conversion is holding back from for want of free space or because they are not writable.
+	DiskFullRoots int64 `json:"disk_full_roots"`
+
 	// Enabled The master switch.
 	Enabled   bool                      `json:"enabled"`
 	Health    []TranscodeHealth         `json:"health"`
 	Libraries []TranscodeLibrarySummary `json:"libraries"`
 
 	// OriginalsBytes Bytes of converted files' originals the recycle bin still holds.
-	OriginalsBytes int64            `json:"originals_bytes"`
-	Totals         TranscodeSavings `json:"totals"`
+	OriginalsBytes int64 `json:"originals_bytes"`
+	OriginalsCount int64 `json:"originals_count"`
+
+	// OriginalsNextExpiry When the first kept original expires; absent when none is kept.
+	OriginalsNextExpiry *time.Time       `json:"originals_next_expiry,omitempty"`
+	Totals              TranscodeSavings `json:"totals"`
 }
 
 // TranscodeVideoFilters defines model for TranscodeVideoFilters.

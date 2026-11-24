@@ -60,6 +60,23 @@ function Pick<T extends string>({ label, value, options, onChange, disabled }: {
   );
 }
 
+/** A comma-separated list of codec names, edited as text and committed on leaving the field. */
+function CodecList({ label, value, onChange }: { label: string; value: string[]; onChange: (value: string[]) => void }) {
+  const [text, setText] = useState(value.join(", "));
+  useEffect(() => setText(value.join(", ")), [value]);
+  return (
+    <label className={labelStyle}>
+      {label}
+      <input
+        className={`${inputStyle} w-48`}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={() => onChange(text.split(",").map((one) => one.trim().toLowerCase()).filter(Boolean))}
+      />
+    </label>
+  );
+}
+
 const strengthOptions = STRENGTHS.map((strength) => [strength, t(`transcode.setup.strength.${strength}`)] as const);
 
 /** The red block above the form, and on the Transcode page: how this setup is likely to miss its target. */
@@ -175,6 +192,10 @@ export function TranscodeSetupForm() {
         <Check label={t("transcode.setup.skip.rate_at_or_below")} checked={skip.rate_at_or_below} onChange={(rate_at_or_below) => patch("skip", { rate_at_or_below })} />
         {!isAudio && <Check label={t("transcode.setup.skip.only_wanted_languages")} checked={skip.only_wanted_languages} onChange={(only_wanted_languages) => patch("skip", { only_wanted_languages })} />}
         <div className="flex flex-wrap items-end gap-4">
+          {!isAudio && <CodecList label={t("transcode.setup.skip.alsoVideo")} value={skip.also_video_codecs} onChange={(also_video_codecs) => patch("skip", { also_video_codecs })} />}
+          <CodecList label={t("transcode.setup.skip.alsoAudio")} value={skip.also_audio_codecs} onChange={(also_audio_codecs) => patch("skip", { also_audio_codecs })} />
+        </div>
+        <div className="flex flex-wrap items-end gap-4">
           <Check label={t("transcode.setup.skip.within_range")} checked={skip.within_range} onChange={(within_range) => patch("skip", { within_range })} />
           <Num label="%" value={skip.range_pct} min={1} max={100} onChange={(range_pct) => patch("skip", { range_pct })} />
           <Check label={t("transcode.setup.skip.below_max")} checked={skip.below_max} onChange={(below_max) => patch("skip", { below_max })} />
@@ -183,8 +204,18 @@ export function TranscodeSetupForm() {
       </Card>
 
       <Card title={t("transcode.setup.streams")} help={t("transcode.setup.streamsHelp")}>
-        {!isAudio && <Check label={t("transcode.setup.streams.copy_video_on_target")} checked={streams.copy_video_on_target} onChange={(copy_video_on_target) => patch("streams", { copy_video_on_target })} />}
-        <Check label={t("transcode.setup.streams.copy_audio_on_target")} checked={streams.copy_audio_on_target} onChange={(copy_audio_on_target) => patch("streams", { copy_audio_on_target })} />
+        <div className="flex flex-wrap items-end gap-4">
+          {!isAudio && (
+            <>
+              <Check label={t("transcode.setup.streams.copy_video_on_target")} checked={streams.copy_video_on_target} onChange={(copy_video_on_target) => patch("streams", { copy_video_on_target })} />
+              <Num label={t("transcode.setup.streams.copyMaxPct")} value={streams.video_copy_max_pct} min={1} max={1000} onChange={(video_copy_max_pct) => patch("streams", { video_copy_max_pct })} />
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap items-end gap-4">
+          <Check label={t("transcode.setup.streams.copy_audio_on_target")} checked={streams.copy_audio_on_target} onChange={(copy_audio_on_target) => patch("streams", { copy_audio_on_target })} />
+          <Num label={t("transcode.setup.streams.copyMaxPct")} value={streams.audio_copy_max_pct} min={1} max={1000} onChange={(audio_copy_max_pct) => patch("streams", { audio_copy_max_pct })} />
+        </div>
         {!isAudio && (
           <>
             <Check label={t("transcode.setup.streams.downscale")} checked={streams.downscale} onChange={(downscale) => patch("streams", { downscale })} />

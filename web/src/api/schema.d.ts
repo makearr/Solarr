@@ -12783,6 +12783,18 @@ export interface components {
              * @description Bytes of converted files' originals the recycle bin still holds.
              */
             originals_bytes: number;
+            /** Format: int64 */
+            originals_count: number;
+            /**
+             * Format: date-time
+             * @description When the first kept original expires; absent when none is kept.
+             */
+            originals_next_expiry?: string;
+            /**
+             * Format: int64
+             * @description Library folders conversion is holding back from for want of free space or because they are not writable.
+             */
+            disk_full_roots: number;
         };
         TranscodeReason: {
             code: string;
@@ -12830,6 +12842,11 @@ export interface components {
             finished_at?: string;
             /** @description A done file whose original the recycle bin may still hold. */
             restorable: boolean;
+            /**
+             * Format: date-time
+             * @description When the kept original expires; only on a restorable file.
+             */
+            restorable_until?: string;
         };
         TranscodeItemPage: {
             items: components["schemas"]["TranscodeItem"][];
@@ -12866,7 +12883,7 @@ export interface components {
         };
         TranscodeWarning: {
             /** @enum {string} */
-            code: "quality_differs_from_target" | "checks_off" | "range_unknown";
+            code: "quality_differs_from_target" | "checks_off" | "range_unknown" | "bitrate_outside_range" | "results_outside_range";
             /** @description The number that triggered it */
             value?: string;
         };

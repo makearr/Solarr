@@ -99,7 +99,7 @@ export function TranscodeFiles() {
               type="button"
               className={quietButton}
               disabled={restore.isPending}
-              onClick={() => window.confirm(t("transcode.files.restoreConfirm")) && restore.mutate(item)}
+              onClick={() => window.confirm(t("transcode.files.restoreConfirm", { date: item.restorable_until ? new Date(item.restorable_until).toLocaleDateString() : "-" })) && restore.mutate(item)}
             >
               {t("transcode.files.restore")}
             </button>

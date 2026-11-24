@@ -53,6 +53,10 @@ type TranscodeSummaryView struct {
 	Counts         TranscodeCountsView
 	Health         []TranscodeHealthView
 	OriginalsBytes int64
+	// OriginalsCount is how many originals the bin keeps; OriginalsNextExpiry is zero when none.
+	OriginalsCount      int64
+	OriginalsNextExpiry time.Time
+	DiskFullRoots       int64
 }
 
 // TranscodeItemView is one judged file; the reasons, warnings and plan are the JSON the pipeline stored.
@@ -66,6 +70,7 @@ type TranscodeItemView struct {
 	OriginalSizeBytes, ResultSizeBytes, ResultRatioPct, EncodeSeconds int64
 	FinishedAt                                                        int64
 	Restorable                                                        bool
+	RestorableUntil                                                   time.Time
 }
 
 // TranscodeItemsQuery selects a page of items; AfterID is the cursor.
@@ -136,6 +141,11 @@ func (s *Server) GetTranscodeSummary(w http.ResponseWriter, r *http.Request) {
 	out := gen.TranscodeSummary{
 		Enabled: summary.Enabled, Libraries: []gen.TranscodeLibrarySummary{}, Totals: transcodeSavings(summary.Totals), Counts: transcodeCounts(summary.Counts),
 		Health: []gen.TranscodeHealth{}, OriginalsBytes: summary.OriginalsBytes,
+		OriginalsCount: summary.OriginalsCount, DiskFullRoots: summary.DiskFullRoots,
+	}
+	if !summary.OriginalsNextExpiry.IsZero() {
+		expiry := summary.OriginalsNextExpiry
+		out.OriginalsNextExpiry = &expiry
 	}
 	for _, library := range summary.Libraries {
 		one := gen.TranscodeLibrarySummary{
@@ -204,6 +214,10 @@ func transcodeItem(view TranscodeItemView) gen.TranscodeItem {
 		out.Engine = &view.Engine
 	}
 	out.OriginalSizeBytes, out.ResultSizeBytes, out.ResultRatioPct, out.EncodeSeconds = &view.OriginalSizeBytes, &view.ResultSizeBytes, &view.ResultRatioPct, &view.EncodeSeconds
+	if !view.RestorableUntil.IsZero() {
+		until := view.RestorableUntil
+		out.RestorableUntil = &until
+	}
 	if view.FinishedAt != 0 {
 		finished := time.Unix(view.FinishedAt, 0).UTC()
 		out.FinishedAt = &finished

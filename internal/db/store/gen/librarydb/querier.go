@@ -201,6 +201,7 @@ type Querier interface {
 	CountStaleVideoProbes(ctx context.Context, arg CountStaleVideoProbesParams) (int64, error)
 	// The truth a counter is corrected against.
 	CountTranscodeItemsByState(ctx context.Context, categoryID int64) ([]CountTranscodeItemsByStateRow, error)
+	CountTranscodeOriginals(ctx context.Context) (CountTranscodeOriginalsRow, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
@@ -1024,9 +1025,12 @@ type Querier interface {
 	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
 	// from these in Go, by what the file is and not by its bytes.
 	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)
+	// The newest converted files' result-to-target ratios, the evidence for the "results outside the range" warning.
+	ListTranscodeDoneRatios(ctx context.Context, categoryID int64) ([]int64, error)
 	// What the probe measured of the given files, enough for the coarse analysis; a file never measured has a NULL attribute id.
 	ListTranscodeFacts(ctx context.Context, ids interface{}) ([]ListTranscodeFactsRow, error)
 	ListTranscodeItems(ctx context.Context, arg ListTranscodeItemsParams) ([]ListTranscodeItemsRow, error)
+	ListTranscodeOriginalExpiries(ctx context.Context, recycleIds []int64) ([]ListTranscodeOriginalExpiriesRow, error)
 	// The same, only the files a wanted album holds that met no track: a file already aligned has nothing to gain from
 	// being read again, and on a first import that was half the library (live_test 35).
 	ListUnalignedWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListUnalignedWorkFileLocationsRow, error)

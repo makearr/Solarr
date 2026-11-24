@@ -1,9 +1,11 @@
 import { t } from "@/lib/i18n";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { Chip } from "@/ui/Chip";
+
+import { formatSize } from "./workFormat";
 
 /** What an expert sees beside a work's file: every path and how it was placed, whether renaming would name it
  *  differently, and whether other files may duplicate it. Nothing for lower tiers. */
@@ -56,6 +58,44 @@ export function ExpertFileInfo({ mediaObjectId, expert }: { mediaObjectId: numbe
         {detail.same_picture > 0 && <Chip tone="warn">{detail.same_picture} other {detail.same_picture === 1 ? "video" : "videos"} with the same picture</Chip>}
         {detail.same_bytes === 0 && detail.same_picture === 0 && <span className="text-ink-muted">{t("fileExpert.noDuplicateCandidates")}</span>}
       </span>
+      <TranscodedLine mediaObjectId={mediaObjectId} />
+    </span>
+  );
+}
+
+/** "Converted by Solarr" under a file the conversion replaced, with the way back while the bin still holds the original.
+ *  Administrators only: others get a refusal, which shows nothing. */
+export function TranscodedLine({ mediaObjectId }: { mediaObjectId: number }) {
+  const queryClient = useQueryClient();
+  const item = useQuery({
+    queryKey: ["transcode-item", mediaObjectId],
+    retry: false,
+    queryFn: () => ok(api.GET("/transcode/items/{media_object_id}", { params: { path: { media_object_id: mediaObjectId } } })),
+  });
+  const restore = useMutation({
+    mutationFn: () => ok(api.POST("/transcode/items/{media_object_id}/restore", { params: { path: { media_object_id: mediaObjectId } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["transcode-item", mediaObjectId] });
+      void queryClient.invalidateQueries({ queryKey: ["file-details"] });
+      void queryClient.invalidateQueries({ queryKey: ["work"] });
+    },
+  });
+  const data = item.data;
+  if (!data || data.state !== "done") return null;
+  const when = data.finished_at ? ` ${new Date(data.finished_at).toLocaleDateString()}` : "";
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+      {t("transcode.line.converted", { when, original: formatSize(data.original_size_bytes ?? 0), result: formatSize(data.result_size_bytes ?? 0) })}
+      {data.restorable ? (
+        <>
+          {data.restorable_until && t("transcode.line.until", { date: new Date(data.restorable_until).toLocaleDateString() })}
+          <button type="button" className="text-accent hover:underline" disabled={restore.isPending} onClick={() => restore.mutate()}>
+            {t("transcode.line.restore")}
+          </button>
+        </>
+      ) : (
+        t("transcode.line.gone")
+      )}
     </span>
   );
 }

@@ -643,6 +643,40 @@ func (t TranscodeItems) OriginalsKept(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
+// DoneRatios answers the result-to-target bitrate ratios (percent) of a library's newest converted files.
+func (t TranscodeItems) DoneRatios(ctx context.Context, categoryID int64) ([]int64, error) {
+	ratios, err := librarydb.New(t.store.Read()).ListTranscodeDoneRatios(ctx, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("library: done ratios: %w", err)
+	}
+	return ratios, nil
+}
+
+// OriginalsHeld is how many originals the bin keeps after a conversion and when the first one expires (0 when none).
+func (t TranscodeItems) OriginalsHeld(ctx context.Context) (count, nextExpiry int64, err error) {
+	row, err := librarydb.New(t.store.Read()).CountTranscodeOriginals(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("library: kept originals count: %w", err)
+	}
+	return row.Kept, row.NextExpiry, nil
+}
+
+// OriginalExpiries answers, per recycle bin id, when the entry expires; an entry gone or restored is absent.
+func (t TranscodeItems) OriginalExpiries(ctx context.Context, recycleIDs []int64) (map[int64]int64, error) {
+	out := map[int64]int64{}
+	if len(recycleIDs) == 0 {
+		return out, nil
+	}
+	rows, err := librarydb.New(t.store.Read()).ListTranscodeOriginalExpiries(ctx, recycleIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: kept original expiries: %w", err)
+	}
+	for _, row := range rows {
+		out[row.ID] = row.ExpiresAt
+	}
+	return out, nil
+}
+
 // KeptOriginal is one converted file's original in the recycle bin.
 type KeptOriginal struct {
 	RecycleID     int64

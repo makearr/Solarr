@@ -114,6 +114,9 @@ func (s *Service) blockRoot(id int64, until time.Time) {
 	s.blockedRoots[id] = until
 }
 
+// BlockedRoots is how many library folders are held back for want of space or write access.
+func (s *Service) BlockedRoots() int64 { return int64(len(s.rootsBlocked())) }
+
 // rootsBlocked are the roots still held back for want of space.
 func (s *Service) rootsBlocked() map[int64]bool {
 	s.mu.Lock()

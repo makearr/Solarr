@@ -156,3 +156,7 @@ orders or drops either. Startup logs
 one warning naming every missing tool rather than each file failing obscurely at scan time,
 and a missing tool degrades: the import proceeds, and tag write-back is recorded as deferred
 rather than dropped.
+
+## Conversion (transcoding)
+
+Library conversion runs `ffmpeg` under `nice -n 19` and `ionice -c 3` in its own process group, with `-protocol_whitelist file`. The image's ffmpeg has no `libfdk_aac` and no NVENC; AAC is the native encoder and Opus, FLAC, x264, x265, SVT-AV1 and libvpx-vp9 are software engines. See `transcoding.md`.
