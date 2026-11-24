@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Adult: a scene file named "Title - S36E29" (a studio's own season and episode numbering) is searched by the bare title, so providers find it; the numbers are kept apart from the title.
 - Adult: a library title with a quality word ("UHD", "4K", "HD", "VR", ...) is searched without it, so the exact scene is found; each hit in Review shows its date and studio, and a debug log line ("adult pick") says why a file stayed open.
 - A music release whose name states no format is downloaded and probed at import: if its files meet none of the library's quality profiles (MP3 in a lossless-only library), the release is blocklisted with that reason and the next one is grabbed.
 - Settings: "Videos hashed at once" and "Duplicate video tolerance" can now be set next to the video-hashing switch (Advanced level); Settings, Libraries, Priority says which level it needs instead of showing blank; a job that safe mode skips writes one "skipped: safe mode" line to the log.

@@ -56,3 +56,23 @@ func TestParseNameTakesQualityWordsOutOfALibraryTitleAndKeepsWhatWasTyped(t *tes
 		}
 	}
 }
+
+func TestParseNameCutsASitesOwnSeasonEpisodeNumberingOutOfTheTitle(t *testing.T) {
+	for name, want := range map[string]parseadult.Info{
+		"[Nimbus Studio] Harbour Scene - S36E29 (2024-03-05)": {
+			Studio: "Nimbus Studio", Title: "Harbour Scene", Raw: "Harbour Scene - S36E29", Season: 36, Episode: 29, Year: 2024, Date: "2024-03-05"},
+		"[Nimbus Studio] Harbour Scene s4e07 (2024-03-05)": {
+			Studio: "Nimbus Studio", Title: "Harbour Scene", Raw: "Harbour Scene s4e07", Season: 4, Episode: 7, Year: 2024, Date: "2024-03-05"},
+		"[Nimbus Studio] Harbour Scene UHD - S02E10 (2024-03-05)": {
+			Studio: "Nimbus Studio", Title: "Harbour Scene", Raw: "Harbour Scene UHD - S02E10", Season: 2, Episode: 10, Year: 2024, Date: "2024-03-05"},
+		"[Nimbus Studio] S01E02 (2024-03-05)": {
+			Studio: "Nimbus Studio", Title: "S01E02", Year: 2024, Date: "2024-03-05"},
+		"[Nimbus Studio] Harbour S2 Scene (2024-03-05)": {
+			Studio: "Nimbus Studio", Title: "Harbour S2 Scene", Year: 2024, Date: "2024-03-05"},
+	} {
+		got, ok := parseadult.ParseName(name)
+		if !ok || !reflect.DeepEqual(got, want) {
+			t.Errorf("%q: %+v (%v), want %+v", name, got, ok, want)
+		}
+	}
+}

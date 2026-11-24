@@ -24,6 +24,9 @@ type Info struct {
 	Group     string
 	// Raw is the title as the name typed it when quality words were taken out of Title, for display; empty otherwise.
 	Raw string
+	// Season and Episode are the numbering a site gives its own scenes ("Title - S36E29"), kept out of Title because
+	// providers carry the bare title; zero when the name has none.
+	Season, Episode int
 	// DurationSec is the file's own length when it was probed; it tells apart scenes that share a title, studio and day.
 	DurationSec int
 }
@@ -38,6 +41,8 @@ var (
 	qualityStart = regexp.MustCompile(`(?i)[. _-](?:2160p|1080p|720p|480p|360p|XXX|WEB(?:-?DL|RIP)?|HDRip|BluRay|MP4|MKV|H\.?26[45]|x26[45])\b`)
 	// qualityWord is a resolution or format tag a person types into a library title; a provider's title has none of them.
 	qualityWord = regexp.MustCompile(`(?i)\b(?:UHD|4K|8K|FHD|FullHD|HD|VR|60fps|2160p|1080p|720p)\b`)
+	// siteNumbering is a trailing "- S36E29" (the dash optional) a studio's own numbering puts after a scene's title.
+	siteNumbering = regexp.MustCompile(`(?i)\s+(?:-\s*)?S(\d{1,3})E(\d{1,4})$`)
 	// bracketed is a (...) or [...] group of a title.
 	bracketed   = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]`)
 	groupSuffix = regexp.MustCompile(`-([A-Za-z0-9]{2,12})$`)
@@ -65,7 +70,8 @@ func ParseName(name string) (Info, bool) {
 	name = strings.TrimSpace(name)
 	if match := libraryName.FindStringSubmatch(name); match != nil {
 		raw := tidy(match[2])
-		info := Info{Studio: strings.TrimSpace(match[1]), Title: withoutQualityWords(raw), Performer: tidy(match[6])}
+		title, season, episode := withoutSiteNumbering(withoutQualityWords(raw))
+		info := Info{Studio: strings.TrimSpace(match[1]), Title: title, Season: season, Episode: episode, Performer: tidy(match[6])}
 		if info.Title != raw {
 			info.Raw = raw
 		}
@@ -108,6 +114,17 @@ func ParseRelease(name string) (Info, bool) {
 	info.Words = tidy(rest)
 	info.Title = info.Words
 	return info, info.Words != ""
+}
+
+// withoutSiteNumbering cuts a trailing site numbering off a title and answers it; a title that is only the numbering stays.
+func withoutSiteNumbering(title string) (cleaned string, season, episode int) {
+	found := siteNumbering.FindStringSubmatchIndex(title)
+	if found == nil || strings.TrimSpace(title[:found[0]]) == "" {
+		return title, 0, 0
+	}
+	season, _ = strconv.Atoi(title[found[2]:found[3]])
+	episode, _ = strconv.Atoi(title[found[4]:found[5]])
+	return strings.TrimSpace(title[:found[0]]), season, episode
 }
 
 // withoutQualityWords takes the quality tags out of a title: a bracket they empty goes, one that keeps other words
