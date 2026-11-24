@@ -15171,6 +15171,8 @@ components:
         provider: { type: string, example: "musicbrainz:release-group" }
         external_id: { type: string }
         title: { type: string, description: What the candidate is called, when the strategy knows (a searched series' name). }
+        date: { type: string, description: The date the candidate was released, when known (a searched scene). }
+        studio: { type: string, description: The studio that released the candidate, when known. }
         confidence: { type: number }
 
     UnidentifiedFile:

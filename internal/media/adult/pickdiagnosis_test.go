@@ -2,11 +2,13 @@ package adult
 
 import (
 	"bytes"
+	"encoding/json"
 	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parseadult"
 )
@@ -67,6 +69,17 @@ func TestIdentifications_CarryTheDateAndStudioOfEachHit(t *testing.T) {
 		if !reflect.DeepEqual(identification.Evidence, want[index]) {
 			t.Errorf("hit %d: evidence %+v, want %+v", index, identification.Evidence, want[index])
 		}
+	}
+}
+
+func TestIdentifications_AreQueuedWithDateAndStudioAsFields(t *testing.T) {
+	queued := library.CandidatesJSON(Resolver{}.identifications([]Candidate{hit("Harbour Scene", "Nimbus Studio", "2024-03-05", 0)}))
+	var got []library.Candidate
+	if err := json.Unmarshal([]byte(queued), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Date != "2024-03-05" || got[0].Studio != "Nimbus Studio" {
+		t.Errorf("queued = %+v, want the date and studio on the candidate", got)
 	}
 }
 

@@ -3,6 +3,7 @@ package library_test
 import (
 	"encoding/json"
 	"math"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -107,6 +108,28 @@ func TestUnitCandidates_ReadsBothStoredForms(t *testing.T) {
 	}
 	if none, err := library.UnitCandidates(""); err != nil || none != nil {
 		t.Errorf("nothing stored: %+v, %v; want none", none, err)
+	}
+}
+
+func TestCandidatesJSON_KeepsASceneCandidatesDateAndStudioAsFields(t *testing.T) {
+	scene := model.Identification{
+		Strategy: "parse", Confidence: 0.6,
+		ExternalID: &model.ExternalID{Provider: "stashdb", ExternalID: "abc", Confidence: 1},
+		Evidence: []model.MatchEvidence{
+			{Kind: "parse", Detail: "Harbour Scene (Nimbus Studio)"}, {Kind: "date", Detail: "2024-03-05"}, {Kind: "studio", Detail: "Nimbus Studio"},
+		},
+	}
+	var stored []library.Candidate
+	if err := json.Unmarshal([]byte(library.CandidatesJSON([]model.Identification{scene})), &stored); err != nil {
+		t.Fatal(err)
+	}
+	want := []library.Candidate{{Strategy: "parse", Provider: "stashdb", ExternalID: "abc", Confidence: 0.6, Title: "Harbour Scene (Nimbus Studio)", Date: "2024-03-05", Studio: "Nimbus Studio"}}
+	if !reflect.DeepEqual(stored, want) {
+		t.Errorf("stored = %+v, want %+v", stored, want)
+	}
+	read, err := library.UnitCandidates(library.CandidatesJSON([]model.Identification{scene}))
+	if err != nil || len(read) != 1 || !reflect.DeepEqual(read[0].Evidence, scene.Evidence) {
+		t.Errorf("read back %+v, %v; want the date and studio evidence restored", read, err)
 	}
 }
 

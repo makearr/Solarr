@@ -7900,9 +7900,15 @@ type TransportKeyScheme string
 // UnidentifiedCandidate One ranked candidate the ADR-24 chain found but was not confident enough to resolve automatically -- RunChain's merged Candidates, best first. Empty on a file that matched nothing at all.
 type UnidentifiedCandidate struct {
 	Confidence float32 `json:"confidence"`
+
+	// Date The date the candidate was released
+	Date       *string `json:"date,omitempty"`
 	ExternalId *string `json:"external_id,omitempty"`
 	Provider   *string `json:"provider,omitempty"`
 	Strategy   string  `json:"strategy"`
+
+	// Studio The studio that released the candidate
+	Studio *string `json:"studio,omitempty"`
 
 	// Title What the candidate is called
 	Title *string `json:"title,omitempty"`

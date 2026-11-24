@@ -146,7 +146,12 @@ export function UnidentifiedReview() {
             <h2 className="font-medium text-ink">Suggested</h2>
             {suggestions.map((candidate) => (
               <div key={`${candidate.provider}:${candidate.external_id}`} className="flex items-center gap-3">
-                <span className="min-w-0 flex-1 text-ink">{candidate.title}</span>
+                <span className="min-w-0 flex-1 text-ink">
+                  {candidate.title}
+                  {(candidate.date || candidate.studio) && (
+                    <span className="block text-xs text-ink-muted">{[candidate.date && t("identify.dated", { date: candidate.date }), candidate.studio].filter(Boolean).join(", ")}</span>
+                  )}
+                </span>
                 <button
                   type="button"
                   disabled={choose.isPending}

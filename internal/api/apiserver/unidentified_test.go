@@ -270,7 +270,7 @@ func TestListUnidentified_ResponseShapeAndCursor(t *testing.T) {
 	fixture.unidentified.rows = []apiserver.UnidentifiedRow{
 		{
 			MediaObjectID: 1, RootFolderID: 1, RelPath: "Unsorted/one.mp3",
-			Candidates:  []apiserver.UnidentifiedCandidate{{Strategy: "embedded-tag", Confidence: 0.4}},
+			Candidates:  []apiserver.UnidentifiedCandidate{{Strategy: "embedded-tag", Confidence: 0.4, Title: "Harbour Scene", Date: "2024-03-05", Studio: "Nimbus Studio"}},
 			FirstSeenAt: fixture.clock.Now(), LastSeenAt: fixture.clock.Now(),
 		},
 		{
@@ -291,6 +291,8 @@ func TestListUnidentified_ResponseShapeAndCursor(t *testing.T) {
 			Candidates    []struct {
 				Strategy   string  `json:"strategy"`
 				Confidence float64 `json:"confidence"`
+				Date       string  `json:"date"`
+				Studio     string  `json:"studio"`
 			} `json:"candidates"`
 		} `json:"items"`
 		NextCursor string `json:"next_cursor"`
@@ -301,7 +303,7 @@ func TestListUnidentified_ResponseShapeAndCursor(t *testing.T) {
 	if len(body.Items) != 1 || body.Items[0].RelPath != "Unsorted/one.mp3" {
 		t.Fatalf("items = %+v, want exactly the first row (limit=1)", body.Items)
 	}
-	if len(body.Items[0].Candidates) != 1 || body.Items[0].Candidates[0].Strategy != "embedded-tag" {
+	if len(body.Items[0].Candidates) != 1 || body.Items[0].Candidates[0].Strategy != "embedded-tag" || body.Items[0].Candidates[0].Date != "2024-03-05" || body.Items[0].Candidates[0].Studio != "Nimbus Studio" {
 		t.Errorf("candidates = %+v, want the one queued candidate", body.Items[0].Candidates)
 	}
 	if body.NextCursor == "" {

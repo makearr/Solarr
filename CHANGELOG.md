@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Adult: a scene waiting in Review or Unidentified shows each suggested hit with its date and studio, as the Import screen does.
 - Conversion: a file that was moved or renamed no longer makes its detail show the old path or Restore answer "folder not reachable"; Restore failures are now shown on the page; a blocked file shows why; the "saved" size in the status bar reads like the file lists (5.9 MB).
 - Comics: pages that are only downscaled keep their own format (a PNG stays a real PNG instead of WebP bytes under a .png name).
 - Comics: a series imported from Kapowarr or Mylar3 that no provider lists issues of arrives monitored when the choice says so; picking a series for a file by hand makes the issue the file names when the series has no issue list; a Grand Comics Database series is found by a year it was publishing in, not only the year it began.

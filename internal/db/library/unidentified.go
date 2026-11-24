@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -43,6 +44,9 @@ type Candidate struct {
 	Confidence float64 `json:"confidence"`
 	// Title is what the candidate is called, when the strategy knows (a searched series' name).
 	Title string `json:"title,omitempty"`
+	// Date and Studio are what the candidate was released on and by, when its evidence names them (a searched scene).
+	Date   string `json:"date,omitempty"`
+	Studio string `json:"studio,omitempty"`
 }
 
 // Row is one page entry.
@@ -63,9 +67,13 @@ func encodeCandidates(candidates []model.Identification) (string, error) {
 	for index, candidate := range candidates {
 		entry := Candidate{Strategy: candidate.Strategy, Confidence: candidate.Confidence}
 		for _, evidence := range candidate.Evidence {
-			if evidence.Kind == "parse" && evidence.Detail != "" {
+			switch {
+			case evidence.Kind == "parse" && evidence.Detail != "" && entry.Title == "":
 				entry.Title = evidence.Detail
-				break
+			case evidence.Kind == "date" && entry.Date == "":
+				entry.Date = evidence.Detail
+			case evidence.Kind == "studio" && entry.Studio == "":
+				entry.Studio = evidence.Detail
 			}
 		}
 		if candidate.ExternalID != nil {
@@ -293,8 +301,18 @@ func UnitCandidates(stored string) ([]model.Identification, error) {
 		if len(whole[index].Evidence) == 0 && candidate.Title != "" {
 			whole[index].Evidence = []model.MatchEvidence{{Kind: "parse", Detail: candidate.Title}}
 		}
+		if candidate.Date != "" && !hasEvidence(whole[index].Evidence, "date") {
+			whole[index].Evidence = append(whole[index].Evidence, model.MatchEvidence{Kind: "date", Detail: candidate.Date})
+		}
+		if candidate.Studio != "" && !hasEvidence(whole[index].Evidence, "studio") {
+			whole[index].Evidence = append(whole[index].Evidence, model.MatchEvidence{Kind: "studio", Detail: candidate.Studio})
+		}
 	}
 	return whole, nil
+}
+
+func hasEvidence(evidence []model.MatchEvidence, kind string) bool {
+	return slices.ContainsFunc(evidence, func(one model.MatchEvidence) bool { return one.Kind == kind })
 }
 
 // CandidatesJSON is how a unit's ranked suggestions are stored, "[]" when there are none.

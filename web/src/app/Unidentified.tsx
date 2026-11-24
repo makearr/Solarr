@@ -242,7 +242,10 @@ function describeBest(file: UnidentifiedFile): string {
   const best = file.candidates[0];
   if (best === undefined) return "No match found";
   const confidence = Math.round(best.confidence * 100);
-  if (best.title) return `${best.title} (${confidence}%)`;
+  if (best.title) {
+    const facts = [best.date && t("identify.dated", { date: best.date }), best.studio].filter(Boolean).join(", ");
+    return `${best.title}${facts ? ` - ${facts}` : ""} (${confidence}%)`;
+  }
   return `${best.provider ?? best.strategy} (${confidence}%)`;
 }
 

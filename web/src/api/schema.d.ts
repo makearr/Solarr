@@ -11297,6 +11297,10 @@ export interface components {
             external_id?: string;
             /** @description What the candidate is called */
             title?: string;
+            /** @description The date the candidate was released */
+            date?: string;
+            /** @description The studio that released the candidate */
+            studio?: string;
             confidence: number;
         };
         UnidentifiedFile: {
