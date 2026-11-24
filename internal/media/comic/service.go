@@ -196,7 +196,7 @@ func (s Service) searchOne(ctx context.Context, key, kind, query string) []Candi
 		if s.GCD == nil || isMangaKind(kind) {
 			return nil
 		}
-		found, _, err := s.GCD.SearchSeries(ctx, query, 1)
+		found, err := s.searchGCD(ctx, query, nil)
 		if err != nil {
 			s.warn(key, query, err)
 		}

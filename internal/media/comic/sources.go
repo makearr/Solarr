@@ -274,13 +274,16 @@ func (s Sources) askGCD(ctx context.Context, series *Series, hint Hint) {
 		if title == "" {
 			return
 		}
-		found, _, err := s.GCD.SearchSeries(ctx, title, 1)
+		matches := func(candidate gcd.Series) bool {
+			return sameTitle(candidate.Name, title) && (hint.Year == 0 || candidate.YearBegan == hint.Year)
+		}
+		found, err := s.searchGCD(ctx, title, matches)
 		if err != nil {
 			s.warn(settings.ComicSourceGCD, title, err)
 			return
 		}
 		for _, candidate := range found {
-			if sameTitle(candidate.Name, title) && (hint.Year == 0 || candidate.YearBegan == hint.Year) {
+			if matches(candidate) {
 				id = candidate.ID
 				break
 			}
@@ -301,6 +304,25 @@ func (s Sources) askGCD(ctx context.Context, series *Series, hint Hint) {
 	if len(series.Parts) == 0 {
 		series.mergeParts(s.gcdIssues(ctx, held.IssueIDs))
 	}
+}
+
+// maxGCDPages bounds a name search: a short name matches many series and the one wanted is often not on the first page.
+const maxGCDPages = 3
+
+// searchGCD reads a name search page by page until a result satisfies stop, the pages run out or maxGCDPages is read.
+func (s Sources) searchGCD(ctx context.Context, name string, stop func(gcd.Series) bool) ([]gcd.Series, error) {
+	var all []gcd.Series
+	for page := 1; page <= maxGCDPages; page++ {
+		found, more, err := s.GCD.SearchSeries(ctx, name, page)
+		if err != nil {
+			return all, err
+		}
+		all = append(all, found...)
+		if !more || (stop != nil && slices.ContainsFunc(found, stop)) {
+			break
+		}
+	}
+	return all, nil
 }
 
 // maxGCDIssues bounds the issues read of one series per refresh: GCD lists a series' issues by address only, so each is a request on the paced bucket.

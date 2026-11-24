@@ -3,6 +3,7 @@ package comic
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/metadata/gcd"
@@ -49,5 +50,49 @@ func TestAGCDOnlySeriesGetsItsIssuesWithoutVariantsAndWithTidyDates(t *testing.T
 	source.askGCD(t.Context(), other, Hint{})
 	if len(asked) != 0 {
 		t.Fatalf("issues read although a list was held: %v", asked)
+	}
+}
+
+// pagedGCD lists a name search over several pages and records which pages were read.
+type pagedGCD struct {
+	pages [][]gcd.Series
+	read  *[]int
+}
+
+func (p pagedGCD) SearchSeries(_ context.Context, _ string, page int) ([]gcd.Series, bool, error) {
+	*p.read = append(*p.read, page)
+	if page > len(p.pages) {
+		return nil, false, nil
+	}
+	return p.pages[page-1], page < len(p.pages), nil
+}
+func (p pagedGCD) Series(_ context.Context, id int) (gcd.Series, error) {
+	return gcd.Series{ID: id, Name: "Wanted Tales", YearBegan: 1990}, nil
+}
+func (p pagedGCD) Issue(context.Context, int) (gcd.Issue, error) { return gcd.Issue{}, nil }
+
+func TestAGCDNameSearchReadsLaterPagesUntilTheSeriesIsFound(t *testing.T) {
+	var read []int
+	source := Sources{GCD: pagedGCD{read: &read, pages: [][]gcd.Series{
+		{{ID: 1, Name: "Wanted Tales Annual", YearBegan: 1990}},
+		{{ID: 2, Name: "Wanted Tales", YearBegan: 1990}},
+		{{ID: 3, Name: "Wanted Tales", YearBegan: 1990}},
+	}}}
+	series := &Series{IDs: map[string]string{}}
+	source.askGCD(t.Context(), series, Hint{Title: "Wanted Tales", Year: 1990})
+	if series.IDs[ProviderGCD] != "2" || !slices.Equal(read, []int{1, 2}) {
+		t.Errorf("id %q after pages %v; want series 2 found on page 2 and page 3 never read", series.IDs[ProviderGCD], read)
+	}
+}
+
+func TestAGCDNameSearchStopsAtThePageBound(t *testing.T) {
+	var read []int
+	pages := make([][]gcd.Series, 6)
+	for i := range pages {
+		pages[i] = []gcd.Series{{ID: i + 1, Name: "Other", YearBegan: 1990}}
+	}
+	found, err := (Sources{GCD: pagedGCD{read: &read, pages: pages}}).searchGCD(t.Context(), "x", nil)
+	if err != nil || len(found) != 3 || !slices.Equal(read, []int{1, 2, 3}) {
+		t.Errorf("found %d, pages %v, error %v; want 3 results from pages 1 to 3", len(found), read, err)
 	}
 }

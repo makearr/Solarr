@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Comics: a series name search at the Grand Comics Database reads up to three result pages, so a short name whose series is not on the first page is found, both when a series is identified and in the manual search.
 - Freeleech counts as a small score bonus: a release the indexer reports as free (or half free) edges out an otherwise equal one. The weight is a "Freeleech bonus" field on each quality profile (default 1, 0 turns it off); it never outranks a better quality tier.
 - Comics: a comics library can convert its files like audio and video do (Settings > Transcode): cbr, cb7 and cbt archives become cbz in natural page order with ComicInfo kept, pages are re-encoded to the target's image format and quality and brought down to its page size (never enlarged), and a repack that would save under 10 percent is skipped; the original goes to the recycle bin and can be restored.
 - Adult: a hit whose own season and episode numbering (S41:E2) differs from the file's (S41E3) is no longer taken, and a hit that agrees wins a tie between same-titled scenes.
