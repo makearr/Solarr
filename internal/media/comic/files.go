@@ -65,9 +65,7 @@ func (f Files) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, p
 		if len(keys) == 0 {
 			continue
 		}
-		if manga {
-			f.Resolver.Service.EnsureParts(ctx, categoryID, workID, keys)
-		}
+		f.Resolver.Service.EnsureParts(ctx, categoryID, workID, keys)
 		result, err := f.Resolver.Service.Series.AttachFiles(ctx, now, workID, waiting.RootFolderID, []library.SeriesFileLink{{MediaObjectID: id, Parts: keys}})
 		if err != nil {
 			return workID, placed, err

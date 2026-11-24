@@ -417,3 +417,24 @@ func TestTranscodeItems_AReAnalysisLeavesAFinishedItemDone(t *testing.T) {
 	}
 	assertCountersMatchRows(t, items, opened, 1)
 }
+
+func TestTranscodeItems_PathsAnswerTheLivePathAndNotTheOnesTheFileLeftBehind(t *testing.T) {
+	items, opened := seedTranscode(t)
+	if _, err := opened.WriteDB().ExecContext(t.Context(), `UPDATE library_path SET missing_since = 5 WHERE media_object_id = 2`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := opened.WriteDB().ExecContext(t.Context(), `INSERT INTO library_path (media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at) VALUES (2, 7, 'show a/moved.mkv', 'copy', 0, 2)`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := items.Paths(t.Context(), 2)
+	if err != nil || len(got) != 1 || got[0].RelPath != "show a/moved.mkv" || got[0].Missing {
+		t.Errorf("paths = %+v, %v; want only the live path", got, err)
+	}
+	if _, err := opened.WriteDB().ExecContext(t.Context(), `UPDATE library_path SET missing_since = 6 WHERE media_object_id = 2`); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = items.Paths(t.Context(), 2)
+	if len(got) != 2 || !got[0].Missing || !got[1].Missing {
+		t.Errorf("paths = %+v; want both, marked missing, when none is live", got)
+	}
+}

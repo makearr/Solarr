@@ -9,6 +9,7 @@ import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { t, type MessageKey } from "@/lib/i18n";
 import { lastErrorText, reasonText } from "@/lib/transcodeReason";
+import { problemText } from "@/lib/useNotifications";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { inputStyle, labelStyle } from "@/ui/form";
@@ -37,6 +38,7 @@ export function TranscodeFiles() {
   const [detail, setDetail] = useState<Item | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [notice, setNotice] = useState("");
+  const [failure, setFailure] = useState("");
   const list = useLibraryList<Item>(
     {
       name: "transcode-files",
@@ -80,7 +82,9 @@ export function TranscodeFiles() {
       const { error } = await api.POST("/transcode/items/{media_object_id}/restore", { params: { path: { media_object_id: item.media_object_id } } });
       if (error) throw error;
     },
+    onError: (error) => setFailure(problemText(error)),
     onSuccess: () => {
+      setFailure("");
       setNotice(t("transcode.files.restored"));
       void queryClient.invalidateQueries({ queryKey: ["transcode-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["transcode-files"] });
@@ -98,7 +102,7 @@ export function TranscodeFiles() {
         item.state === "done" ? `${formatSize(item.original_size_bytes ?? 0)} → ${formatSize(item.result_size_bytes ?? 0)}` : formatSize(item.original_size_bytes ?? 0),
     },
     { key: "attempts", header: t("transcode.files.attempts"), width: "4rem", render: (item) => (item.attempts > 0 ? item.attempts : item.pass > 1 ? item.pass : "") },
-    { key: "error", header: t("transcode.files.error"), render: (item) => <span className="block truncate text-danger" title={lastErrorText(item.last_error ?? "")}>{lastErrorText(item.last_error ?? "")}</span> },
+    { key: "error", header: t("transcode.files.error"), render: (item) => <span className="block truncate text-danger" title={lastErrorText(item.last_error || item.failure_code || "")}>{lastErrorText(item.last_error || item.failure_code || "")}</span> },
     {
       key: "actions",
       header: "",
@@ -174,6 +178,7 @@ export function TranscodeFiles() {
           </button>
         </div>
       </div>
+      {failure && <p role="alert" className="px-3 py-1 text-xs text-danger">{failure}</p>}
       {notice && <p role="status" className="px-3 py-1 text-xs text-ok">{notice}</p>}
       <div className="min-h-0 flex-1">
         {list.isLoading && <p className="p-6 text-sm text-ink-muted">{t("transcode.files.loading")}</p>}
@@ -217,6 +222,7 @@ function DetailDialog({ id, onClose }: { id: number; onClose: () => void }) {
             {item.data?.reasons.map((reason, index) => (
               <li key={index}>{reasonText(reason)}</li>
             ))}
+            {item.data && (item.data.last_error || item.data.failure_code) && <li className="text-danger">{lastErrorText(item.data.last_error || item.data.failure_code || "")}</li>}
           </ul>
         </section>
         <section>

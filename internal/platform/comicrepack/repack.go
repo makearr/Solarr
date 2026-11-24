@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/png"
 	"io"
 	"path"
 	"slices"
@@ -252,6 +253,12 @@ func encode(img image.Image, format string, quality int) ([]byte, error) {
 		return artwork.EncodeJPEGAt(img, quality)
 	}
 	var buf bytes.Buffer
+	if format == "png" {
+		if err := png.Encode(&buf, img); err != nil {
+			return nil, fmt.Errorf("comicrepack: encode png: %w", err)
+		}
+		return buf.Bytes(), nil
+	}
 	if err := webp.Encode(&buf, img, &webp.Options{Compression: webp.CompressionLossy, Quality: quality}); err != nil {
 		return nil, fmt.Errorf("comicrepack: encode webp: %w", err)
 	}

@@ -178,9 +178,12 @@ func TestRepack_DownscalesToThePageSizeAndNeverUpscales(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := readZip(t, fsys, "/lib/out.cbz")
-	config, _, err := image.DecodeConfig(bytes.NewReader(got["1.png"]))
+	config, format, err := image.DecodeConfig(bytes.NewReader(got["1.png"]))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if format != "png" {
+		t.Errorf("the page named .png holds %s", format)
 	}
 	if config.Width != 200 || config.Height != 300 {
 		t.Errorf("big page is %dx%d, want 200x300", config.Width, config.Height)

@@ -270,3 +270,55 @@ func TestASeriesNoProviderListsPartsOfIsStillInItsLibrary(t *testing.T) {
 		t.Fatalf("items = %+v, %v: the series must hold its volume item so a library lists it", items, err)
 	}
 }
+
+func TestASeriesNoProviderListsPartsOfIsMonitoredUnlessTheChoiceWasNone(t *testing.T) {
+	for option, want := range map[MonitorOption]int64{MonitorAll: 1, MonitorNone: 0} {
+		service := comicService(t, Sources{AniList: fakeAniList{bare: true}})
+		service.KindOf = func(int64) string { return KindManga }
+		service.ProvidersOf = func(int64) []string { return []string{settings.TVSourceAniList} }
+		result, err := service.Add(t.Context(), AddRequest{IDs: map[string]string{ProviderAniListManga: "5"}, CategoryID: 3, ProfileID: 1, Monitor: option})
+		if err != nil {
+			t.Fatal(err)
+		}
+		items, err := service.Desired.AlbumItemsForWork(t.Context(), result.WorkID)
+		if err != nil || len(items) != 1 || items[0].Monitored != want {
+			t.Errorf("%s: items = %+v, %v; want monitored %d", option, items, err, want)
+		}
+	}
+}
+
+func TestEnsurePartsMakesTheIssueAFileNamesOnlyForASeriesWithNoListedIssues(t *testing.T) {
+	refs := func(service Service, workID int64) []string {
+		parts, err := service.Desired.AllParts(t.Context(), workID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, part := range parts {
+			out = append(out, part.MediaRef)
+		}
+		return out
+	}
+	bare := comicService(t, Sources{AniList: fakeAniList{bare: true}})
+	bare.KindOf = func(int64) string { return KindManga }
+	bare.ProvidersOf = func(int64) []string { return []string{settings.TVSourceAniList} }
+	added, err := bare.Add(t.Context(), AddRequest{IDs: map[string]string{ProviderAniListManga: "5"}, CategoryID: 3, ProfileID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bare.EnsureParts(t.Context(), 3, added.WorkID, []library.PartKey{{MediaRef: "issue:1"}})
+	if got := refs(bare, added.WorkID); !reflect.DeepEqual(got, []string{"issue:1"}) {
+		t.Errorf("bare series parts = %v, want issue:1 made from the file", got)
+	}
+
+	listed := comicService(t, Sources{ComicVine: fakeComicVine{issues: lanternIssues}, Metron: fakeMetron{}})
+	held, err := listed.Add(t.Context(), AddRequest{IDs: map[string]string{ProviderComicVine: "4050"}, CategoryID: 1, ProfileID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := refs(listed, held.WorkID)
+	listed.EnsureParts(t.Context(), 1, held.WorkID, []library.PartKey{{MediaRef: "issue:9999"}})
+	if after := refs(listed, held.WorkID); !reflect.DeepEqual(before, after) {
+		t.Errorf("parts of a listed series changed: %v to %v", before, after)
+	}
+}

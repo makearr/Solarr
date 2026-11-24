@@ -275,7 +275,7 @@ func (s Sources) askGCD(ctx context.Context, series *Series, hint Hint) {
 			return
 		}
 		matches := func(candidate gcd.Series) bool {
-			return sameTitle(candidate.Name, title) && (hint.Year == 0 || candidate.YearBegan == hint.Year)
+			return sameTitle(candidate.Name, title) && runsIn(candidate, hint.Year)
 		}
 		found, err := s.searchGCD(ctx, title, matches)
 		if err != nil {
@@ -304,6 +304,11 @@ func (s Sources) askGCD(ctx context.Context, series *Series, hint Hint) {
 	if len(series.Parts) == 0 {
 		series.mergeParts(s.gcdIssues(ctx, held.IssueIDs))
 	}
+}
+
+// runsIn says a series was publishing in the year a file names: its first issue is not the year every file carries.
+func runsIn(series gcd.Series, year int) bool {
+	return year == 0 || (year >= series.YearBegan && (series.YearEnded == 0 || year <= series.YearEnded))
 }
 
 // maxGCDPages bounds a name search: a short name matches many series and the one wanted is often not on the first page.

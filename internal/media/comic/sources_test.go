@@ -96,3 +96,24 @@ func TestAGCDNameSearchStopsAtThePageBound(t *testing.T) {
 		t.Errorf("found %d, pages %v, error %v; want 3 results from pages 1 to 3", len(found), read, err)
 	}
 }
+
+func TestAGCDSeriesIsFoundByAYearItWasPublishingIn(t *testing.T) {
+	for name, tc := range map[string]struct {
+		series gcd.Series
+		year   int
+		want   string
+	}{
+		"ongoing, later year":   {gcd.Series{ID: 4, Name: "Wanted Tales", YearBegan: 2020}, 2024, "4"},
+		"ended before the year": {gcd.Series{ID: 4, Name: "Wanted Tales", YearBegan: 2010, YearEnded: 2015}, 2024, ""},
+		"not begun yet":         {gcd.Series{ID: 4, Name: "Wanted Tales", YearBegan: 2030}, 2024, ""},
+		"no year in the name":   {gcd.Series{ID: 4, Name: "Wanted Tales", YearBegan: 2030}, 0, "4"},
+	} {
+		var read []int
+		source := Sources{GCD: pagedGCD{read: &read, pages: [][]gcd.Series{{tc.series}}}}
+		series := &Series{IDs: map[string]string{}}
+		source.askGCD(t.Context(), series, Hint{Title: "Wanted Tales", Year: tc.year})
+		if series.IDs[ProviderGCD] != tc.want {
+			t.Errorf("%s: id %q, want %q", name, series.IDs[ProviderGCD], tc.want)
+		}
+	}
+}

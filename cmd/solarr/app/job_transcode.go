@@ -63,6 +63,20 @@ func (c transcodeComics) ProbeComic(ctx context.Context, absolute string) (trans
 	return transcoder.ComicFacts{Pages: pages.Count, MedianLong: pages.MedianLong, MedianShort: pages.MedianShort, ImageFormat: pages.Format}, nil
 }
 
+// sizeText writes a byte count as the file lists do: decimal units, one decimal under ten.
+func sizeText(bytes int64) string {
+	units := []string{"B", "KB", "MB", "GB", "TB"}
+	value, unit := float64(bytes), 0
+	for value >= 1000 && unit < len(units)-1 {
+		value /= 1000
+		unit++
+	}
+	if value >= 10 || unit == 0 {
+		return fmt.Sprintf("%.0f %s", value, units[unit])
+	}
+	return fmt.Sprintf("%.1f %s", value, units[unit])
+}
+
 // transcodeBin adds the lookup by original path to the recycle bin.
 type transcodeBin struct{ library.RecycleBin }
 
@@ -126,7 +140,7 @@ func (r transcodeReporter) Converted(ctx context.Context, converted transcoder.C
 	saved := converted.OriginalBytes - converted.ResultBytes
 	_, err = r.history.Append(ctx, statistics.HistoryEntry{
 		At: converted.At.Unix(), Kind: transcodeHistoryKind, CategoryID: converted.CategoryID,
-		ReleaseTitle: path.Base(converted.Path), Detail: fmt.Sprintf("%s, %d bytes saved", converted.Engine, saved),
+		ReleaseTitle: path.Base(converted.Path), Detail: fmt.Sprintf("%s, %s saved", converted.Engine, sizeText(saved)),
 	})
 	if err != nil {
 		r.logger.WarnContext(ctx, "record conversion history", slog.Any("error", err))

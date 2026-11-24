@@ -225,11 +225,19 @@ func (t TranscodeItems) Paths(ctx context.Context, mediaObjectID int64) ([]Objec
 	if err != nil {
 		return nil, fmt.Errorf("library: paths of file %d: %w", mediaObjectID, err)
 	}
-	out := make([]ObjectPath, len(rows))
-	for i, row := range rows {
-		out[i] = ObjectPath{RootFolderID: row.RootFolderID, RelPath: row.RelPath, Missing: row.MissingSince.Valid}
+	var live, all []ObjectPath
+	for _, row := range rows {
+		one := ObjectPath{RootFolderID: row.RootFolderID, RelPath: row.RelPath, Missing: row.MissingSince.Valid}
+		all = append(all, one)
+		if !one.Missing {
+			live = append(live, one)
+		}
 	}
-	return out, nil
+	// A file that moved keeps its old rows marked missing; they say nothing about where it is now.
+	if len(live) > 0 {
+		return live, nil
+	}
+	return all, nil
 }
 
 // ReplacedFile is a conversion that took the original's place: the new bytes, where they are, and how it went.

@@ -304,7 +304,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if err != nil {
 		return AddResult{}, err
 	}
-	if err := s.ensureItems(ctx, stored.WorkID, request.CategoryID, request.ProfileID, request.AddedBy, series.primaryKind(), series.Parts, Monitored(series.Parts, monitor, now)); err != nil {
+	if err := s.ensureItems(ctx, stored.WorkID, request.CategoryID, request.ProfileID, request.AddedBy, series.primaryKind(), series.Parts, Monitored(series.Parts, monitor, now), monitor != MonitorNone); err != nil {
 		return AddResult{}, err
 	}
 	return AddResult{WorkID: stored.WorkID, Created: stored.Created, Series: series}, nil
@@ -313,11 +313,12 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 // ensureItems gives the series one wanted item for each kind of part it holds (issues, annuals, volumes, loose chapters),
 // as a TV series has one per season: a file covers parts of the item its kind names. An item that exists keeps its
 // own monitoring (Invariant 71).
-func (s Service) ensureItems(ctx context.Context, workID, categoryID, profileID int64, addedBy *int64, primary string, parts []Part, wanted map[string]bool) error {
+func (s Service) ensureItems(ctx context.Context, workID, categoryID, profileID int64, addedBy *int64, primary string, parts []Part, wanted map[string]bool, unlistedMonitored bool) error {
 	// The series' main kind of part always has an item, so a series whose parts no provider lists yet is still in its library.
 	monitored := map[string]bool{}
 	if primary != "" {
-		monitored[primary] = false
+		// A series no provider lists parts of has nothing to monitor but its main item, which follows the choice.
+		monitored[primary] = unlistedMonitored && len(parts) == 0
 	}
 	for _, part := range parts {
 		monitored[part.Kind] = monitored[part.Kind] || wanted[part.Ref()]
@@ -379,7 +380,7 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Series,
 	for _, part := range series.Parts {
 		kept[part.Ref()] = monitored && part.Kind != PartChapter
 	}
-	if err := s.ensureItems(ctx, workID, categoryID, s.profileOf(ctx, workID, categoryID), nil, series.primaryKind(), series.Parts, kept); err != nil {
+	if err := s.ensureItems(ctx, workID, categoryID, s.profileOf(ctx, workID, categoryID), nil, series.primaryKind(), series.Parts, kept, false); err != nil {
 		return Series{}, err
 	}
 	return series, nil
@@ -464,13 +465,21 @@ func (s Service) IsExcluded(ctx context.Context, ids map[string]string) bool {
 	return excluded
 }
 
-// EnsureParts makes the parts a manga's files name that no provider listed: a volume of a series whose count is unknown, a
-// chapter no volume holds. Parts appear as files or providers reveal them.
+// EnsureParts makes the parts a file names that no provider listed: a volume of a series whose count is unknown, a
+// chapter no volume holds, an issue of a series no provider listed issues of. Parts appear as files or providers reveal them.
 func (s Service) EnsureParts(ctx context.Context, categoryID, workID int64, keys []library.PartKey) {
 	var missing []Part
+	listed := map[string]bool{}
+	if parts, err := s.Desired.AllParts(ctx, workID); err == nil {
+		for _, part := range parts {
+			kind, _, _ := strings.Cut(part.MediaRef, ":")
+			listed[kind] = true
+		}
+	}
 	for _, key := range keys {
 		kind, number, _ := strings.Cut(key.MediaRef, ":")
-		if kind != PartChapter && kind != PartVolume {
+		// An issue is made from a file only for a series no provider listed issues of; a listed series has the issues it has.
+		if kind != PartChapter && kind != PartVolume && (kind != PartIssue || listed[PartIssue]) {
 			continue
 		}
 		if _, absent, _ := s.Series.ResolveParts(ctx, workID, []library.PartKey{key}); absent > 0 {
@@ -497,7 +506,7 @@ func (s Service) EnsureParts(ctx context.Context, categoryID, workID int64, keys
 		return
 	}
 	profile := s.profileOf(ctx, workID, categoryID)
-	if err := s.ensureItems(ctx, workID, categoryID, profile, nil, "", missing, map[string]bool{}); err != nil {
+	if err := s.ensureItems(ctx, workID, categoryID, profile, nil, "", missing, map[string]bool{}, false); err != nil {
 		s.warn("part items", strconv.FormatInt(workID, 10), err)
 	}
 }
