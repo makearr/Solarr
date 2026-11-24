@@ -303,3 +303,34 @@ func TestTranscodeItems_FactsReadTheMeasuredAttributesAndFlagAFileNeverMeasured(
 		t.Fatalf("Facts = %+v\nwant %+v", got, want)
 	}
 }
+
+func TestTranscodeItems_ReplaceBytesGivesTheObjectItsNewBytesAndPathAndFinishesTheItemTogether(t *testing.T) {
+	items, opened := seedTranscode(t)
+	if err := items.Judge(t.Context(), []library.JudgedTranscodeItem{judge(1, "video", library.TranscodeNeeded)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := items.Transition(t.Context(), 1, library.TranscodeNeeded, library.TranscodeRunning, nil); err != nil {
+		t.Fatal(err)
+	}
+	err := items.ReplaceBytes(t.Context(), library.ReplacedFile{
+		MediaObjectID: 1, RootFolderID: 7, OldRelPath: "show b/e1.mkv", NewRelPath: "show b/e1.mp4", SizeBytes: 120, QuickHash: "new",
+		Result: library.TranscodeResult{OriginalSizeBytes: 300, ResultSizeBytes: 120, ResultRatioPct: 40, Engine: "software", FinishedAt: 99},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var size int64
+	var hash, path string
+	read := opened.Read()
+	if err := read.QueryRowContext(t.Context(), `SELECT size_bytes, quick_hash FROM media_object WHERE id = 1`).Scan(&size, &hash); err != nil {
+		t.Fatal(err)
+	}
+	if err := read.QueryRowContext(t.Context(), `SELECT rel_path FROM library_path WHERE media_object_id = 1`).Scan(&path); err != nil {
+		t.Fatal(err)
+	}
+	item, _, _ := items.Get(t.Context(), 1)
+	if size != 120 || hash != "new" || path != "show b/e1.mp4" || item.State != library.TranscodeDone || item.ResultSizeBytes != 120 || item.FinishedAt != 99 {
+		t.Errorf("size %d hash %q path %q item %+v, want the converted bytes at the new path and a done item", size, hash, path, item)
+	}
+	assertCountersMatchRows(t, items, opened, 1)
+}

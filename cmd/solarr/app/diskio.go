@@ -37,6 +37,7 @@ var jobClasses = map[jobs.Type]iogate.Class{
 	"library.probe":               iogate.ClassProbe,
 	"library.statistics":          iogate.ClassStatistics,
 	"library.recycle_bin_cleanup": iogate.ClassRecycleBin,
+	"transcode.file":              iogate.ClassTranscode,
 	"library.video_pictures":      iogate.ClassPreviews, "library.preview_cleanup": iogate.ClassPreviews,
 }
 
@@ -54,6 +55,7 @@ var stallPolicies = map[iogate.Class]jobs.StallPolicy{
 	iogate.ClassStatistics:   {Floor: 20 * time.Minute, Restart: 5 * time.Minute},
 	iogate.ClassRecycleBin:   {Floor: 20 * time.Minute, Restart: 5 * time.Minute},
 	iogate.ClassPreviews:     {Floor: 30 * time.Minute, Restart: 15 * time.Minute},
+	iogate.ClassTranscode:    {Floor: 60 * time.Minute, Restart: 15 * time.Minute},
 }
 
 // StallPolicy is jobs.Watchdog: every job with a disk class is watched.

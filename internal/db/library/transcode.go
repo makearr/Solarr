@@ -162,45 +162,115 @@ func (t TranscodeItems) Get(ctx context.Context, mediaObjectID int64) (Transcode
 func (t TranscodeItems) Transition(ctx context.Context, mediaObjectID int64, from, to TranscodeState, mutate func(*TranscodeItem)) error {
 	now := t.clock.Now().Unix()
 	err := t.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		row, err := queries.GetTranscodeItem(ctx, mediaObjectID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNoTranscodeItem
-		}
-		if err != nil {
-			return err
-		}
-		if TranscodeState(row.State) != from {
-			return ErrTranscodeState
-		}
-		item := itemOf(row)
-		item.State = to
-		if mutate != nil {
-			mutate(&item)
-		}
-		item.State = to
-		interrupted := int64(0)
-		if item.Interrupted {
-			interrupted = 1
-		}
-		err = queries.SetTranscodeItemState(ctx, librarydb.SetTranscodeItemStateParams{
-			State: string(item.State), Lane: item.Lane, OverrideJson: item.OverrideJSON, Attempts: item.Attempts, Pass: item.Pass,
-			Interrupted: interrupted, FailureCode: item.FailureCode, LastError: item.LastError, LastRunSeq: item.LastRunSeq, UpdatedAt: now,
-			MediaObjectID: mediaObjectID,
-		})
-		if err != nil {
-			return err
-		}
-		if from == to {
-			return nil
-		}
-		if err := adjustState(ctx, queries, item.CategoryID, from, -1, now); err != nil {
-			return err
-		}
-		return adjustState(ctx, queries, item.CategoryID, to, 1, now)
+		return transition(ctx, librarydb.New(tx), mediaObjectID, from, to, mutate, now)
 	})
 	if err != nil {
 		return fmt.Errorf("library: transcode item %d %s to %s: %w", mediaObjectID, from, to, err)
+	}
+	return nil
+}
+
+func transition(ctx context.Context, queries *librarydb.Queries, mediaObjectID int64, from, to TranscodeState, mutate func(*TranscodeItem), now int64) error {
+	row, err := queries.GetTranscodeItem(ctx, mediaObjectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNoTranscodeItem
+	}
+	if err != nil {
+		return err
+	}
+	if TranscodeState(row.State) != from {
+		return ErrTranscodeState
+	}
+	item := itemOf(row)
+	if mutate != nil {
+		mutate(&item)
+	}
+	interrupted := int64(0)
+	if item.Interrupted {
+		interrupted = 1
+	}
+	err = queries.SetTranscodeItemState(ctx, librarydb.SetTranscodeItemStateParams{
+		State: string(to), Lane: item.Lane, OverrideJson: item.OverrideJSON, Attempts: item.Attempts, Pass: item.Pass,
+		Interrupted: interrupted, FailureCode: item.FailureCode, LastError: item.LastError, LastRunSeq: item.LastRunSeq, UpdatedAt: now,
+		MediaObjectID: mediaObjectID,
+	})
+	if err != nil || from == to {
+		return err
+	}
+	if err := adjustState(ctx, queries, item.CategoryID, from, -1, now); err != nil {
+		return err
+	}
+	return adjustState(ctx, queries, item.CategoryID, to, 1, now)
+}
+
+// SetJudgement stores the reasons, plan and warnings a conversion's own analysis or check found.
+func (t TranscodeItems) SetJudgement(ctx context.Context, mediaObjectID int64, reasonsJSON, planJSON, warningsJSON string) error {
+	return t.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetTranscodeItemJudgement(ctx, librarydb.SetTranscodeItemJudgementParams{
+			ReasonsJson: reasonsJSON, PlanJson: planJSON, WarningsJson: warningsJSON, UpdatedAt: t.clock.Now().Unix(), MediaObjectID: mediaObjectID,
+		})
+	})
+}
+
+// ObjectPath is one place a file is in the library.
+type ObjectPath struct {
+	RootFolderID int64
+	RelPath      string
+	Missing      bool
+}
+
+// Paths answers every path of a file, the primary one first.
+func (t TranscodeItems) Paths(ctx context.Context, mediaObjectID int64) ([]ObjectPath, error) {
+	rows, err := librarydb.New(t.store.Read()).ListPathsForObject(ctx, mediaObjectID)
+	if err != nil {
+		return nil, fmt.Errorf("library: paths of file %d: %w", mediaObjectID, err)
+	}
+	out := make([]ObjectPath, len(rows))
+	for i, row := range rows {
+		out[i] = ObjectPath{RootFolderID: row.RootFolderID, RelPath: row.RelPath, Missing: row.MissingSince.Valid}
+	}
+	return out, nil
+}
+
+// ReplacedFile is a conversion that took the original's place: the new bytes, where they are, and how it went.
+type ReplacedFile struct {
+	MediaObjectID, RootFolderID int64
+	OldRelPath, NewRelPath      string
+	SizeBytes                   int64
+	QuickHash                   string
+	Result                      TranscodeResult
+}
+
+// ReplaceBytes gives the file its new size, hash and path and finishes its item, all in one transaction, so the
+// library never holds the original's facts for the converted bytes; the probe measures the new bytes next.
+func (t TranscodeItems) ReplaceBytes(ctx context.Context, replaced ReplacedFile) error {
+	now := t.clock.Now().Unix()
+	err := t.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if err := queries.SetMediaObjectContent(ctx, librarydb.SetMediaObjectContentParams{SizeBytes: replaced.SizeBytes, QuickHash: replaced.QuickHash, ID: replaced.MediaObjectID}); err != nil {
+			return err
+		}
+		if replaced.NewRelPath != replaced.OldRelPath {
+			if _, err := queries.RelocateLibraryPath(ctx, librarydb.RelocateLibraryPathParams{
+				NewRootFolderID: replaced.RootFolderID, NewRelPath: replaced.NewRelPath, OldRootFolderID: replaced.RootFolderID, OldRelPath: replaced.OldRelPath,
+			}); err != nil {
+				return err
+			}
+		}
+		if err := transition(ctx, queries, replaced.MediaObjectID, TranscodeRunning, TranscodeDone, func(item *TranscodeItem) {
+			item.Interrupted, item.FailureCode, item.LastError = false, "", ""
+		}, now); err != nil {
+			return err
+		}
+		result := replaced.Result
+		return queries.SetTranscodeItemResult(ctx, librarydb.SetTranscodeItemResultParams{
+			OriginalRecycleID: nullableID(result.OriginalRecycleID), OriginalSizeBytes: result.OriginalSizeBytes, ResultSizeBytes: result.ResultSizeBytes,
+			ResultRatioPct: result.ResultRatioPct, Engine: result.Engine, EncodeSeconds: result.EncodeSeconds,
+			FinishedAt: sql.NullInt64{Int64: result.FinishedAt, Valid: result.FinishedAt != 0}, UpdatedAt: now, MediaObjectID: replaced.MediaObjectID,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: replace the bytes of file %d: %w", replaced.MediaObjectID, err)
 	}
 	return nil
 }

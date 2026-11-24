@@ -556,6 +556,7 @@ const (
 	JobPoolMove         JobPool = "move"
 	JobPoolScan         JobPool = "scan"
 	JobPoolSearch       JobPool = "search"
+	JobPoolTranscode    JobPool = "transcode"
 )
 
 // Defines values for JobState.

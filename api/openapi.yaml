@@ -12187,7 +12187,7 @@ components:
 
     JobPool:
       type: string
-      enum: [search, acquire, import, metadata, scan, files, move, housekeeping, maintenance]
+      enum: [search, acquire, import, metadata, scan, files, move, housekeeping, maintenance, transcode]
 
     Job:
       type: object

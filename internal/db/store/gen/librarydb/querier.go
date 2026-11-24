@@ -1484,6 +1484,8 @@ type Querier interface {
 	SetTagName(ctx context.Context, arg SetTagNameParams) error
 	SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error
 	SetTranscodeItemJournal(ctx context.Context, arg SetTranscodeItemJournalParams) error
+	// The reasons, plan and warnings a conversion's own analysis or check found, for the item the dispatcher judged coarsely.
+	SetTranscodeItemJudgement(ctx context.Context, arg SetTranscodeItemJudgementParams) error
 	SetTranscodeItemResult(ctx context.Context, arg SetTranscodeItemResultParams) error
 	// The mutable pipeline fields: everything a transition may change except the judged plan and the result.
 	SetTranscodeItemState(ctx context.Context, arg SetTranscodeItemStateParams) error

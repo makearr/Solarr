@@ -744,6 +744,7 @@ func (p *process) startJobs(ctx context.Context) error {
 			{Pool: jobs.PoolMove, Capacity: 1},
 			{Pool: jobs.PoolHousekeeping, Capacity: housekeepingWorkers},
 			{Pool: jobs.PoolMaintenance, Capacity: 1},
+			{Pool: jobs.PoolTranscode, Capacity: 16},
 		},
 		Logger: p.logger,
 	})
@@ -822,6 +823,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.memory.startSync(background)
 
 	p.startBackupSchedules()
+	go p.transcodeService().Slots.Run(stopping)
 	go p.detectTranscodeHardware(stopping)
 
 	dispatcherDone := make(chan struct{})

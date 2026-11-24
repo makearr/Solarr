@@ -182,3 +182,7 @@ FROM media_object o
 LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
 WHERE o.id IN (SELECT value FROM json_each(sqlc.arg(ids)))
 ORDER BY o.id;
+
+-- The reasons, plan and warnings a conversion's own analysis or check found, for the item the dispatcher judged coarsely.
+-- name: SetTranscodeItemJudgement :exec
+UPDATE transcode_item SET reasons_json = ?, plan_json = ?, warnings_json = ?, updated_at = ? WHERE media_object_id = ?;

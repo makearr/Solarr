@@ -48,6 +48,8 @@ const (
 	PoolRescan Pool = "rescan"
 	// PoolFiles reads and judges files already in the library: the attribute probe, the cutoff checks, tag write-back.
 	PoolFiles Pool = "files"
+	// PoolTranscode converts files; the lane limits of the transcode settings do the limiting, this is their ceiling.
+	PoolTranscode Pool = "transcode"
 	// PoolMove moves and links library files; one at a time, so two moves never fight over a path.
 	PoolMove Pool = "move"
 	// PoolHousekeeping is short bookkeeping: counters, statistics, capacity, cache and retention sweeps.

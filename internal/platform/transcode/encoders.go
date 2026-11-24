@@ -228,3 +228,13 @@ func testEncodeArgs(capability Capability, encoder string, rate RateControl, ten
 	source = append(source, RateArgs(encoder, rate)...)
 	return append(source, "-f", "null", "-")
 }
+
+// DeviceFor is the render device a working detection of the engine used, empty for software and for an engine without one.
+func (s *Service) DeviceFor(engine Accel) string {
+	for _, capability := range s.Capabilities() {
+		if capability.Accel == engine && capability.Working {
+			return capability.Device
+		}
+	}
+	return ""
+}

@@ -957,6 +957,30 @@ func (q *Queries) SetTranscodeItemJournal(ctx context.Context, arg SetTranscodeI
 	return err
 }
 
+const setTranscodeItemJudgement = `-- name: SetTranscodeItemJudgement :exec
+UPDATE transcode_item SET reasons_json = ?, plan_json = ?, warnings_json = ?, updated_at = ? WHERE media_object_id = ?
+`
+
+type SetTranscodeItemJudgementParams struct {
+	ReasonsJson   string
+	PlanJson      string
+	WarningsJson  string
+	UpdatedAt     int64
+	MediaObjectID int64
+}
+
+// The reasons, plan and warnings a conversion's own analysis or check found, for the item the dispatcher judged coarsely.
+func (q *Queries) SetTranscodeItemJudgement(ctx context.Context, arg SetTranscodeItemJudgementParams) error {
+	_, err := q.db.ExecContext(ctx, setTranscodeItemJudgement,
+		arg.ReasonsJson,
+		arg.PlanJson,
+		arg.WarningsJson,
+		arg.UpdatedAt,
+		arg.MediaObjectID,
+	)
+	return err
+}
+
 const setTranscodeItemResult = `-- name: SetTranscodeItemResult :exec
 UPDATE transcode_item SET
   original_recycle_id = ?, original_size_bytes = ?, result_size_bytes = ?, result_ratio_pct = ?, engine = ?, encode_seconds = ?,

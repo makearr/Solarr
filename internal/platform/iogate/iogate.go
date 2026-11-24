@@ -27,6 +27,7 @@ const (
 	ClassStatistics
 	ClassRecycleBin
 	ClassPreviews
+	ClassTranscode
 	classCount
 )
 
