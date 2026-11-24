@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- A film refresh while TMDB does not answer is skipped and retried later, instead of replacing the stored credits, keywords and pictures with a fallback source's shorter lists.
 - Safe mode: `safe_mode: true` in config.yml (or SOLARR_SAFE_MODE) keeps transcoding, the automatic search, the RSS sync, the cutoff check and sending monitoring to an *Arr off without touching any setting; Settings pages for them say so in a banner, and GET /settings/general reports it.
 - Discover: a sidebar page (poster wall per library with list, genre and title filters, Add and Not interested) and a dashboard row of recommendations.
 - Discover (settings): Settings > General has the switch; Settings > Discover sets what is never recommended and, per library, list sizes, language, rating and vote floors and automatic adding.

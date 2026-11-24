@@ -390,3 +390,20 @@ func TestFetchLeavesOutTheDatasetRatingForATitleItDoesNotHold(t *testing.T) {
 		}
 	}
 }
+
+// A refresh during a TMDB outage would store the proxy's shorter credit list over the full one.
+func TestRefreshIsSkippedWhileTMDBIsDown(t *testing.T) {
+	service, _ := newService(t, fakeTMDB{configured: true, movie: theExample()}, fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, Title: "The Example Film"}})
+	added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 5, ProfileID: 1, Monitor: movie.MonitorMovieOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.TMDB = fakeTMDB{configured: true, err: errors.New("timeout")}
+	if _, err := service.Refresh(t.Context(), movie.RefreshRequest{WorkID: added.WorkID, CategoryID: 5, Force: true}); !errors.Is(err, media.ErrSourceUnavailable) {
+		t.Fatalf("refresh while TMDB is down: err = %v, want ErrSourceUnavailable", err)
+	}
+	service.TMDB = fakeTMDB{configured: true, err: tmdb.ErrNotFound}
+	if _, err := service.Refresh(t.Context(), movie.RefreshRequest{WorkID: added.WorkID, CategoryID: 5, Force: true}); errors.Is(err, media.ErrSourceUnavailable) {
+		t.Fatalf("refresh with TMDB answering not-found: err = %v, want it to go ahead", err)
+	}
+}

@@ -108,7 +108,9 @@ type Collection struct {
 
 // Movie is one film, merged from every source that knew it. Dates are yyyy-MM-dd or empty.
 type Movie struct {
-	IDs              IDs
+	IDs IDs
+	// Failed lists the sources that were asked and answered an error, not "no such film".
+	Failed           []string
 	Title            string
 	OriginalTitle    string
 	Aliases          []string

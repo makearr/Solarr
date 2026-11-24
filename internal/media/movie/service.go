@@ -130,16 +130,16 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 			}
 			return Movie{}, errNoAnswer
 		}
-		answer, ok := s.askSource(ctx, name, ids)
-		if !ok {
-			return Movie{}, errNoAnswer
-		}
-		return answer, nil
+		return s.askSource(ctx, name, ids)
 	})
 	answers := map[string]Movie{}
+	var failed []string
 	for _, reply := range replies {
-		if reply.Err == nil {
+		switch {
+		case reply.Err == nil:
 			answers[reply.Source] = reply.Value
+		case !errors.Is(reply.Err, errNoAnswer):
+			failed = append(failed, reply.Source)
 		}
 	}
 	var movie Movie
@@ -163,6 +163,7 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 	if len(movie.Genres) == 0 {
 		movie.Genres = movie.spareGenres
 	}
+	movie.Failed = failed
 	return movie, nil
 }
 
@@ -235,16 +236,17 @@ func (s Service) askMore(ctx context.Context, name string, ids IDs) (Movie, bool
 var errNoAnswer = errors.New("movie source gave no answer")
 
 // askSource asks one source of the order: TMDB, Radarr's service, or one of the extra sources.
-func (s Service) askSource(ctx context.Context, name string, ids IDs) (Movie, bool) {
+func (s Service) askSource(ctx context.Context, name string, ids IDs) (Movie, error) {
 	switch name {
 	case settings.MovieSourceTMDB:
 		if ids.TMDB > 0 && s.TMDB != nil && s.TMDB.Configured() {
 			answer, err := s.TMDB.Movie(ctx, ids.TMDB)
 			switch {
 			case err == nil:
-				return FromTMDB(answer, s.country()), true
+				return FromTMDB(answer, s.country()), nil
 			case !errors.Is(err, tmdb.ErrNotFound):
 				s.warn("tmdb", ids.TMDB, err)
+				return Movie{}, err
 			}
 		}
 	case settings.MovieSourceRadarr:
@@ -252,15 +254,18 @@ func (s Service) askSource(ctx context.Context, name string, ids IDs) (Movie, bo
 			answer, err := s.askProxy(ctx, ids)
 			switch {
 			case err == nil:
-				return FromRadarr(answer, s.country()), true
+				return FromRadarr(answer, s.country()), nil
 			case !errors.Is(err, radarrmeta.ErrNotFound):
 				s.warn("radarr", ids.TMDB, err)
+				return Movie{}, err
 			}
 		}
 	default:
-		return s.askMore(ctx, name, ids)
+		if answer, ok := s.askMore(ctx, name, ids); ok {
+			return answer, nil
+		}
 	}
-	return Movie{}, false
+	return Movie{}, errNoAnswer
 }
 
 func (s Service) askProxy(ctx context.Context, ids IDs) (radarrmeta.Movie, error) {
@@ -523,6 +528,10 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	movie, err := s.FetchFor(ctx, request.CategoryID, ids)
 	if err != nil {
 		return AddResult{}, err
+	}
+	// TMDB holds the credits, keywords and images: a refresh built on the fallback's shorter lists would replace them.
+	if slices.Contains(movie.Failed, settings.MovieSourceTMDB) {
+		return AddResult{}, fmt.Errorf("movie: refresh of work %d skipped, %s did not answer: %w", request.WorkID, settings.MovieSourceTMDB, media.ErrSourceUnavailable)
 	}
 	manual, err := s.Reader.ManualFields(ctx, request.WorkID)
 	if err != nil {
