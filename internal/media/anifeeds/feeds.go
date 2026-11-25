@@ -11,6 +11,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
+// sourceKey is the provider's key in the metadata settings, which switch the feeds off with the provider.
+const sourceKey = "anilist"
+
 // Charts is the part of the AniList client the feeds read.
 type Charts interface {
 	Chart(ctx context.Context, chart anilist.ChartQuery, page int) ([]anilist.Media, bool, error)
@@ -38,10 +41,10 @@ var _ media.Recommending = Feeds{}
 var feedTypes = []media.RecommendationType{media.RecommendTrending, media.RecommendHighestRated, media.RecommendUpcoming, media.RecommendClassics}
 
 // RecommendationFeeds implements media.Recommending; AniList needs no key.
-func (Feeds) RecommendationFeeds(context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+func (Feeds) RecommendationFeeds(context.Context, int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
 	feeds := make([]media.RecommendationFeed, len(feedTypes))
 	for index, one := range feedTypes {
-		feeds[index] = media.RecommendationFeed{Type: one, Source: "AniList", HasRating: true}
+		feeds[index] = media.RecommendationFeed{Type: one, Source: "AniList", SourceKey: sourceKey, HasRating: true}
 	}
 	return feeds, nil
 }

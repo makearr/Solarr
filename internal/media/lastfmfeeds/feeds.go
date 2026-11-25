@@ -11,6 +11,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
+// sourceKey is the provider's key in the metadata settings, which switch the feeds off with the provider.
+const sourceKey = "lastfm"
+
 // Charts is the part of the Last.fm client the feeds read.
 type Charts interface {
 	TopArtists(ctx context.Context, page, limit int) ([]lastfm.ChartArtist, bool, error)
@@ -71,11 +74,11 @@ type Feeds struct {
 var _ media.Recommending = Feeds{}
 
 func feed(kind string, listType media.RecommendationType) media.RecommendationFeed {
-	return media.RecommendationFeed{Type: listType, Kind: kind, Source: "Last.fm"}
+	return media.RecommendationFeed{Type: listType, Kind: kind, Source: "Last.fm", SourceKey: sourceKey}
 }
 
 // RecommendationFeeds implements media.Recommending; Last.fm carries no ratings, so auto-add skips its rating gate.
-func (f Feeds) RecommendationFeeds(context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+func (f Feeds) RecommendationFeeds(context.Context, int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
 	feeds := []media.RecommendationFeed{
 		feed(KindArtist, media.RecommendTrending), feed(KindAlbum, media.RecommendTrending),
 		feed(KindArtist, media.RecommendHighestRated), feed(KindAlbum, media.RecommendHighestRated),

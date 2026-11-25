@@ -1,4 +1,4 @@
-// Package deezer reads Deezer's public catalogue (no key): an album found by artist and title, and the fans it has.
+// Package deezer reads Deezer's public catalogue (no key): an album found by artist and title, the fans it has, and the charts.
 package deezer
 
 import (
@@ -85,4 +85,53 @@ func (c Client) ByUPC(ctx context.Context, upc string) (Album, error) {
 		return Album{}, ErrNotFound
 	}
 	return Album{ID: page.ID, Title: page.Title, Artist: page.Artist.Name, Fans: page.Fans, Explicit: page.ExplicitLyrics, Cover: page.CoverXL}, nil
+}
+
+// ChartEntry is one artist or album of a chart: an artist's entry has no Artist.
+type ChartEntry struct {
+	Title, Artist, Picture string
+	Position               int
+}
+
+// ChartArtists reads one page of the artist chart of the caller's country; total is the chart's length.
+func (c Client) ChartArtists(ctx context.Context, index, limit int) ([]ChartEntry, int, error) {
+	var page struct {
+		Data []struct {
+			Name      string `json:"name"`
+			PictureXL string `json:"picture_xl"`
+			Position  int    `json:"position"`
+		} `json:"data"`
+		Total int `json:"total"`
+	}
+	if err := c.http.GetJSON(ctx, chartURL("artists", index, limit), maxResponseBytes, &page); err != nil {
+		return nil, 0, fmt.Errorf("deezer: artist chart: %w", err)
+	}
+	entries := make([]ChartEntry, 0, len(page.Data))
+	for _, one := range page.Data {
+		entries = append(entries, ChartEntry{Title: one.Name, Picture: one.PictureXL, Position: one.Position})
+	}
+	return entries, page.Total, nil
+}
+
+// ChartAlbums reads one page of the album chart of the caller's country; total is the chart's length.
+func (c Client) ChartAlbums(ctx context.Context, index, limit int) ([]ChartEntry, int, error) {
+	var page struct {
+		Data []struct {
+			wireAlbum
+			Position int `json:"position"`
+		} `json:"data"`
+		Total int `json:"total"`
+	}
+	if err := c.http.GetJSON(ctx, chartURL("albums", index, limit), maxResponseBytes, &page); err != nil {
+		return nil, 0, fmt.Errorf("deezer: album chart: %w", err)
+	}
+	entries := make([]ChartEntry, 0, len(page.Data))
+	for _, one := range page.Data {
+		entries = append(entries, ChartEntry{Title: one.Title, Artist: one.Artist.Name, Picture: one.CoverXL, Position: one.Position})
+	}
+	return entries, page.Total, nil
+}
+
+func chartURL(of string, index, limit int) string {
+	return baseURL + "/chart/0/" + of + "?" + url.Values{"index": {strconv.Itoa(index)}, "limit": {strconv.Itoa(limit)}}.Encode()
 }

@@ -100,22 +100,27 @@ CREATE TABLE recommendation_genre (
 ) WITHOUT ROWID;
 CREATE INDEX recommendation_genre_by_genre ON recommendation_genre(genre, recommendation_id);
 
+-- Which list of which source names an item; one item may be named by several sources of one list.
 CREATE TABLE recommendation_feed_item (
   recommendation_id INTEGER NOT NULL REFERENCES recommendation(id) ON DELETE CASCADE,
   type              TEXT    NOT NULL,
+  source            TEXT    NOT NULL,
   rank              INTEGER NOT NULL,
-  PRIMARY KEY (recommendation_id, type)
+  PRIMARY KEY (recommendation_id, type, source)
 ) WITHOUT ROWID;
 
+-- One source's read of one list; popularity_max is the raw popularity a stored 100 stands for.
 CREATE TABLE recommendation_feed (
-  category_id  INTEGER NOT NULL,
-  kind         TEXT    NOT NULL,
-  type         TEXT    NOT NULL,
-  pages_read   INTEGER NOT NULL DEFAULT 0,
-  exhausted    INTEGER NOT NULL DEFAULT 0 CHECK (exhausted IN (0, 1)),
-  refreshed_at INTEGER NOT NULL DEFAULT 0,
-  last_error   TEXT    NOT NULL DEFAULT '',
-  PRIMARY KEY (category_id, kind, type)
+  category_id    INTEGER NOT NULL,
+  kind           TEXT    NOT NULL,
+  type           TEXT    NOT NULL,
+  source         TEXT    NOT NULL,
+  pages_read     INTEGER NOT NULL DEFAULT 0,
+  exhausted      INTEGER NOT NULL DEFAULT 0 CHECK (exhausted IN (0, 1)),
+  refreshed_at   INTEGER NOT NULL DEFAULT 0,
+  popularity_max REAL    NOT NULL DEFAULT 0,
+  last_error     TEXT    NOT NULL DEFAULT '',
+  PRIMARY KEY (category_id, kind, type, source)
 ) WITHOUT ROWID;
 
 -- A person's "not interested", by provider id so it survives a refresh; no foreign key, app_user lives in settings.db.

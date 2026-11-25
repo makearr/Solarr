@@ -43,6 +43,9 @@ func (c discoverConfiguration) Libraries(ctx context.Context) ([]settings.Librar
 func (c discoverConfiguration) Category(id int64) (settings.Category, bool) {
 	return c.cache.Snapshot().Category(id)
 }
+func (c discoverConfiguration) ProviderEnabled(key string) bool {
+	return c.cache.Snapshot().ProviderEnabled(key)
+}
 
 type discoverSources struct{ registry *media.Registry }
 
@@ -139,26 +142,25 @@ func (c discoverCollections) Candidates(ctx context.Context, category settings.C
 	return out, nil
 }
 
-// seriesFeeds reads TMDB's charts for a series library and AniList's for an anime one.
+// seriesFeeds reads TMDB's charts for a series library, and AniList's with TMDB's anime charts for an anime one.
 type seriesFeeds struct {
 	series, anime media.Recommending
 	isAnime       func(categoryID int64) bool
 }
 
-// RecommendationFeeds answers TMDB's feeds, or AniList's alone while TMDB has no key (which AniList does not need).
-func (f seriesFeeds) RecommendationFeeds(ctx context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
-	usable, unavailable := f.series.RecommendationFeeds(ctx)
-	if len(usable) == 0 {
-		usable, _ = f.anime.RecommendationFeeds(ctx)
+func (f seriesFeeds) of(categoryID int64) media.Recommending {
+	if f.isAnime(categoryID) {
+		return f.anime
 	}
-	return usable, unavailable
+	return f.series
+}
+
+func (f seriesFeeds) RecommendationFeeds(ctx context.Context, categoryID int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+	return f.of(categoryID).RecommendationFeeds(ctx, categoryID)
 }
 
 func (f seriesFeeds) Recommend(ctx context.Context, query media.RecommendQuery) ([]media.Recommendation, bool, error) {
-	if f.isAnime(query.CategoryID) {
-		return f.anime.Recommend(ctx, query)
-	}
-	return f.series.Recommend(ctx, query)
+	return f.of(query.CategoryID).Recommend(ctx, query)
 }
 
 // resolveSeriesEntry names the series a list entry is through the series type's list resolver.

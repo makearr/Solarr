@@ -42,7 +42,7 @@ func (s Service) More(ctx context.Context, categoryID int64, listType string) (M
 		return MoreResult{}, ErrNothingToRead
 	}
 	lib := libraries[index]
-	usable, _ := module.RecommendationFeeds(ctx)
+	usable := s.usableFeeds(ctx, module, category.ID)
 	rules := s.rulesOf(global, lib, category)
 	result := MoreResult{Exhausted: true}
 	read := false
@@ -50,10 +50,7 @@ func (s Service) More(ctx context.Context, categoryID int64, listType string) (M
 		if !setting.Enabled || setting.Type == string(media.RecommendCollections) || (listType != "" && setting.Type != listType) {
 			continue
 		}
-		for _, feed := range usable {
-			if string(feed.Type) != setting.Type || (feed.Kind != "" && slices.Contains(lib.DisabledKinds, feed.Kind)) {
-				continue
-			}
+		for _, feed := range feedsOfList(usable, lib, setting.Type) {
 			added, exhausted, err := s.moreOfFeed(ctx, category, lib, feed, module, rules)
 			if err != nil {
 				return result, err
@@ -71,7 +68,7 @@ func (s Service) More(ctx context.Context, categoryID int64, listType string) (M
 
 func (s Service) moreOfFeed(ctx context.Context, category settings.Category, lib settings.LibraryDiscover, feed media.RecommendationFeed,
 	module media.Recommending, rules Rules) (added int, exhausted bool, err error) {
-	ref := library.FeedRef{CategoryID: category.ID, Kind: feed.Kind, Type: string(feed.Type)}
+	ref := library.FeedRef{CategoryID: category.ID, Kind: feed.Kind, Type: string(feed.Type), Source: feed.SourceKey}
 	state, err := s.Pool.FeedState(ctx, ref)
 	if err != nil {
 		return 0, false, err
@@ -94,6 +91,11 @@ func (s Service) moreOfFeed(ctx context.Context, category settings.Category, lib
 			return 0, false, nil
 		}
 		state.PagesRead, state.Exhausted = page, !more
+		if state.PopularityMax <= 0 {
+			for _, item := range items {
+				state.PopularityMax = max(state.PopularityMax, item.Popularity)
+			}
+		}
 		for _, item := range items {
 			if item.Kind == "" {
 				item.Kind = feed.Kind
@@ -103,7 +105,9 @@ func (s Service) moreOfFeed(ctx context.Context, category settings.Category, lib
 				continue
 			}
 			if Admit(item, rules, facts).Admitted {
-				admitted = append(admitted, poolItemOf(item, workID))
+				pooled := poolItemOf(item, workID)
+				pooled.Popularity = scaledPopularity(item.Popularity, state.PopularityMax)
+				admitted = append(admitted, pooled)
 			}
 		}
 	}

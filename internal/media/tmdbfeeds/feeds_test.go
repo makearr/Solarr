@@ -38,7 +38,7 @@ func feeds(c *charts, media string) tmdbfeeds.Feeds {
 func TestFeedsAreUnavailableWithoutAKeyAndSayWhy(t *testing.T) {
 	f := feeds(&charts{}, tmdb.MediaMovie)
 	f.Configured = func() bool { return false }
-	usable, unavailable := f.RecommendationFeeds(t.Context())
+	usable, unavailable := f.RecommendationFeeds(t.Context(), 1)
 	if len(usable) != 0 || len(unavailable) != 4 {
 		t.Fatalf("usable %v, unavailable %v", usable, unavailable)
 	}
@@ -126,5 +126,27 @@ func TestAFilmIsAddedByTheMovieKeyAndAFailedChartIsAnError(t *testing.T) {
 	boom := errors.New("boom")
 	if _, _, err := feeds(&charts{err: boom}, tmdb.MediaMovie).Recommend(t.Context(), media.RecommendQuery{Feed: media.RecommendationFeed{Type: media.RecommendTrending}, Page: 1}); !errors.Is(err, boom) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestAnimeTrendingIsThePopularJapaneseAnimationKeyedByTheTVDBWhereKnown(t *testing.T) {
+	c := &charts{answer: tmdb.ListPage{Items: []tmdb.ListItem{{ID: 7, Name: "Example Anime", FirstAirDate: "2024-04-01"}, {ID: 8, Name: "Other Anime"}}, TotalPages: 1}}
+	f := feeds(c, tmdb.MediaTV)
+	f.Anime, f.TVDBProvider = true, "tvdb"
+	f.Detail = func(_ context.Context, id int64) (tmdbfeeds.Detail, error) {
+		if id == 7 {
+			return tmdbfeeds.Detail{TVDBID: 70}, nil
+		}
+		return tmdbfeeds.Detail{}, nil
+	}
+	items, _, err := f.Recommend(t.Context(), media.RecommendQuery{Feed: media.RecommendationFeed{Type: media.RecommendTrending}, Page: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (tmdb.DiscoverQuery{SortBy: tmdb.SortPopularity, WithGenres: []int64{16}, OriginCountry: "JP"}); !reflect.DeepEqual(c.query, want) || len(c.trending) != 0 {
+		t.Errorf("query %+v trending %v", c.query, c.trending)
+	}
+	if got := []string{items[0].Provider + ":" + items[0].ExternalID, items[1].Provider + ":" + items[1].ExternalID}; !reflect.DeepEqual(got, []string{"tvdb:70", tmdb.KeySeries + ":8"}) {
+		t.Errorf("ids %v", got)
 	}
 }

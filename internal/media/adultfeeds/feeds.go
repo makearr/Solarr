@@ -38,9 +38,9 @@ type Feeds struct {
 var _ media.Recommending = Feeds{}
 
 // RecommendationFeeds implements media.Recommending; the server answers only with its API key.
-func (f Feeds) RecommendationFeeds(context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+func (f Feeds) RecommendationFeeds(context.Context, int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
 	feed := func(listType media.RecommendationType) media.RecommendationFeed {
-		return media.RecommendationFeed{Type: listType, Kind: f.Kind, Source: f.Source}
+		return media.RecommendationFeed{Type: listType, Kind: f.Kind, Source: f.Source, SourceKey: f.Provider}
 	}
 	unavailable := map[media.RecommendationFeed]string{
 		feed(media.RecommendHighestRated): NoRatesNote, feed(media.RecommendClassics): NoRatesNote,

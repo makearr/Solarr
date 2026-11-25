@@ -15,14 +15,17 @@
 - **Collections:** the missing members of a collection you hold one of.
 - **Request-only accounts** see *Request* instead of *Add*.
 
-| Library | Source |
+A library reads **every source** of its media type that is switched on under Settings → Metadata:
+
+| Library | Sources |
 |---|---|
-| Movies, TV | TMDB (needs your TMDB key); anime reads AniList |
-| Music | Last.fm (needs your Last.fm key) |
-| Ebooks | Open Library |
-| Audiobooks | Audible |
+| Movies, TV | TMDB (needs your TMDB key) |
+| Anime | AniList and TMDB's Japanese animation |
+| Music | Last.fm (needs your Last.fm key), ListenBrainz, Deezer |
+| Ebooks | Open Library, Hardcover (needs your token) |
+| Audiobooks | Audible, Open Library, Hardcover |
 | Comics and manga | AniList manga charts |
-| Adult | StashDB (needs its key) |
+| Adult | StashDB, ThePornDB, FansDB (each needs its key) |
 
 ## Benefits
 

@@ -62,7 +62,7 @@ func TestRecommendKeepsOnlyEntriesASeriesWasFoundFor(t *testing.T) {
 func TestEveryFeedTypeMapsToAChartAndUpcomingAsksUnreleased(t *testing.T) {
 	c := &charts{}
 	feeds := anifeeds.Feeds{Charts: c, Resolve: resolver, Clock: clock.NewFake(time.Unix(0, 0))}
-	usable, unavailable := feeds.RecommendationFeeds(t.Context())
+	usable, unavailable := feeds.RecommendationFeeds(t.Context(), 1)
 	if len(usable) != 4 || len(unavailable) != 0 {
 		t.Fatalf("usable = %v, unavailable = %v", usable, unavailable)
 	}

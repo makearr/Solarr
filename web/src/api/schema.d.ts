@@ -12433,6 +12433,8 @@ export interface components {
         DiscoverFeed: {
             type: string;
             kind: string;
+            /** @description The display name of the metadata provider that reads this list; a list read by several sources has one feed each. */
+            source: string;
             /** @description The source has no further page to read. */
             exhausted: boolean;
             /** @description A code when the last read failed (source_unavailable, not_supported, failed), else empty. */

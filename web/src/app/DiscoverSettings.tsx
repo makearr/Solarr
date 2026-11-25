@@ -288,9 +288,10 @@ function FeedStates({ category }: { category: number }) {
   return (
     <ul className="flex flex-col gap-0.5 text-xs text-ink-muted">
       {feeds.map((feed) => (
-        <li key={`${feed.type}:${feed.kind}`} className={feed.last_error ? "text-danger" : undefined}>
+        <li key={`${feed.type}:${feed.kind}:${feed.source}`} className={feed.last_error ? "text-danger" : undefined}>
           {t(LIST_LABELS[feed.type] ?? "discover.list.highest_rated")}
           {feed.kind ? ` (${feed.kind})` : ""}
+          {feed.source ? ` · ${feed.source}` : ""}
           {": "}
           {feed.last_error
             ? t(`discover.feedError.${feed.last_error}` as MessageKey)

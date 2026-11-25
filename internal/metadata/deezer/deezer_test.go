@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -53,5 +54,15 @@ func TestByUPC_AnErrorBodyIsNotFound(t *testing.T) {
 	client := deezer.New(pages{"/album/upc:": `{"error":{"type":"DataException","code":800}}`})
 	if _, err := client.ByUPC(t.Context(), "5000000000002"); !errors.Is(err, deezer.ErrNotFound) {
 		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestChartAlbums_AsksThePageAndReadsArtistCoverAndPosition(t *testing.T) {
+	client := deezer.New(pages{"/chart/0/albums?index=20&limit=20": `{"data":[{"id":7,"title":"Example Album","cover_xl":"https://e-cdns-images.dzcdn.net/x.jpg",` +
+		`"position":21,"artist":{"name":"Example Artist"}}],"total":100}`})
+	got, total, err := client.ChartAlbums(t.Context(), 20, 20)
+	want := []deezer.ChartEntry{{Title: "Example Album", Artist: "Example Artist", Picture: "https://e-cdns-images.dzcdn.net/x.jpg", Position: 21}}
+	if err != nil || total != 100 || !reflect.DeepEqual(got, want) {
+		t.Errorf("ChartAlbums = %+v, %d, %v", got, total, err)
 	}
 }

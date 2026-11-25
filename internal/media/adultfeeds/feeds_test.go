@@ -40,11 +40,11 @@ func ask(listType media.RecommendationType, page int) media.RecommendQuery {
 }
 
 func TestWithoutTheKeyEveryFeedSaysWhyAndWithItOnlyRatingsDo(t *testing.T) {
-	usable, unavailable := feeds(&charts{}).RecommendationFeeds(t.Context())
+	usable, unavailable := feeds(&charts{}).RecommendationFeeds(t.Context(), 1)
 	if len(usable) != 0 || len(unavailable) != 4 {
 		t.Errorf("without key: usable %v unavailable %v", usable, unavailable)
 	}
-	usable, unavailable = feeds(&charts{configured: true}).RecommendationFeeds(t.Context())
+	usable, unavailable = feeds(&charts{configured: true}).RecommendationFeeds(t.Context(), 1)
 	got := map[media.RecommendationType]bool{}
 	for _, one := range usable {
 		got[one.Type] = one.HasRating

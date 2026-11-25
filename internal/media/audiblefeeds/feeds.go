@@ -11,6 +11,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
+// sourceKey is the provider's key in the metadata settings, which switch the feeds off with the provider.
+const sourceKey = "audible"
+
 // Charts is the part of the Audible client the feeds read.
 type Charts interface {
 	Chart(ctx context.Context, sort audible.ChartSort, page int) ([]audible.Product, bool, error)
@@ -38,9 +41,9 @@ type Feeds struct {
 var _ media.Recommending = Feeds{}
 
 // RecommendationFeeds implements media.Recommending; Audible's catalogue needs no key. Only the rated list carries ratings.
-func (f Feeds) RecommendationFeeds(context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+func (f Feeds) RecommendationFeeds(context.Context, int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
 	feed := func(listType media.RecommendationType, rated bool) media.RecommendationFeed {
-		return media.RecommendationFeed{Type: listType, Kind: f.Kind, Source: "Audible", HasRating: rated}
+		return media.RecommendationFeed{Type: listType, Kind: f.Kind, Source: "Audible", SourceKey: sourceKey, HasRating: rated}
 	}
 	return []media.RecommendationFeed{
 			feed(media.RecommendTrending, false), feed(media.RecommendHighestRated, true), feed(media.RecommendUpcoming, false),

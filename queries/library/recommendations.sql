@@ -18,13 +18,13 @@ DELETE FROM recommendation_genre WHERE recommendation_id = ?;
 INSERT OR IGNORE INTO recommendation_genre (recommendation_id, genre) VALUES (?, ?);
 
 -- name: UpsertRecommendationFeedItem :exec
-INSERT INTO recommendation_feed_item (recommendation_id, type, rank) VALUES (?, ?, ?)
-ON CONFLICT (recommendation_id, type) DO UPDATE SET rank = excluded.rank;
+INSERT INTO recommendation_feed_item (recommendation_id, type, source, rank) VALUES (?, ?, ?, ?)
+ON CONFLICT (recommendation_id, type, source) DO UPDATE SET rank = excluded.rank;
 
--- What a refresh no longer names: this feed's items outside the new set.
+-- What a refresh no longer names: this source's items of the list outside the new set.
 -- name: DeleteStaleRecommendationFeedItems :exec
 DELETE FROM recommendation_feed_item
-WHERE type = sqlc.arg(type)
+WHERE type = sqlc.arg(type) AND source = sqlc.arg(source)
   AND recommendation_id IN (SELECT r.id FROM recommendation r WHERE r.category_id = sqlc.arg(category_id) AND r.kind = sqlc.arg(kind))
   AND recommendation_id NOT IN (SELECT value FROM json_each(sqlc.arg(keep_ids)));
 
@@ -34,17 +34,19 @@ WHERE category_id = ? AND kind = ?
   AND NOT EXISTS (SELECT 1 FROM recommendation_feed_item f WHERE f.recommendation_id = recommendation.id);
 
 -- name: GetRecommendationFeed :one
-SELECT category_id, kind, type, pages_read, exhausted, refreshed_at, last_error FROM recommendation_feed
-WHERE category_id = ? AND kind = ? AND type = ?;
+SELECT category_id, kind, type, source, pages_read, exhausted, refreshed_at, popularity_max, last_error FROM recommendation_feed
+WHERE category_id = ? AND kind = ? AND type = ? AND source = ?;
 
 -- name: ListRecommendationFeeds :many
-SELECT category_id, kind, type, pages_read, exhausted, refreshed_at, last_error FROM recommendation_feed
-WHERE category_id = ? ORDER BY kind, type;
+SELECT category_id, kind, type, source, pages_read, exhausted, refreshed_at, popularity_max, last_error FROM recommendation_feed
+WHERE category_id = ? ORDER BY kind, type, source;
 
 -- name: SetRecommendationFeed :exec
-INSERT INTO recommendation_feed (category_id, kind, type, pages_read, exhausted, refreshed_at, last_error) VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (category_id, kind, type) DO UPDATE SET
-  pages_read = excluded.pages_read, exhausted = excluded.exhausted, refreshed_at = excluded.refreshed_at, last_error = excluded.last_error;
+INSERT INTO recommendation_feed (category_id, kind, type, source, pages_read, exhausted, refreshed_at, popularity_max, last_error)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (category_id, kind, type, source) DO UPDATE SET
+  pages_read = excluded.pages_read, exhausted = excluded.exhausted, refreshed_at = excluded.refreshed_at, popularity_max = excluded.popularity_max,
+  last_error = excluded.last_error;
 
 -- What the person has not dismissed and is not already monitored; keyset on (popularity, id), no OFFSET.
 -- name: ListRecommendations :many
@@ -68,7 +70,7 @@ LIMIT sqlc.arg(page_size);
 SELECT recommendation_id, genre FROM recommendation_genre WHERE recommendation_id IN (SELECT value FROM json_each(sqlc.arg(ids))) ORDER BY recommendation_id, genre;
 
 -- name: ListRecommendationFeedTypesOf :many
-SELECT recommendation_id, type FROM recommendation_feed_item WHERE recommendation_id IN (SELECT value FROM json_each(sqlc.arg(ids))) ORDER BY recommendation_id, type;
+SELECT DISTINCT recommendation_id, type FROM recommendation_feed_item WHERE recommendation_id IN (SELECT value FROM json_each(sqlc.arg(ids))) ORDER BY recommendation_id, type;
 
 -- The genre facet of a library and kind.
 -- name: ListRecommendationGenreCounts :many

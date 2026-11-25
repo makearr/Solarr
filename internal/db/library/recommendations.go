@@ -37,10 +37,12 @@ type PoolRecommendation struct {
 	Types []string
 }
 
-// FeedRef names one list of one library: a recommendation type for one add kind.
+// FeedRef names one source's read of one list of one library: a recommendation type for one add kind.
 type FeedRef struct {
 	CategoryID int64
 	Kind, Type string
+	// Source is the provider key of the source that reads the list.
+	Source string
 }
 
 // FeedState is how far a feed was read and how its last read ended.
@@ -49,7 +51,9 @@ type FeedState struct {
 	PagesRead   int64
 	Exhausted   bool
 	RefreshedAt int64
-	LastError   string
+	// PopularityMax is the raw popularity a stored 100 stands for, so a later page scales like the first.
+	PopularityMax float64
+	LastError     string
 }
 
 // RecommendationCursor is the keyset position after the last row of a page.
@@ -102,7 +106,7 @@ func (r Recommendations) ReplaceFeed(ctx context.Context, ref FeedRef, items []P
 	err = r.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		if err := queries.DeleteStaleRecommendationFeedItems(ctx, librarydb.DeleteStaleRecommendationFeedItemsParams{
-			Type: ref.Type, CategoryID: ref.CategoryID, Kind: ref.Kind, KeepIds: string(keep),
+			Type: ref.Type, Source: ref.Source, CategoryID: ref.CategoryID, Kind: ref.Kind, KeepIds: string(keep),
 		}); err != nil {
 			return err
 		}
@@ -153,7 +157,7 @@ func (r Recommendations) upsert(ctx context.Context, ref FeedRef, items []PoolIt
 					}
 				}
 				if err := queries.UpsertRecommendationFeedItem(ctx, librarydb.UpsertRecommendationFeedItemParams{
-					RecommendationID: id, Type: ref.Type, Rank: firstRank + int64(start+offset),
+					RecommendationID: id, Type: ref.Type, Source: ref.Source, Rank: firstRank + int64(start+offset),
 				}); err != nil {
 					return err
 				}
@@ -193,7 +197,8 @@ func setFeedState(ctx context.Context, queries *librarydb.Queries, ref FeedRef, 
 		exhausted = 1
 	}
 	return queries.SetRecommendationFeed(ctx, librarydb.SetRecommendationFeedParams{
-		CategoryID: ref.CategoryID, Kind: ref.Kind, Type: ref.Type, PagesRead: state.PagesRead, Exhausted: exhausted, RefreshedAt: state.RefreshedAt, LastError: state.LastError,
+		CategoryID: ref.CategoryID, Kind: ref.Kind, Type: ref.Type, Source: ref.Source, PagesRead: state.PagesRead, Exhausted: exhausted, RefreshedAt: state.RefreshedAt,
+		PopularityMax: state.PopularityMax, LastError: state.LastError,
 	})
 }
 
@@ -210,7 +215,9 @@ func (r Recommendations) SetFeedState(ctx context.Context, ref FeedRef, state Fe
 
 // FeedState answers how far one feed was read; the zero state for a feed never read.
 func (r Recommendations) FeedState(ctx context.Context, ref FeedRef) (FeedState, error) {
-	row, err := librarydb.New(r.store.Read()).GetRecommendationFeed(ctx, librarydb.GetRecommendationFeedParams{CategoryID: ref.CategoryID, Kind: ref.Kind, Type: ref.Type})
+	row, err := librarydb.New(r.store.Read()).GetRecommendationFeed(ctx, librarydb.GetRecommendationFeedParams{
+		CategoryID: ref.CategoryID, Kind: ref.Kind, Type: ref.Type, Source: ref.Source,
+	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return FeedState{FeedRef: ref}, nil
 	}
@@ -222,8 +229,8 @@ func (r Recommendations) FeedState(ctx context.Context, ref FeedRef) (FeedState,
 
 func feedStateOf(row librarydb.RecommendationFeed) FeedState {
 	return FeedState{
-		FeedRef: FeedRef{CategoryID: row.CategoryID, Kind: row.Kind, Type: row.Type}, PagesRead: row.PagesRead, Exhausted: row.Exhausted == 1,
-		RefreshedAt: row.RefreshedAt, LastError: row.LastError,
+		FeedRef: FeedRef{CategoryID: row.CategoryID, Kind: row.Kind, Type: row.Type, Source: row.Source}, PagesRead: row.PagesRead, Exhausted: row.Exhausted == 1,
+		RefreshedAt: row.RefreshedAt, PopularityMax: row.PopularityMax, LastError: row.LastError,
 	}
 }
 

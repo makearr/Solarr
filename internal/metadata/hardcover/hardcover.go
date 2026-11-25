@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -135,4 +136,120 @@ func (c Client) Search(ctx context.Context, title, author string, limit int) ([]
 		books = append(books, hit.Document)
 	}
 	return books, nil
+}
+
+// ChartBook is one book of a chart, with the editions whose ISBNs name it elsewhere.
+type ChartBook struct {
+	ID           int64   `json:"id"`
+	Title        string  `json:"title"`
+	ReleaseYear  int     `json:"release_year"`
+	ReleaseDate  string  `json:"release_date"`
+	Rating       float64 `json:"rating"`
+	RatingsCount int64   `json:"ratings_count"`
+	UsersCount   int64   `json:"users_count"`
+	Image        struct {
+		URL string `json:"url"`
+	} `json:"image"`
+	Contributions []struct {
+		Author struct {
+			Name string `json:"name"`
+		} `json:"author"`
+	} `json:"contributions"`
+	PhysicalEdition *chartEdition `json:"default_physical_edition"`
+	EbookEdition    *chartEdition `json:"default_ebook_edition"`
+}
+
+type chartEdition struct {
+	ISBN13 string `json:"isbn_13"`
+	ISBN10 string `json:"isbn_10"`
+}
+
+// Authors are the book's credited names, in Hardcover's order.
+func (b ChartBook) Authors() []string {
+	names := make([]string, 0, len(b.Contributions))
+	for _, one := range b.Contributions {
+		if one.Author.Name != "" {
+			names = append(names, one.Author.Name)
+		}
+	}
+	return names
+}
+
+// ISBNs are the ISBNs of the default print and ebook editions, 13 digits first.
+func (b ChartBook) ISBNs() []string {
+	var isbns []string
+	for _, edition := range []*chartEdition{b.PhysicalEdition, b.EbookEdition} {
+		if edition == nil {
+			continue
+		}
+		for _, isbn := range []string{edition.ISBN13, edition.ISBN10} {
+			if isbn != "" && !slices.Contains(isbns, isbn) {
+				isbns = append(isbns, isbn)
+			}
+		}
+	}
+	return isbns
+}
+
+// chartFields is what a chart reads of each book.
+const chartFields = `id title release_year release_date rating ratings_count users_count image { url } contributions { author { name } }
+default_physical_edition { isbn_13 isbn_10 } default_ebook_edition { isbn_13 isbn_10 }`
+
+// Trending reads one page of the books most read between two ISO days, most first.
+func (c Client) Trending(ctx context.Context, from, to string, limit, offset int) ([]ChartBook, error) {
+	var trending struct {
+		BooksTrending struct {
+			IDs []int64 `json:"ids"`
+		} `json:"books_trending"`
+	}
+	const query = `query ($from: date!, $to: date!, $n: Int!, $o: Int!) { books_trending(from: $from, to: $to, limit: $n, offset: $o) { ids } }`
+	if err := c.query(ctx, query, map[string]any{"from": from, "to": to, "n": limit, "o": offset}, &trending); err != nil {
+		return nil, err
+	}
+	ids := trending.BooksTrending.IDs
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var found struct {
+		Books []ChartBook `json:"books"`
+	}
+	if err := c.query(ctx, `query ($ids: [Int!]) { books(where: {id: {_in: $ids}}) { `+chartFields+` } }`, map[string]any{"ids": ids}, &found); err != nil {
+		return nil, err
+	}
+	byID := make(map[int64]ChartBook, len(found.Books))
+	for _, book := range found.Books {
+		byID[book.ID] = book
+	}
+	books := make([]ChartBook, 0, len(ids))
+	for _, id := range ids {
+		if book, ok := byID[id]; ok {
+			books = append(books, book)
+		}
+	}
+	return books, nil
+}
+
+// TopRated reads one page of the best rated books with at least minRatings ratings, released by the year (0 for any), best first.
+func (c Client) TopRated(ctx context.Context, minRatings int64, releasedBy, limit, offset int) ([]ChartBook, error) {
+	where := map[string]any{"ratings_count": map[string]any{"_gte": minRatings}}
+	if releasedBy > 0 {
+		where["release_year"] = map[string]any{"_lte": releasedBy}
+	}
+	return c.chart(ctx, where, map[string]any{"rating": "desc"}, limit, offset)
+}
+
+// Upcoming reads one page of the books released after an ISO day, most awaited first.
+func (c Client) Upcoming(ctx context.Context, after string, limit, offset int) ([]ChartBook, error) {
+	return c.chart(ctx, map[string]any{"release_date": map[string]any{"_gt": after}}, map[string]any{"users_count": "desc"}, limit, offset)
+}
+
+func (c Client) chart(ctx context.Context, where, order map[string]any, limit, offset int) ([]ChartBook, error) {
+	var found struct {
+		Books []ChartBook `json:"books"`
+	}
+	query := `query ($where: books_bool_exp!, $order: [books_order_by!], $n: Int!, $o: Int!) { books(where: $where, order_by: $order, limit: $n, offset: $o) { ` + chartFields + ` } }`
+	if err := c.query(ctx, query, map[string]any{"where": where, "order": order, "n": limit, "o": offset}, &found); err != nil {
+		return nil, err
+	}
+	return found.Books, nil
 }

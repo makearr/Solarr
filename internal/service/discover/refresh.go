@@ -57,6 +57,8 @@ type Configuration interface {
 	Global() settings.DiscoverGlobal
 	Libraries(ctx context.Context) ([]settings.LibraryDiscover, error)
 	Category(id int64) (settings.Category, bool)
+	// ProviderEnabled says a metadata provider is switched on; its feeds are read only then.
+	ProviderEnabled(key string) bool
 }
 
 // Pool is where a refresh keeps what it admitted.
@@ -141,7 +143,7 @@ func (s Service) refreshLibrary(ctx context.Context, global settings.DiscoverGlo
 	if !ok {
 		return
 	}
-	usable, _ := module.RecommendationFeeds(ctx)
+	usable := s.usableFeeds(ctx, module, category.ID)
 	rules := s.rulesOf(global, lib, category)
 	for _, setting := range lib.Types {
 		if !setting.Enabled {
@@ -151,14 +153,50 @@ func (s Service) refreshLibrary(ctx context.Context, global settings.DiscoverGlo
 			s.refreshCollections(ctx, category, setting, rules)
 			continue
 		}
-		for _, feed := range usable {
-			if string(feed.Type) != setting.Type || (feed.Kind != "" && slices.Contains(lib.DisabledKinds, feed.Kind)) {
-				continue
-			}
-			s.refreshFeed(ctx, category, lib, setting, feed, module, rules)
+		feeds := feedsOfList(usable, lib, setting.Type)
+		for _, feed := range feeds {
+			s.refreshFeed(ctx, category, lib, setting, feed, module, rules, shareOf(setting.Amount, feeds, feed))
 		}
 	}
 	s.runAutoAdd(ctx, global, lib, category)
+}
+
+// usableFeeds are a library's feeds that can be read now, from every source whose provider is switched on.
+func (s Service) usableFeeds(ctx context.Context, module media.Recommending, categoryID int64) []media.RecommendationFeed {
+	usable, _ := module.RecommendationFeeds(ctx, categoryID)
+	return slices.DeleteFunc(usable, func(feed media.RecommendationFeed) bool {
+		return feed.SourceKey != "" && !s.Config.ProviderEnabled(feed.SourceKey)
+	})
+}
+
+// feedsOfList are the usable feeds of one list, one per source and add kind the library has not switched off.
+func feedsOfList(usable []media.RecommendationFeed, lib settings.LibraryDiscover, listType string) []media.RecommendationFeed {
+	var out []media.RecommendationFeed
+	for _, feed := range usable {
+		if string(feed.Type) == listType && (feed.Kind == "" || !slices.Contains(lib.DisabledKinds, feed.Kind)) {
+			out = append(out, feed)
+		}
+	}
+	return out
+}
+
+// shareOf splits a list's amount between the sources reading the same add kind, so more sources never mean a longer list.
+func shareOf(amount int64, feeds []media.RecommendationFeed, feed media.RecommendationFeed) int64 {
+	sources := int64(0)
+	for _, one := range feeds {
+		if one.Kind == feed.Kind {
+			sources++
+		}
+	}
+	return (amount + sources - 1) / max(sources, 1)
+}
+
+// scaledPopularity puts a source's popularity on 0 to 100 against the highest it answered, so sources of other scales interleave.
+func scaledPopularity(raw, highest float64) float64 {
+	if highest <= 0 {
+		return 0
+	}
+	return min(100, 100*raw/highest)
 }
 
 // rulesOf is what a library keeps out: its exclusions joined with the instance's, its languages and its rating limit.
@@ -174,12 +212,12 @@ func (s Service) rulesOf(global settings.DiscoverGlobal, lib settings.LibraryDis
 }
 
 func (s Service) refreshFeed(ctx context.Context, category settings.Category, lib settings.LibraryDiscover, setting settings.DiscoverTypeSetting,
-	feed media.RecommendationFeed, module media.Recommending, rules Rules) {
-	ref := library.FeedRef{CategoryID: category.ID, Kind: feed.Kind, Type: setting.Type}
+	feed media.RecommendationFeed, module media.Recommending, rules Rules, amount int64) {
+	ref := library.FeedRef{CategoryID: category.ID, Kind: feed.Kind, Type: setting.Type, Source: feed.SourceKey}
 	now := s.Clock.Now().Unix()
 	var admitted []library.PoolItem
 	state := library.FeedState{FeedRef: ref, RefreshedAt: now}
-	for page := 1; page <= maxPages && int64(len(admitted)) < setting.Amount; page++ {
+	for page := 1; page <= maxPages && int64(len(admitted)) < amount; page++ {
 		items, more, err := module.Recommend(ctx, media.RecommendQuery{
 			CategoryID: category.ID, Feed: feed, Page: page, ClassicAgeYears: int(lib.ClassicAgeYears), Languages: rules.OriginalLanguages,
 			ExcludeGenres: rules.ExcludeGenres, MaxAge: maxAgeOf(category),
@@ -195,7 +233,10 @@ func (s Service) refreshFeed(ctx context.Context, category settings.Category, li
 		}
 		state.PagesRead = int64(page)
 		for _, item := range items {
-			if int64(len(admitted)) >= setting.Amount {
+			state.PopularityMax = max(state.PopularityMax, item.Popularity)
+		}
+		for _, item := range items {
+			if int64(len(admitted)) >= amount {
 				break
 			}
 			if item.Kind == "" {
@@ -214,6 +255,9 @@ func (s Service) refreshFeed(ctx context.Context, category settings.Category, li
 			state.Exhausted = true
 			break
 		}
+	}
+	for index := range admitted {
+		admitted[index].Popularity = scaledPopularity(admitted[index].Popularity, state.PopularityMax)
 	}
 	if err := s.Pool.ReplaceFeed(ctx, ref, admitted, state, now); err != nil {
 		s.logger().WarnContext(ctx, "recommendation pool", slog.Int64("category_id", category.ID), slog.String("type", setting.Type), slog.Any("error", err))

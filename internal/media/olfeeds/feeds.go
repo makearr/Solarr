@@ -11,6 +11,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
+// sourceKey is the provider's key in the metadata settings, which switch the feeds off with the provider.
+const sourceKey = "openlibrary"
+
 // Charts is the part of the Open Library client the feeds read.
 type Charts interface {
 	Trending(ctx context.Context, page int) ([]openlibrary.Doc, bool, error)
@@ -41,9 +44,9 @@ type Feeds struct {
 var _ media.Recommending = Feeds{}
 
 // RecommendationFeeds implements media.Recommending; Open Library needs no key. Only the rated lists carry ratings.
-func (f Feeds) RecommendationFeeds(context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+func (f Feeds) RecommendationFeeds(context.Context, int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
 	feed := func(listType media.RecommendationType, rated bool) media.RecommendationFeed {
-		return media.RecommendationFeed{Type: listType, Kind: f.Kind, Source: "Open Library", HasRating: rated}
+		return media.RecommendationFeed{Type: listType, Kind: f.Kind, Source: "Open Library", SourceKey: sourceKey, HasRating: rated}
 	}
 	return []media.RecommendationFeed{
 			feed(media.RecommendTrending, false), feed(media.RecommendHighestRated, true), feed(media.RecommendClassics, true),

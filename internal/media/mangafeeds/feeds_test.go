@@ -25,7 +25,7 @@ func (c *charts) Chart(_ context.Context, chart anilist.ChartQuery, _ int) ([]an
 func TestEveryListReadsMangaAndClassicsLookBackTheLibrarysAge(t *testing.T) {
 	c := &charts{}
 	feeds := mangafeeds.Feeds{Charts: c, Kind: "series", Provider: "anilist:manga", Clock: clock.NewFake(time.Date(2026, 6, 5, 0, 0, 0, 0, time.UTC))}
-	usable, _ := feeds.RecommendationFeeds(t.Context())
+	usable, _ := feeds.RecommendationFeeds(t.Context(), 1)
 	if len(usable) != 4 || usable[0].Kind != "series" || !usable[0].HasRating {
 		t.Fatalf("usable = %+v", usable)
 	}

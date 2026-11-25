@@ -38,7 +38,7 @@ func product(asin, title, released string) audible.Product {
 }
 
 func TestClassicsSaysWhyNotAndOnlyTheRatedListClaimsRatings(t *testing.T) {
-	usable, unavailable := feeds(&charts{}).RecommendationFeeds(t.Context())
+	usable, unavailable := feeds(&charts{}).RecommendationFeeds(t.Context(), 1)
 	rated := map[media.RecommendationType]bool{}
 	for _, one := range usable {
 		rated[one.Type] = one.HasRating

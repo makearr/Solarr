@@ -16714,10 +16714,11 @@ components:
 
     DiscoverFeed:
       type: object
-      required: [type, kind, exhausted, last_error, refreshed_at]
+      required: [type, kind, source, exhausted, last_error, refreshed_at]
       properties:
         type: { type: string }
         kind: { type: string }
+        source: { type: string, description: The display name of the metadata provider that reads this list; a list read by several sources has one feed each. }
         exhausted: { type: boolean, description: The source has no further page to read. }
         last_error: { type: string, description: "A code when the last read failed (source_unavailable, not_supported, failed), else empty." }
         refreshed_at: { type: integer, format: int64, description: Unix seconds of the last refresh; 0 before the first. }

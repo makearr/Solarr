@@ -111,6 +111,40 @@ func TestRecommendations_ReplacingAFeedDropsWhatItLostButKeepsWhatAnotherFeedNam
 	}
 }
 
+func TestRecommendations_TwoSourcesOfOneListKeepTheirOwnItemsAndStates(t *testing.T) {
+	opened, _ := newLibrary(t)
+	pool := library.NewRecommendations(opened)
+	first := library.FeedRef{CategoryID: 1, Kind: "movie", Type: "trending", Source: "first"}
+	second := library.FeedRef{CategoryID: 1, Kind: "movie", Type: "trending", Source: "second"}
+	if err := pool.ReplaceFeed(t.Context(), first, []library.PoolItem{poolItem("a", 3), poolItem("b", 2)}, library.FeedState{FeedRef: first, PopularityMax: 50}, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.ReplaceFeed(t.Context(), second, []library.PoolItem{poolItem("b", 2), poolItem("c", 1)}, library.FeedState{FeedRef: second, PagesRead: 2}, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.ReplaceFeed(t.Context(), first, []library.PoolItem{poolItem("a", 3)}, library.FeedState{FeedRef: first, PopularityMax: 60}, 200); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := pool.List(t.Context(), library.RecommendationQuery{CategoryIDs: []int64{1}, Type: "trending", UserID: 1, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a", "b", "c"}; !reflect.DeepEqual(ids(rows), want) {
+		t.Fatalf("pool = %v, want %v", ids(rows), want)
+	}
+	if want := []string{"trending"}; !reflect.DeepEqual(rows[1].Types, want) {
+		t.Errorf("b is named by %v, want %v", rows[1].Types, want)
+	}
+	states, err := pool.FeedStates(t.Context(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []library.FeedState{{FeedRef: first, PopularityMax: 60}, {FeedRef: second, PagesRead: 2}}
+	if !reflect.DeepEqual(states, want) {
+		t.Errorf("states = %+v, want %+v", states, want)
+	}
+}
+
 func TestRecommendations_FourHundredFiftyItemsGoInChunksAndGenresFilter(t *testing.T) {
 	opened, _ := newLibrary(t)
 	pool := library.NewRecommendations(opened)

@@ -880,18 +880,21 @@ type RecommendationDismissal struct {
 }
 
 type RecommendationFeed struct {
-	CategoryID  int64
-	Kind        string
-	Type        string
-	PagesRead   int64
-	Exhausted   int64
-	RefreshedAt int64
-	LastError   string
+	CategoryID    int64
+	Kind          string
+	Type          string
+	Source        string
+	PagesRead     int64
+	Exhausted     int64
+	RefreshedAt   int64
+	PopularityMax float64
+	LastError     string
 }
 
 type RecommendationFeedItem struct {
 	RecommendationID int64
 	Type             string
+	Source           string
 	Rank             int64
 }
 

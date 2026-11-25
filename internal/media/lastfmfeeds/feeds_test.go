@@ -70,18 +70,18 @@ func feeds(c *charts, n names, t taste, configured bool) lastfmfeeds.Feeds {
 }
 
 func feedOf(kind string, listType media.RecommendationType) media.RecommendationFeed {
-	return media.RecommendationFeed{Type: listType, Kind: kind, Source: "Last.fm"}
+	return media.RecommendationFeed{Type: listType, Kind: kind, Source: "Last.fm", SourceKey: "lastfm"}
 }
 
 func TestNoKeyMakesEveryFeedUnavailableWithTheReason(t *testing.T) {
-	usable, unavailable := feeds(&charts{}, names{}, taste{}, false).RecommendationFeeds(t.Context())
+	usable, unavailable := feeds(&charts{}, names{}, taste{}, false).RecommendationFeeds(t.Context(), 1)
 	if len(usable) != 0 || unavailable[feedOf("album", media.RecommendTrending)] != lastfmfeeds.NoKeyReason {
 		t.Errorf("usable %v, unavailable %v", usable, unavailable)
 	}
 }
 
 func TestUpcomingIsNeverUsableAndNoFeedClaimsARating(t *testing.T) {
-	usable, unavailable := feeds(&charts{}, names{}, taste{}, true).RecommendationFeeds(t.Context())
+	usable, unavailable := feeds(&charts{}, names{}, taste{}, true).RecommendationFeeds(t.Context(), 1)
 	for _, one := range usable {
 		if one.Type == media.RecommendUpcoming || one.HasRating {
 			t.Errorf("usable feed %+v", one)

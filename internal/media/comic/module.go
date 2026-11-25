@@ -308,11 +308,11 @@ var fileSettings = []media.FileSetting{
 }
 
 // RecommendationFeeds implements media.Recommending.
-func (m Module) RecommendationFeeds(ctx context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+func (m Module) RecommendationFeeds(ctx context.Context, categoryID int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
 	if m.Feeds == nil {
 		return nil, nil
 	}
-	return m.Feeds.RecommendationFeeds(ctx)
+	return m.Feeds.RecommendationFeeds(ctx, categoryID)
 }
 
 // Recommend implements media.Recommending.

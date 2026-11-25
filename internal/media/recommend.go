@@ -1,6 +1,10 @@
 package media
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"slices"
+)
 
 // RecommendationType names one kind of recommendation list.
 type RecommendationType string
@@ -21,6 +25,8 @@ type RecommendationFeed struct {
 	Kind string
 	// Source is the provider's display name.
 	Source string
+	// SourceKey is the provider's settings key: what switches the source off and what keeps its read apart in the pool.
+	SourceKey string
 	// HasRating is false when the source carries no ratings, which skips the rating gate of auto-add.
 	HasRating bool
 }
@@ -54,8 +60,37 @@ type Recommendation struct {
 
 // Recommending is the capability of a media type whose sources have charts to recommend from.
 type Recommending interface {
-	// RecommendationFeeds answers the feeds usable now and, for each that is not, why (a missing key).
-	RecommendationFeeds(ctx context.Context) (usable []RecommendationFeed, unavailable map[RecommendationFeed]string)
+	// RecommendationFeeds answers a library's feeds usable now and, for each that is not, why (a missing key).
+	RecommendationFeeds(ctx context.Context, categoryID int64) (usable []RecommendationFeed, unavailable map[RecommendationFeed]string)
 	// Recommend reads one page of a feed; more says whether a next page exists.
 	Recommend(ctx context.Context, query RecommendQuery) (items []Recommendation, more bool, err error)
+}
+
+// JoinedFeeds is every source of a type as one: their feeds side by side, each page asked of the source that offers the feed.
+type JoinedFeeds []Recommending
+
+var _ Recommending = JoinedFeeds{}
+
+// RecommendationFeeds implements Recommending.
+func (j JoinedFeeds) RecommendationFeeds(ctx context.Context, categoryID int64) ([]RecommendationFeed, map[RecommendationFeed]string) {
+	var usable []RecommendationFeed
+	unavailable := map[RecommendationFeed]string{}
+	for _, source := range j {
+		feeds, reasons := source.RecommendationFeeds(ctx, categoryID)
+		usable = append(usable, feeds...)
+		for feed, reason := range reasons {
+			unavailable[feed] = reason
+		}
+	}
+	return usable, unavailable
+}
+
+// Recommend implements Recommending.
+func (j JoinedFeeds) Recommend(ctx context.Context, query RecommendQuery) ([]Recommendation, bool, error) {
+	for _, source := range j {
+		if feeds, _ := source.RecommendationFeeds(ctx, query.CategoryID); slices.Contains(feeds, query.Feed) {
+			return source.Recommend(ctx, query)
+		}
+	}
+	return nil, false, fmt.Errorf("no source offers %s of %s from %s: %w", query.Feed.Type, query.Feed.Kind, query.Feed.SourceKey, ErrNotWired)
 }

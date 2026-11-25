@@ -35,8 +35,10 @@ type DiscoverQuery struct {
 // DiscoverFeedState is how far a feed was read and how its last read ended.
 type DiscoverFeedState struct {
 	Type, Kind, LastError string
-	Exhausted             bool
-	RefreshedAt           int64
+	// Source is the display name of the provider that reads the list.
+	Source      string
+	Exhausted   bool
+	RefreshedAt int64
 }
 
 // DiscoverDismissal is one thing a person is not interested in.
@@ -140,7 +142,7 @@ func (s *Server) ListDiscoverLibraries(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, state := range states {
 			if slices.Contains(view.Types, state.Type) {
-				view.Feeds = append(view.Feeds, gen.DiscoverFeed{Type: state.Type, Kind: state.Kind, Exhausted: state.Exhausted, LastError: state.LastError, RefreshedAt: state.RefreshedAt})
+				view.Feeds = append(view.Feeds, gen.DiscoverFeed{Type: state.Type, Kind: state.Kind, Source: state.Source, Exhausted: state.Exhausted, LastError: state.LastError, RefreshedAt: state.RefreshedAt})
 			}
 		}
 		out = append(out, view)

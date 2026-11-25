@@ -23,9 +23,12 @@ import (
 	"github.com/makearr/Solarr/internal/media/audiblefeeds"
 	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/comic"
+	"github.com/makearr/Solarr/internal/media/deezerfeeds"
+	"github.com/makearr/Solarr/internal/media/hcfeeds"
 	"github.com/makearr/Solarr/internal/media/housekeeping"
 	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/media/lastfmfeeds"
+	"github.com/makearr/Solarr/internal/media/lbfeeds"
 	"github.com/makearr/Solarr/internal/media/mangafeeds"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -36,8 +39,11 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/comicvine"
+	"github.com/makearr/Solarr/internal/metadata/deezer"
 	"github.com/makearr/Solarr/internal/metadata/gcd"
+	"github.com/makearr/Solarr/internal/metadata/hardcover"
 	"github.com/makearr/Solarr/internal/metadata/lastfm"
+	"github.com/makearr/Solarr/internal/metadata/listenbrainz"
 	"github.com/makearr/Solarr/internal/metadata/mangadex"
 	"github.com/makearr/Solarr/internal/metadata/mangaupdates"
 	"github.com/makearr/Solarr/internal/metadata/metron"
@@ -134,7 +140,7 @@ func (p *process) musicModule() music.Module {
 	realign := func(ctx context.Context, workID int64) error {
 		return music.AlignClaimedFiles(ctx, &desired, clock.NewSystem(), workID)
 	}
-	return music.Module{Feeds: p.lastFMFeeds(), AcoustIDConfigured: func() bool { return p.cache.Snapshot().AcoustIDConfigured() }, Registrations: p.musicJobs(), Realign: realign, Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	return music.Module{Feeds: p.musicFeeds(), AcoustIDConfigured: func() bool { return p.cache.Snapshot().AcoustIDConfigured() }, Registrations: p.musicJobs(), Realign: realign, Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -1150,15 +1156,17 @@ func (p *process) tmdbFeeds(kind string) media.Recommending {
 			if err != nil {
 				return tmdbfeeds.Detail{}, err
 			}
-			detail := tmdbfeeds.Detail{Certification: series.ContentRating("US")}
+			detail := tmdbfeeds.Detail{Certification: series.ContentRating("US"), TVDBID: series.ExternalIDs.TVDB}
 			for _, network := range series.Networks {
 				detail.Networks = append(detail.Networks, network.Name)
 			}
 			return detail, nil
 		}
+		anime := feeds
+		anime.Anime, anime.TVDBProvider = true, tv.ProviderTVDB
 		return seriesFeeds{
 			series: feeds,
-			anime:  anifeeds.Feeds{Charts: p.aniListClient(), Resolve: p.resolveSeriesEntry, Clock: clock.NewSystem()},
+			anime:  media.JoinedFeeds{anifeeds.Feeds{Charts: p.aniListClient(), Resolve: p.resolveSeriesEntry, Clock: clock.NewSystem()}, anime},
 			isAnime: func(categoryID int64) bool {
 				category, found := p.cache.Snapshot().Category(categoryID)
 				return found && category.Kind == "anime"
@@ -1177,6 +1185,22 @@ func (p *process) tmdbFeeds(kind string) media.Recommending {
 		return detail, nil
 	}
 	return feeds
+}
+
+// musicFeeds is the recommendation feeds of music libraries: Last.fm, ListenBrainz and Deezer side by side.
+func (p *process) musicFeeds() media.Recommending {
+	names := adapters.MusicNames{Provider: p.musicBrainzProvider()}
+	return media.JoinedFeeds{
+		p.lastFMFeeds(),
+		lbfeeds.Feeds{
+			Charts:         listenbrainz.New(p.providerClient(providerListenBrainz, nil, httpx.ClientConfig{})),
+			ArtistProvider: music.ProviderArtist, AlbumProvider: music.ProviderReleaseGroup,
+		},
+		deezerfeeds.Feeds{
+			Charts: deezer.New(p.providerClient(providerDeezer, nil, httpx.ClientConfig{})), Names: names,
+			ArtistProvider: music.ProviderArtist, AlbumProvider: music.ProviderReleaseGroup,
+		},
+	}
 }
 
 // lastFMFeeds is the recommendation feeds of music libraries, from Last.fm's charts and the library's own artists and genres.
@@ -1201,23 +1225,47 @@ func (t musicTaste) Genres(ctx context.Context, categoryID int64, limit int) ([]
 	return t.pool.TopGenres(ctx, categoryID, int64(limit))
 }
 
-// adultFeeds is the recommendation feeds of adult libraries, read from StashDB's trending and upcoming scenes.
+// adultFeeds is the recommendation feeds of adult libraries: the trending and upcoming scenes of every stash-box server.
 func (p *process) adultFeeds() media.Recommending {
-	server, _ := p.adultService().Servers[adult.ProviderStashDB].(adultfeeds.Charts)
-	if server == nil {
+	servers := p.adultService().Servers
+	var joined media.JoinedFeeds
+	for _, provider := range []string{adult.ProviderStashDB, adult.ProviderThePornDB, adult.ProviderFansDB} {
+		server, ok := servers[provider].(adultfeeds.Charts)
+		if !ok {
+			continue
+		}
+		label := provider
+		if known, found := settings.MetadataProviderByKey(provider); found {
+			label = known.Label
+		}
+		joined = append(joined, adultfeeds.Feeds{Charts: server, Kind: adult.MediaType, Provider: provider, Source: label, Clock: clock.NewSystem()})
+	}
+	if len(joined) == 0 {
 		return nil
 	}
-	return adultfeeds.Feeds{Charts: server, Kind: adult.MediaType, Provider: adult.ProviderStashDB, Source: "StashDB", Clock: clock.NewSystem()}
+	return joined
 }
 
-// bookFeeds is the recommendation feeds of a book library: Open Library's charts for ebooks, Audible's catalogue for audiobooks.
+// bookFeeds is the recommendation feeds of a book library: Open Library's and Hardcover's charts, with Audible's catalogue first for audiobooks.
 func (p *process) bookFeeds(format book.Format) media.Recommending {
+	openLibrary := openlibrary.New(p.providerClient(providerOpenLibrary, nil, httpx.ClientConfig{}))
+	joined := media.JoinedFeeds{
+		olfeeds.Feeds{Charts: openLibrary, Kind: format.MediaType, Provider: format.Provider(book.ProviderOpenLibrary), Clock: clock.NewSystem()},
+		hcfeeds.Feeds{
+			Charts: hardcover.New(p.providerClient(providerHardcover, nil, httpx.ClientConfig{}), p.providerKey(settings.BookSourceHardcover)), Kind: format.MediaType,
+			WorkProvider: format.Provider(book.ProviderOpenLibrary), HardcoverProvider: format.Provider(book.ProviderHardcover), Clock: clock.NewSystem(),
+			Resolve: func(ctx context.Context, isbn string) (string, bool, error) {
+				edition, err := openLibrary.ByISBN(ctx, isbn)
+				if errors.Is(err, openlibrary.ErrNotFound) {
+					return "", false, nil
+				}
+				return edition.WorkID(), err == nil && edition.WorkID() != "", err
+			},
+		},
+	}
 	if format.ByFolder {
 		client := p.providerClient(providerAudible, nil, httpx.ClientConfig{})
-		return audiblefeeds.Feeds{Charts: audible.New(client, client, nil), Kind: format.MediaType, Clock: clock.NewSystem()}
+		return append(media.JoinedFeeds{audiblefeeds.Feeds{Charts: audible.New(client, client, nil), Kind: format.MediaType, Clock: clock.NewSystem()}}, joined...)
 	}
-	return olfeeds.Feeds{
-		Charts: openlibrary.New(p.providerClient(providerOpenLibrary, nil, httpx.ClientConfig{})), Kind: format.MediaType,
-		Provider: format.Provider(book.ProviderOpenLibrary), Clock: clock.NewSystem(),
-	}
+	return joined
 }

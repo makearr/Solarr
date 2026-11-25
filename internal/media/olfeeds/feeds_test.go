@@ -37,7 +37,7 @@ func ask(listType media.RecommendationType, page int) media.RecommendQuery {
 }
 
 func TestOnlyTheRatedListsClaimRatingsAndUpcomingSaysWhyNot(t *testing.T) {
-	usable, unavailable := feeds(&charts{}).RecommendationFeeds(t.Context())
+	usable, unavailable := feeds(&charts{}).RecommendationFeeds(t.Context(), 1)
 	rated := map[media.RecommendationType]bool{}
 	for _, one := range usable {
 		rated[one.Type] = one.HasRating

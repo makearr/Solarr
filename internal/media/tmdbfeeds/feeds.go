@@ -13,6 +13,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
+// sourceKey is the provider's key in the metadata settings, which switch the feeds off with the provider.
+const sourceKey = "tmdb"
+
 // Charts is the part of the TMDB client the feeds read.
 type Charts interface {
 	Discover(ctx context.Context, media string, query tmdb.DiscoverQuery, page int) (tmdb.ListPage, error)
@@ -23,7 +26,15 @@ type Charts interface {
 type Detail struct {
 	Networks      []string
 	Certification string
+	// TVDBID is the show's TheTVDB id, 0 when TMDB knows none.
+	TVDBID int64
 }
+
+// The filters that make a TV chart an anime one: animation first made in Japan.
+const (
+	genreAnimation = 16
+	originAnime    = "JP"
+)
 
 // NoKeyReason is what an unusable feed says when the owner has stored no TMDB key.
 const NoKeyReason = "needs the TMDB key, under Settings, Metadata"
@@ -43,6 +54,10 @@ type Feeds struct {
 	Configured func() bool
 	// Detail reads one entry's networks and certification; nil leaves them empty.
 	Detail func(ctx context.Context, id int64) (Detail, error)
+	// Anime narrows the charts to anime, with trending read as the most popular, since TMDB's trending takes no filter.
+	Anime bool
+	// TVDBProvider, when set, keys a show by its TheTVDB id where Detail knows it, so another source naming it by that id is the same item.
+	TVDBProvider string
 }
 
 var _ media.Recommending = Feeds{}
@@ -50,10 +65,10 @@ var _ media.Recommending = Feeds{}
 var feedTypes = []media.RecommendationType{media.RecommendTrending, media.RecommendHighestRated, media.RecommendUpcoming, media.RecommendClassics}
 
 // RecommendationFeeds implements media.Recommending.
-func (f Feeds) RecommendationFeeds(context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+func (f Feeds) RecommendationFeeds(context.Context, int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
 	feeds := make([]media.RecommendationFeed, len(feedTypes))
 	for index, one := range feedTypes {
-		feeds[index] = media.RecommendationFeed{Type: one, Source: "TMDB", HasRating: true}
+		feeds[index] = media.RecommendationFeed{Type: one, Source: "TMDB", SourceKey: sourceKey, HasRating: true}
 	}
 	if f.Configured != nil && !f.Configured() {
 		unavailable := map[media.RecommendationFeed]string{}
@@ -77,6 +92,9 @@ func (f Feeds) Recommend(ctx context.Context, query media.RecommendQuery) ([]med
 		if f.Detail != nil {
 			if detail, err := f.Detail(ctx, entry.ID); err == nil {
 				item.Networks, item.Traits.Rating = detail.Networks, detail.Certification
+				if f.TVDBProvider != "" && detail.TVDBID > 0 {
+					item.Provider, item.ExternalID = f.TVDBProvider, strconv.FormatInt(detail.TVDBID, 10)
+				}
 			}
 		}
 		items = append(items, item)
@@ -95,8 +113,15 @@ func (f Feeds) read(ctx context.Context, query media.RecommendQuery) (tmdb.ListP
 	if len(query.Languages) == 1 {
 		discover.Language = query.Languages[0]
 	}
+	if f.Anime {
+		discover.WithGenres, discover.OriginCountry = []int64{genreAnimation}, originAnime
+	}
 	switch query.Feed.Type {
 	case media.RecommendTrending:
+		if f.Anime {
+			discover.SortBy = tmdb.SortPopularity
+			break
+		}
 		return f.Charts.Trending(ctx, f.Media, tmdb.TrendingWeek, query.Page)
 	case media.RecommendHighestRated:
 		discover.SortBy, discover.MinVotes = tmdb.SortRating, votesRated

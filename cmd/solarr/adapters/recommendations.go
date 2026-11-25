@@ -5,6 +5,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // Recommendations satisfies apiserver.DiscoverPool over library.db's recommendation pool.
@@ -67,7 +68,11 @@ func (a Recommendations) FeedStates(ctx context.Context, categoryID int64) ([]ap
 	}
 	out := make([]apiserver.DiscoverFeedState, len(rows))
 	for index, row := range rows {
-		out[index] = apiserver.DiscoverFeedState{Type: row.Type, Kind: row.Kind, LastError: row.LastError, Exhausted: row.Exhausted, RefreshedAt: row.RefreshedAt}
+		source := row.Source
+		if provider, found := settings.MetadataProviderByKey(row.Source); found {
+			source = provider.Label
+		}
+		out[index] = apiserver.DiscoverFeedState{Type: row.Type, Kind: row.Kind, Source: source, LastError: row.LastError, Exhausted: row.Exhausted, RefreshedAt: row.RefreshedAt}
 	}
 	return out, nil
 }

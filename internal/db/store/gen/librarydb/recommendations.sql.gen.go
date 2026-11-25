@@ -108,22 +108,24 @@ func (q *Queries) DeleteRecommendationsOfCategory(ctx context.Context, categoryI
 
 const deleteStaleRecommendationFeedItems = `-- name: DeleteStaleRecommendationFeedItems :exec
 DELETE FROM recommendation_feed_item
-WHERE type = ?1
-  AND recommendation_id IN (SELECT r.id FROM recommendation r WHERE r.category_id = ?2 AND r.kind = ?3)
-  AND recommendation_id NOT IN (SELECT value FROM json_each(?4))
+WHERE type = ?1 AND source = ?2
+  AND recommendation_id IN (SELECT r.id FROM recommendation r WHERE r.category_id = ?3 AND r.kind = ?4)
+  AND recommendation_id NOT IN (SELECT value FROM json_each(?5))
 `
 
 type DeleteStaleRecommendationFeedItemsParams struct {
 	Type       string
+	Source     string
 	CategoryID int64
 	Kind       string
 	KeepIds    interface{}
 }
 
-// What a refresh no longer names: this feed's items outside the new set.
+// What a refresh no longer names: this source's items of the list outside the new set.
 func (q *Queries) DeleteStaleRecommendationFeedItems(ctx context.Context, arg DeleteStaleRecommendationFeedItemsParams) error {
 	_, err := q.db.ExecContext(ctx, deleteStaleRecommendationFeedItems,
 		arg.Type,
+		arg.Source,
 		arg.CategoryID,
 		arg.Kind,
 		arg.KeepIds,
@@ -215,26 +217,34 @@ func (q *Queries) GetRecommendation(ctx context.Context, id int64) (Recommendati
 }
 
 const getRecommendationFeed = `-- name: GetRecommendationFeed :one
-SELECT category_id, kind, type, pages_read, exhausted, refreshed_at, last_error FROM recommendation_feed
-WHERE category_id = ? AND kind = ? AND type = ?
+SELECT category_id, kind, type, source, pages_read, exhausted, refreshed_at, popularity_max, last_error FROM recommendation_feed
+WHERE category_id = ? AND kind = ? AND type = ? AND source = ?
 `
 
 type GetRecommendationFeedParams struct {
 	CategoryID int64
 	Kind       string
 	Type       string
+	Source     string
 }
 
 func (q *Queries) GetRecommendationFeed(ctx context.Context, arg GetRecommendationFeedParams) (RecommendationFeed, error) {
-	row := q.db.QueryRowContext(ctx, getRecommendationFeed, arg.CategoryID, arg.Kind, arg.Type)
+	row := q.db.QueryRowContext(ctx, getRecommendationFeed,
+		arg.CategoryID,
+		arg.Kind,
+		arg.Type,
+		arg.Source,
+	)
 	var i RecommendationFeed
 	err := row.Scan(
 		&i.CategoryID,
 		&i.Kind,
 		&i.Type,
+		&i.Source,
 		&i.PagesRead,
 		&i.Exhausted,
 		&i.RefreshedAt,
+		&i.PopularityMax,
 		&i.LastError,
 	)
 	return i, err
@@ -343,7 +353,7 @@ func (q *Queries) ListRecommendationDismissals(ctx context.Context, userID int64
 }
 
 const listRecommendationFeedTypesOf = `-- name: ListRecommendationFeedTypesOf :many
-SELECT recommendation_id, type FROM recommendation_feed_item WHERE recommendation_id IN (SELECT value FROM json_each(?1)) ORDER BY recommendation_id, type
+SELECT DISTINCT recommendation_id, type FROM recommendation_feed_item WHERE recommendation_id IN (SELECT value FROM json_each(?1)) ORDER BY recommendation_id, type
 `
 
 type ListRecommendationFeedTypesOfRow struct {
@@ -375,8 +385,8 @@ func (q *Queries) ListRecommendationFeedTypesOf(ctx context.Context, ids interfa
 }
 
 const listRecommendationFeeds = `-- name: ListRecommendationFeeds :many
-SELECT category_id, kind, type, pages_read, exhausted, refreshed_at, last_error FROM recommendation_feed
-WHERE category_id = ? ORDER BY kind, type
+SELECT category_id, kind, type, source, pages_read, exhausted, refreshed_at, popularity_max, last_error FROM recommendation_feed
+WHERE category_id = ? ORDER BY kind, type, source
 `
 
 func (q *Queries) ListRecommendationFeeds(ctx context.Context, categoryID int64) ([]RecommendationFeed, error) {
@@ -392,9 +402,11 @@ func (q *Queries) ListRecommendationFeeds(ctx context.Context, categoryID int64)
 			&i.CategoryID,
 			&i.Kind,
 			&i.Type,
+			&i.Source,
 			&i.PagesRead,
 			&i.Exhausted,
 			&i.RefreshedAt,
+			&i.PopularityMax,
 			&i.LastError,
 		); err != nil {
 			return nil, err
@@ -710,19 +722,23 @@ func (q *Queries) RestoreRecommendation(ctx context.Context, arg RestoreRecommen
 }
 
 const setRecommendationFeed = `-- name: SetRecommendationFeed :exec
-INSERT INTO recommendation_feed (category_id, kind, type, pages_read, exhausted, refreshed_at, last_error) VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (category_id, kind, type) DO UPDATE SET
-  pages_read = excluded.pages_read, exhausted = excluded.exhausted, refreshed_at = excluded.refreshed_at, last_error = excluded.last_error
+INSERT INTO recommendation_feed (category_id, kind, type, source, pages_read, exhausted, refreshed_at, popularity_max, last_error)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (category_id, kind, type, source) DO UPDATE SET
+  pages_read = excluded.pages_read, exhausted = excluded.exhausted, refreshed_at = excluded.refreshed_at, popularity_max = excluded.popularity_max,
+  last_error = excluded.last_error
 `
 
 type SetRecommendationFeedParams struct {
-	CategoryID  int64
-	Kind        string
-	Type        string
-	PagesRead   int64
-	Exhausted   int64
-	RefreshedAt int64
-	LastError   string
+	CategoryID    int64
+	Kind          string
+	Type          string
+	Source        string
+	PagesRead     int64
+	Exhausted     int64
+	RefreshedAt   int64
+	PopularityMax float64
+	LastError     string
 }
 
 func (q *Queries) SetRecommendationFeed(ctx context.Context, arg SetRecommendationFeedParams) error {
@@ -730,9 +746,11 @@ func (q *Queries) SetRecommendationFeed(ctx context.Context, arg SetRecommendati
 		arg.CategoryID,
 		arg.Kind,
 		arg.Type,
+		arg.Source,
 		arg.PagesRead,
 		arg.Exhausted,
 		arg.RefreshedAt,
+		arg.PopularityMax,
 		arg.LastError,
 	)
 	return err
@@ -800,18 +818,24 @@ func (q *Queries) UpsertRecommendation(ctx context.Context, arg UpsertRecommenda
 }
 
 const upsertRecommendationFeedItem = `-- name: UpsertRecommendationFeedItem :exec
-INSERT INTO recommendation_feed_item (recommendation_id, type, rank) VALUES (?, ?, ?)
-ON CONFLICT (recommendation_id, type) DO UPDATE SET rank = excluded.rank
+INSERT INTO recommendation_feed_item (recommendation_id, type, source, rank) VALUES (?, ?, ?, ?)
+ON CONFLICT (recommendation_id, type, source) DO UPDATE SET rank = excluded.rank
 `
 
 type UpsertRecommendationFeedItemParams struct {
 	RecommendationID int64
 	Type             string
+	Source           string
 	Rank             int64
 }
 
 func (q *Queries) UpsertRecommendationFeedItem(ctx context.Context, arg UpsertRecommendationFeedItemParams) error {
-	_, err := q.db.ExecContext(ctx, upsertRecommendationFeedItem, arg.RecommendationID, arg.Type, arg.Rank)
+	_, err := q.db.ExecContext(ctx, upsertRecommendationFeedItem,
+		arg.RecommendationID,
+		arg.Type,
+		arg.Source,
+		arg.Rank,
+	)
 	return err
 }
 

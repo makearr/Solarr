@@ -94,10 +94,12 @@ type DiscoverQuery struct {
 	SortBy   string
 	MinVotes int
 	// ReleasedFrom and ReleasedTo are ISO dates on the first release (a film's primary release, a show's first air date); empty is open.
-	ReleasedFrom, ReleasedTo string
-	WithoutGenres            []int64
+	ReleasedFrom, ReleasedTo  string
+	WithGenres, WithoutGenres []int64
 	// Language is one original language; empty is any.
 	Language string
+	// OriginCountry is one country of origin (ISO 3166-1); empty is any.
+	OriginCountry string
 }
 
 // Discover reads one page of the discover chart of a kind (MediaTV, MediaMovie).
@@ -116,15 +118,26 @@ func (c Client) Discover(ctx context.Context, media string, query DiscoverQuery,
 	if query.ReleasedTo != "" {
 		values.Set(dateField+".lte", query.ReleasedTo)
 	}
+	if len(query.WithGenres) > 0 {
+		values.Set("with_genres", joinIDs(query.WithGenres, ","))
+	}
 	if len(query.WithoutGenres) > 0 {
-		ids := make([]string, len(query.WithoutGenres))
-		for index, id := range query.WithoutGenres {
-			ids[index] = strconv.FormatInt(id, 10)
-		}
-		values.Set("without_genres", strings.Join(ids, "|"))
+		values.Set("without_genres", joinIDs(query.WithoutGenres, "|"))
+	}
+	if query.OriginCountry != "" {
+		values.Set("with_origin_country", query.OriginCountry)
 	}
 	if query.Language != "" {
 		values.Set("with_original_language", query.Language)
 	}
 	return c.chartWith(ctx, "/discover/"+url.PathEscape(media), media, values)
+}
+
+// joinIDs spells ids the way a discover filter takes them: "," for all of them, "|" for any.
+func joinIDs(ids []int64, separator string) string {
+	spelled := make([]string, len(ids))
+	for index, id := range ids {
+		spelled[index] = strconv.FormatInt(id, 10)
+	}
+	return strings.Join(spelled, separator)
 }

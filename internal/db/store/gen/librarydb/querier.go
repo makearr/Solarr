@@ -370,7 +370,7 @@ type Querier interface {
 	// rather than trusting a silent no-op.
 	// The file's own row marked missing where it moves back to (a folder renamed by hand, then rescanned) is stale.
 	DeleteStaleDestinationPath(ctx context.Context, arg DeleteStaleDestinationPathParams) error
-	// What a refresh no longer names: this feed's items outside the new set.
+	// What a refresh no longer names: this source's items of the list outside the new set.
 	DeleteStaleRecommendationFeedItems(ctx context.Context, arg DeleteStaleRecommendationFeedItemsParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	DeleteTag(ctx context.Context, id int64) (int64, error)

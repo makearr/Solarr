@@ -109,7 +109,7 @@ func (s Service) autoAddVerdicts(ctx context.Context, global settings.DiscoverGl
 	if !ok {
 		return nil, nil
 	}
-	usable, _ := module.RecommendationFeeds(ctx)
+	usable := s.usableFeeds(ctx, module, category.ID)
 	rules := s.rulesOf(global, lib, category)
 	gates := AutoAddGates{MinRating: lib.MinRating, MinVotes: lib.MinVotes, PerDay: lib.AutoAddPerDay}
 	addedToday, err := s.AutoAdd.Pool.AutoAddedSince(ctx, category.ID, s.Clock.Now().Add(-24*time.Hour).Unix())
@@ -160,9 +160,13 @@ func (s Service) judgeAutoAdd(ctx context.Context, category settings.Category, r
 	if err != nil {
 		return PreviewItem{}, err
 	}
-	hasRating := slices.ContainsFunc(usable, func(feed media.RecommendationFeed) bool {
-		return string(feed.Type) == listType && feed.Kind == pooled.Kind && feed.HasRating
-	})
+	ofList := func(rated bool) bool {
+		return slices.ContainsFunc(usable, func(feed media.RecommendationFeed) bool {
+			return string(feed.Type) == listType && feed.Kind == pooled.Kind && feed.HasRating == rated
+		})
+	}
+	// An unrated item of a list that also has an unrated source is taken to be that source's, so the rating gate skips it.
+	hasRating := ofList(true) && (pooled.Rating > 0 || !ofList(false))
 	auto := AutoAdmit(item, gates, AutoAddFacts{HasRating: hasRating, AddedBefore: addedBefore, AddedToday: addedToday})
 	decision.Rejections = append(decision.Rejections, auto.Rejections...)
 	decision.Admitted = len(decision.Rejections) == 0

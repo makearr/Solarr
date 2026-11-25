@@ -8,19 +8,25 @@ enables it per library under **Settings, Discover**. A dashboard row shows the m
 
 ## Sources
 
-| Library | Source | Lists |
+A library reads every source of its media type whose provider is switched on under **Settings, Metadata** (and has its key,
+where it needs one). Each list's size is shared between the sources that read it, so a second source never makes a list
+longer. An item two sources name by the same id is shown once. Each source's popularity is scaled to 0 to 100 against the
+highest it answered, so the sources interleave in the poster wall instead of one source's larger numbers putting it on top.
+
+| Library | Sources | Lists |
 |---|---|---|
 | Film | TMDB (needs the TMDB key) | trending, highest rated, upcoming, classics |
-| TV | TMDB; an anime library reads AniList instead (no key) | trending, highest rated, upcoming, classics |
-| Music | Last.fm (needs the Last.fm key); names are resolved to MusicBrainz by exact name | trending artists and albums, artists and albums alike the ones you hold most of, classic albums of your genres; no upcoming (Last.fm has no calendar) |
-| Audiobooks | Audible catalogue (no key; the library's region store) | best sellers (the catalogue's own ordering, which favours new releases), highest rated (the catalogue's average-rating ordering), upcoming (newest first, only titles not out yet); no classics, the catalogue cannot be cut by release date |
-| Adult | StashDB (needs its API key in Settings) | trending, upcoming (scenes dated after today); no highest rated or classics, stash-box servers keep no ratings |
-| Ebooks | Open Library (no key) | trending this week, highest rated (at least 100 ratings), classics (at least 300 ratings, first published long enough ago); no upcoming |
+| TV | TMDB | trending, highest rated, upcoming, classics |
+| Anime (a TV library of the anime kind) | AniList (no key); TMDB's Japanese animation (needs the TMDB key; trending is the most popular, as TMDB's trending chart takes no filter; a show is keyed by its TheTVDB id, so it merges with AniList's entry) | trending, highest rated, upcoming, classics |
+| Music | Last.fm (needs the Last.fm key; names resolved to MusicBrainz by exact name): trending artists and albums, artists and albums alike the ones you hold most of, classic albums of your genres. ListenBrainz (no key, MusicBrainz ids): the week's most listened artists and albums, upcoming albums of the next 30 days. Deezer (no key; the chart of the country the instance runs in, names resolved like Last.fm's): trending artists and albums | as named per source; nothing carries ratings |
+| Audiobooks | Audible catalogue (no key; the library's region store): best sellers, highest rated, upcoming. Open Library and Hardcover as for ebooks | as named per source |
+| Ebooks | Open Library (no key): trending this week, highest rated (at least 100 ratings), classics (at least 300 ratings, first published long enough ago). Hardcover (needs the Hardcover token): most read in the last 30 days, highest rated (at least 500 ratings), upcoming (most awaited first), classics (at least 300 ratings); a book is keyed by the Open Library work its ISBN names, so it merges with Open Library's entry, else by its Hardcover id | as named per source |
+| Adult | every stash-box server with its API key: StashDB, ThePornDB, FansDB | trending, upcoming (scenes dated after today); no highest rated or classics, stash-box servers keep no ratings |
 | Comics and manga | AniList manga (no key); Western comics have no free popularity chart | trending, highest rated, upcoming, classics |
 | Any library of a media type with collections | the provider that names the collection | collections: the members of a collection you hold one of |
 
-A list whose source cannot be read (no key, source down) keeps its old items and says why under Settings, Discover.
-Audiobooks and adult libraries have the feeds below; magazines have none yet.
+A source that cannot be read (no key, source down) keeps its old items and says why under Settings, Discover, one line per
+list and source; the other sources of the list go on. Magazines have no feeds yet.
 
 ## What is kept out
 
@@ -42,7 +48,7 @@ appears for a few seconds after hiding. Load more reads the next page from the s
 
 Per list and library, **Add automatically** adds what passes both gates after every refresh, most popular first:
 
-- the source's rating is at least *minimum rating* (skipped for a source with no ratings, Last.fm);
+- the source's rating is at least *minimum rating* (skipped for a source with no ratings: Last.fm, ListenBrainz, Deezer, stash-box; an unrated item of a list that also has an unrated source is taken to be that source's);
 - it has at least *minimum votes* (Last.fm gives albums no vote count, so albums need the floor at 0);
 - no more than *at most per day* are added to a library in 24 hours;
 - never an item automatic adding added before, even if you deleted it.

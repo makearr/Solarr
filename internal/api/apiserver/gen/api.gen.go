@@ -2756,8 +2756,11 @@ type DiscoverFeed struct {
 	LastError string `json:"last_error"`
 
 	// RefreshedAt Unix seconds of the last refresh; 0 before the first.
-	RefreshedAt int64  `json:"refreshed_at"`
-	Type        string `json:"type"`
+	RefreshedAt int64 `json:"refreshed_at"`
+
+	// Source The display name of the metadata provider that reads this list; a list read by several sources has one feed each.
+	Source string `json:"source"`
+	Type   string `json:"type"`
 }
 
 // DiscoverGlobalSettings defines model for DiscoverGlobalSettings.

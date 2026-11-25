@@ -21,6 +21,8 @@ type config struct {
 	global    settings.DiscoverGlobal
 	libraries []settings.LibraryDiscover
 	category  settings.Category
+	// disabled are the provider keys switched off.
+	disabled []string
 }
 
 func (c config) Global() settings.DiscoverGlobal { return c.global }
@@ -28,6 +30,7 @@ func (c config) Libraries(context.Context) ([]settings.LibraryDiscover, error) {
 	return c.libraries, nil
 }
 func (c config) Category(id int64) (settings.Category, bool) { return c.category, id == c.category.ID }
+func (c config) ProviderEnabled(key string) bool             { return !contains(c.disabled, key) }
 
 type replaced struct {
 	ref   library.FeedRef
@@ -69,7 +72,7 @@ type module struct {
 	asked []media.RecommendQuery
 }
 
-func (m *module) RecommendationFeeds(context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+func (m *module) RecommendationFeeds(context.Context, int64) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
 	return m.feeds, nil
 }
 
@@ -322,5 +325,61 @@ func TestMoreKeepsReadingWhenAPageAdmitsNothingAndStopsAtTheEnd(t *testing.T) {
 	}
 	if _, err := service(enabledLibrary(4, "trending"), p, m, held).More(t.Context(), 1, "classics"); !errors.Is(err, discover.ErrNothingToRead) {
 		t.Errorf("a list that is off: err = %v", err)
+	}
+}
+
+func popular(count int, prefix string, highest float64) []media.Recommendation {
+	items := titles(count, prefix)
+	for index := range items {
+		items[index].Popularity = highest / float64(index+1)
+	}
+	return items
+}
+
+func TestRefreshReadsEverySourceOfAListSplitsTheAmountAndScalesPopularity(t *testing.T) {
+	first := &module{
+		feeds: []media.RecommendationFeed{{Type: media.RecommendTrending, Source: "First", SourceKey: "first"}},
+		pages: map[media.RecommendationType][][]media.Recommendation{media.RecommendTrending: {popular(3, "a", 50000)}},
+	}
+	second := &module{
+		feeds: []media.RecommendationFeed{{Type: media.RecommendTrending, Source: "Second", SourceKey: "second"}},
+		pages: map[media.RecommendationType][][]media.Recommendation{media.RecommendTrending: {popular(3, "b", 40)}},
+	}
+	p := &pool{}
+	if err := service(enabledLibrary(4, "trending"), p, media.JoinedFeeds{first, second}, judge{}).Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]float64{}
+	for _, one := range p.replaced {
+		for _, item := range one.items {
+			got[one.ref.Source] = append(got[one.ref.Source], item.Popularity)
+		}
+		if one.state.Source != one.ref.Source {
+			t.Errorf("state %+v of ref %+v", one.state, one.ref)
+		}
+	}
+	want := map[string][]float64{"first": {100, 50}, "second": {100, 50}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("popularity by source = %v, want %v", got, want)
+	}
+	if p.replaced[0].state.PopularityMax != 50000 || p.replaced[1].state.PopularityMax != 40 {
+		t.Errorf("states = %+v, %+v", p.replaced[0].state, p.replaced[1].state)
+	}
+}
+
+func TestRefreshLeavesTheFeedsOfASwitchedOffProviderUnread(t *testing.T) {
+	first := &module{
+		feeds: []media.RecommendationFeed{{Type: media.RecommendTrending, SourceKey: "first"}},
+		pages: map[media.RecommendationType][][]media.Recommendation{media.RecommendTrending: {titles(5, "a")}},
+	}
+	second := &module{feeds: []media.RecommendationFeed{{Type: media.RecommendTrending, SourceKey: "second"}}}
+	c := enabledLibrary(4, "trending")
+	c.disabled = []string{"second"}
+	p := &pool{}
+	if err := service(c, p, media.JoinedFeeds{first, second}, judge{}).Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(second.asked) != 0 || len(p.replaced) != 1 || len(p.replaced[0].items) != 4 {
+		t.Errorf("second asked %d times, replaced = %+v", len(second.asked), p.replaced)
 	}
 }
