@@ -8,6 +8,26 @@ how they are named, how hard Solarr searches), 🔴 **Expert** (internals, and c
 interface levels *normal / advanced / expert* in Settings → User.
 
 **New? Read [getting-started.md](getting-started.md)**, then follow the [user guide](user-guide.md).
+**What can it do?** The [feature pages](features/README.md): one per feature, each with its feature set, benefits and technical details.
+
+## ⭐ Features
+
+| Page | Covers |
+|---|---|
+| [features/libraries.md](features/libraries.md) | Media types, libraries, mixed libraries, list views |
+| [features/recognition.md](features/recognition.md) | Recognition and import: evidence, preview, undo |
+| [features/metadata.md](features/metadata.md) | Providers per library, ratings, pictures, franchises |
+| [features/hunting.md](features/hunting.md) | The planner, RSS, upgrades, indexers and download clients |
+| [features/quality.md](features/quality.md) | Targets, profiles, measured quality, strict upgrades |
+| [features/storage.md](features/storage.md) | Naming, root folders, drain, recycle bin, duplicates |
+| [features/arr-migration.md](features/arr-migration.md) | Moving over from the *Arrs, and the comparison table |
+| [features/player.md](features/player.md) | The preview player |
+| [features/transcoding.md](features/transcoding.md) | Converting a library to its target quality |
+| [features/discover.md](features/discover.md) | Recommendations and import lists |
+| [features/users.md](features/users.md) | Accounts, access per library, interface levels |
+| [features/automation.md](features/automation.md) | Scheduler, activity, calendar, statistics, health |
+| [features/connections.md](features/connections.md) | Media servers and webhooks |
+| [features/privacy.md](features/privacy.md) | Privacy and security |
 
 ## 🟢 Beginner: using Solarr
 
@@ -21,7 +41,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [guide/automation.md](guide/automation.md) | What Solarr does by itself, how to watch it, how to tune it |
 | [guide/people.md](guide/people.md) | People, labels, networks and following |
 | [guide/favorites.md](guide/favorites.md) | Hearts, apart from follows, and the Favorites filter |
-| [screenshots/](screenshots/) | The images the top-level README shows, from a demo instance with placeholder files |
+| [screenshots/](screenshots/) | The images the README and the feature pages show, from a demo instance with placeholder files |
 
 ## 🟡 Advanced: setting it up your way
 
@@ -31,6 +51,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [guide/libraries.md](guide/libraries.md) | Which library, moving works, several kinds in one, collections, saved filters |
 | [guide/importing.md](guide/importing.md) | Import a folder, archives, held reviews |
 | [guide/storage.md](guide/storage.md) | Root folders, offline roots, recycle bin, cache |
+| [docker-image.md](docker-image.md) | Docker run and compose, mounts, image size, memory, RAM copies, the variables people set |
 | [container-runtime.md](container-runtime.md) | PUID/PGID, TZ, ownership, capabilities |
 | [environment-variables.md](environment-variables.md) | Every variable: defaults, precedence, API keys, root folders, `_FILE` secrets |
 | [startup-checks.md](startup-checks.md) | How directories are checked at startup, and what deliberately is not |
@@ -62,6 +83,9 @@ interface levels *normal / advanced / expert* in Settings → User.
 
 | Page | Covers |
 |---|---|
+| [architecture.md](architecture.md) | The four databases, why Go, the three kinds of work, the core concepts |
+| [building.md](building.md) | Compiling the binary and the image yourself, the make targets |
+| [../agents/](../agents/README.md) | Briefs for AI agents: recognition test, benchmark, code review |
 | [music-identification.md](music-identification.md) | How a music file is identified: the passes, album matching, what was measured |
 | [tv-internals.md](tv-internals.md) | The TV parser, providers, series storage and naming |
 | [tv-providers-benchmark.md](tv-providers-benchmark.md) | Provider speed and richness, and the default order it set |
@@ -73,7 +97,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [disk-io.md](disk-io.md) | Disk groups, the per-disk IO gate and its priorities, latency probing, ionice |
 | [pausing-tasks.md](pausing-tasks.md) | Pausing and resuming scheduler tasks: what a pause holds, interrupts and keeps |
 | [users-and-access.md](users-and-access.md) | Roles, the per-library grants (request, add, manage) and hiding tagged items from an account |
-| [benchmarks.md](benchmarks.md) | The 500k corpus, the performance targets as tests |
+| [benchmarks.md](benchmarks.md) | Resource use in practice, the 500k corpus, the performance targets as tests |
 | [duplicate-videos.md](duplicate-videos.md) | Perceptual hashing of videos, the finder's levels, why not Stash's method, merging |
 | [codebase-map.md](codebase-map.md) | The package tree, what depends on what, where to start reading |
 | [coding-standards.md](coding-standards.md) | Style, structure, comments, testing |

@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Documentation: a shorter README, one page per feature (what it does, why it helps, how it works) with fresh screenshots, a Docker image page, an architecture page, a security policy with private vulnerability reporting, a contributing guide, and briefs that let an AI agent test recognition, benchmark a library or review the code and write a report you can post.
 - Readarr: connect a Readarr and import its books and audiobooks (by Goodreads id, with its monitoring, library and quality-profile mapping, download clients and indexers), send monitoring back, and add a book named by its Goodreads id to Readarr when running as its companion.
 - Adult: a scene waiting in Review or Unidentified shows each suggested hit with its date and studio, as the Import screen does.
 - Conversion: a file that was moved or renamed no longer makes its detail show the old path or Restore answer "folder not reachable"; Restore failures are now shown on the page; a blocked file shows why; the "saved" size in the status bar reads like the file lists (5.9 MB).

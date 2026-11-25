@@ -5,6 +5,36 @@
 ADR-28 states performance as numbers, and numbers only mean something against a corpus.
 `internal/db/library/fixture` builds one; `internal/db/library/bench_test.go` measures against it.
 
+## Resource use in practice
+
+Numbers measured on the developer's machine, not guarantees. Everyday browsing is cheap; these are the operations that
+are not, so you can plan for them.
+
+| Operation | Cost | Notes |
+|---|---|---|
+| **Video perceptual hashing** (the similar-videos report) | **High: hours on a big library.** About 1.5 s of one CPU core per 1080p video | **Off by default.** *Storage → Duplicates*. "Videos hashed at once" (up to 8) speeds up fast disks |
+| **First scan of a large library** | Hours | About 200,000 audio files on an NFS NAS: roughly 1 to 3.5 hours from an empty database. Resumable |
+| **Probe sweep** (ffprobe on every file) | Moderate, I/O-bound | Reads each file's header once, so it is limited by your storage |
+| **AcoustID fingerprints** | Moderate CPU | Only for files nothing else could identify, and optional |
+| **Transcoding** (player or library) | One `ffmpeg` per file | CPU, or GPU if you pass a device. The player only while someone watches; library transcoding at the lowest priority |
+| **Importing from the \*Arrs** | 29 to 38 minutes | About 4,000 films and about 1,000 series; paced by metadata providers |
+| **Artwork** | Network, in the background | Fills in over minutes after a scan |
+
+Where the bottlenecks are in usual operation:
+
+1. **Your storage.** Scanning and probing are bound by disk or NAS speed, not by Solarr. On a shared NAS, parallel reads
+   slow down every client.
+2. **Metadata providers' rate limits.** Enrichment is paced by what each provider allows (TVmaze: 20 calls per 10 s).
+3. **Indexers and the download client.** Searches wait on indexer answers; Solarr asks them in parallel.
+4. **The single writer.** Imports run one at a time on purpose: the interface stays responsive, and a very large import
+   is steady rather than fast.
+
+A filtered page of a 500,000-file library comes back in under 4 ms in the worst case, and a TV library of about 1,000
+series and 85,000 episodes answers every list in under 0.25 s, so the interface is rarely the slow part.
+
+Measured a library import on your hardware? [Share it](../README.md#how-you-can-help): the
+[benchmark agent brief](../agents/recognition-benchmark.md) produces a ready-to-post report.
+
 ## The corpus
 
 `fixture.Ensure` generates a `library.db` and caches it under
