@@ -97,6 +97,7 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 	for i, observed := range kept {
 		file := observedFile{Observed: observed, registered: registered[i]}
 		facts, err := Probe(ctx, c.config.FS, path.Join(root.Path, observed.File.RelPath))
+		markDefect(ctx, c.config.Physical, c.logger, file.registered.MediaObjectID, observed.File.SizeBytes, path.Ext(observed.File.RelPath), facts, err, now)
 		if err != nil {
 			c.logger.Warn("comic file not readable; imported unidentified", slog.String("path", observed.File.RelPath), slog.Any("error", err))
 		} else {
