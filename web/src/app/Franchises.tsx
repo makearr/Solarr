@@ -78,6 +78,29 @@ function CoverageBar({ franchise }: { franchise: Franchise }) {
   return <AvailabilityBar status={present >= required ? "complete" : "incomplete"} present={present} required={required} />;
 }
 
+/** A collection's own picture, else a mosaic of its members' covers (the provider's, or the library's own), else the type's icon. */
+function CollectionPicture({ franchise, size, fallback }: { franchise: Franchise; size: "small" | "thumb"; fallback: React.ReactNode }) {
+  if (franchise.poster_url) return <img src={remoteImage(franchise.poster_url, size)} alt="" loading="lazy" className="size-full object-cover" />;
+  const covers = franchise.members.filter((member) => member.poster_url || member.work_id).slice(0, 4);
+  if (covers.length === 0) return <span className="flex size-full items-center justify-center text-ink-muted">{fallback}</span>;
+  const cover = (member: FranchiseMember) =>
+    member.poster_url ? (
+      <img src={remoteImage(member.poster_url, size)} alt="" loading="lazy" className="size-full object-cover" />
+    ) : (
+      <CoverArt workId={member.work_id as number} title={member.title} size={size} className="size-full object-cover" />
+    );
+  if (covers.length < 4) return <span className="block size-full">{cover(covers[0]!)}</span>;
+  return (
+    <span className="grid size-full grid-cols-2 grid-rows-2">
+      {covers.map((member) => (
+        <span key={member.work_id ?? `${member.provider}:${member.external_id}`} className="block overflow-hidden">
+          {cover(member)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** The letter a name is listed under: its first letter or digit, "#" for the rest. */
 function initialOf(name: string): string {
   const letter = name.trim().charAt(0).toLowerCase();
@@ -229,13 +252,7 @@ export function FranchiseIndex() {
                 className="group flex flex-col gap-1 text-left focus-visible:outline-2 focus-visible:outline-accent"
               >
                 <span className="relative block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
-                  {franchise.poster_url ? (
-                    <img src={remoteImage(franchise.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
-                  ) : (
-                    <span className="flex size-full items-center justify-center text-ink-muted">
-                      <TypeIcon aria-hidden className="size-8" />
-                    </span>
-                  )}
+                  <CollectionPicture franchise={franchise} size="small" fallback={<TypeIcon aria-hidden className="size-8" />} />
                   <span className="absolute bottom-1.5 left-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-pressed=true]]:opacity-100">
                     <HeartButton subject="collection" id={franchise.id} name={franchise.name} />
                   </span>
@@ -252,7 +269,7 @@ export function FranchiseIndex() {
             {shown.map((franchise) => (
               <li key={franchise.id} data-initial={initialOf(franchise.name)} className="flex flex-wrap items-center gap-3 px-3 py-2">
                 <span className="block h-12 w-8 shrink-0 overflow-hidden rounded border border-border-subtle bg-canvas">
-                  {franchise.poster_url && <img src={remoteImage(franchise.poster_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />}
+                  <CollectionPicture franchise={franchise} size="thumb" fallback={<TypeIcon aria-hidden className="size-4" />} />
                 </span>
                 <Link to="/library/$categoryId/collections/$franchiseId" params={{ categoryId, franchiseId: String(franchise.id) }} className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">
                   {franchise.name}
