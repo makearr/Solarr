@@ -225,3 +225,19 @@ func TestProbeStreams_RealFFmpegFileWithTwoAudioLanguagesProbesBack(t *testing.T
 		t.Errorf("streams = %+v", file.Streams)
 	}
 }
+
+func TestEnginesOfModelAnswersOnlyForCardsTheTableStates(t *testing.T) {
+	cases := map[string]transcode.EngineCounts{
+		"NVIDIA GeForce RTX 4090": {Encode: 2, Decode: 2},
+		"NVIDIA GeForce RTX 2070": {Encode: 1, Decode: 1},
+		"NVIDIA GeForce GTX 1660": {Encode: 1, Decode: 1},
+		"NVIDIA GeForce RTX 3060": {},
+		"Tesla T4":                {},
+		"":                        {},
+	}
+	for model, want := range cases {
+		if got := transcode.EnginesOfModel(model); got != want {
+			t.Errorf("EnginesOfModel(%q) = %+v, want %+v", model, got, want)
+		}
+	}
+}

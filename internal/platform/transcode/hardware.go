@@ -31,7 +31,10 @@ type Capability struct {
 	Accel  Accel
 	Device string
 	// Name is what the device is, for the settings page ("Intel", "AMD", "NVIDIA").
-	Name    string
+	Name string
+	// Model is the card's own name where the driver tool gives it; Engines how many encode and decode engines it has, zero when unknown.
+	Model   string
+	Engines EngineCounts
 	Working bool
 	Detail  string
 }
@@ -67,7 +70,8 @@ func Detect(ctx context.Context, runner Runner, fsys fsx.FS) []Capability {
 	methods := hwaccelMethods(ctx, runner)
 
 	if _, err := fsys.Stat(nvidiaNode); err == nil {
-		found = append(found, try(ctx, runner, lacking(methods, "cuda", Capability{Accel: NVENC, Name: "NVIDIA"})))
+		model := nvidiaModel(ctx, runner)
+		found = append(found, try(ctx, runner, lacking(methods, "cuda", Capability{Accel: NVENC, Name: "NVIDIA", Model: model, Engines: EnginesOfModel(model)})))
 	}
 	nodes := renderNodes(fsys)
 	if len(nodes) == 0 {

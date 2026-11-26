@@ -1137,6 +1137,8 @@ const catalogue = {
   "transcode.retainDays": "Keep for days (0 follows the recycle bin)",
   "transcode.capGb": "Most space in GB (0 for no limit)",
   "transcode.save": "Save",
+  "transcode.engines": "{encode} encode, {decode} decode engines",
+  "transcode.enginesUnknown": "engine count unknown",
   "transcode.hardware": "Hardware",
   "transcode.hardwareHelp": "What this machine can encode with. A container needs the render device (--device /dev/dri) and its group for GPU engines.",
   "transcode.ffmpeg": "ffmpeg {version}",

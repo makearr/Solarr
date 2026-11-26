@@ -12930,6 +12930,12 @@ export interface components {
             accel: "software" | "qsv" | "vaapi" | "nvenc";
             device?: string;
             name?: string;
+            /** @description The card's own name, where the driver tool reports it. */
+            model?: string;
+            /** @description Hardware encoder engines on the device; absent when not known. */
+            encode_engines?: number;
+            /** @description Hardware decoder engines on the device; absent when not known. */
+            decode_engines?: number;
             working: boolean;
             detail?: string;
         };

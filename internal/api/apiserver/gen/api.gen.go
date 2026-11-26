@@ -7448,11 +7448,20 @@ type TranscodeAudioFiltersDenoiseMethod string
 
 // TranscodeCapability defines model for TranscodeCapability.
 type TranscodeCapability struct {
-	Accel   TranscodeCapabilityAccel `json:"accel"`
-	Detail  *string                  `json:"detail,omitempty"`
-	Device  *string                  `json:"device,omitempty"`
-	Name    *string                  `json:"name,omitempty"`
-	Working bool                     `json:"working"`
+	Accel TranscodeCapabilityAccel `json:"accel"`
+
+	// DecodeEngines Hardware decoder engines on the device; absent when not known.
+	DecodeEngines *int    `json:"decode_engines,omitempty"`
+	Detail        *string `json:"detail,omitempty"`
+	Device        *string `json:"device,omitempty"`
+
+	// EncodeEngines Hardware encoder engines on the device; absent when not known.
+	EncodeEngines *int `json:"encode_engines,omitempty"`
+
+	// Model The card's own name, where the driver tool reports it.
+	Model   *string `json:"model,omitempty"`
+	Name    *string `json:"name,omitempty"`
+	Working bool    `json:"working"`
 }
 
 // TranscodeCapabilityAccel defines model for TranscodeCapability.Accel.

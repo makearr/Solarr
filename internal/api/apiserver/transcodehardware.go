@@ -48,6 +48,15 @@ func (s *Server) transcodeHardware() gen.TranscodeHardware {
 		if capability.Detail != "" {
 			one.Detail = &capability.Detail
 		}
+		if capability.Model != "" {
+			one.Model = &capability.Model
+		}
+		if capability.Engines.Encode > 0 {
+			one.EncodeEngines = &capability.Engines.Encode
+		}
+		if capability.Engines.Decode > 0 {
+			one.DecodeEngines = &capability.Engines.Decode
+		}
 		out.Capabilities = append(out.Capabilities, one)
 	}
 	for _, row := range s.transcoder.Encoders() {

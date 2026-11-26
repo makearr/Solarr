@@ -17166,6 +17166,9 @@ components:
         accel: { type: string, enum: [software, qsv, vaapi, nvenc] }
         device: { type: string }
         name: { type: string }
+        model: { type: string, description: "The card's own name, where the driver tool reports it." }
+        encode_engines: { type: integer, description: "Hardware encoder engines on the device; absent when not known." }
+        decode_engines: { type: integer, description: "Hardware decoder engines on the device; absent when not known." }
         working: { type: boolean }
         detail: { type: string }
 

@@ -421,7 +421,13 @@ function HardwareCard() {
         .filter((capability) => capability.accel !== "software")
         .map((capability) => (
           <p key={capability.accel} className="text-xs text-ink-muted">
-            {capability.accel.toUpperCase()}: {capability.name ?? ""} {capability.device ?? ""} {capability.working ? "" : `(${capability.detail ?? t("transcode.unavailable")})`}
+            {capability.accel.toUpperCase()}: {capability.model ?? capability.name ?? ""} {capability.device ?? ""} {capability.working ? "" : `(${capability.detail ?? t("transcode.unavailable")})`}
+            {capability.working && (
+              <>
+                {" "}
+                {capability.encode_engines !== undefined ? t("transcode.engines", { encode: capability.encode_engines, decode: capability.decode_engines ?? 0 }) : t("transcode.enginesUnknown")}
+              </>
+            )}
           </p>
         ))}
       <div className="overflow-x-auto">

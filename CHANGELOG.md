@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Settings, Transcode: the hardware card names the GPU and shows how many encode and decode engines it has where they are known (NVIDIA cards in the shipped table), otherwise says "engine count unknown".
 - Comics and manga now use Wikidata as a metadata source (switch it on under Settings, Metadata): summary, genres, original language, creators and start year fill what the comic providers leave empty, found by the series' Comic Vine or MyAnimeList id.
 - Organisation pictures: publishers (books, audiobooks, comics), studios, networks and labels without a logo now get one from Wikidata by name, in a daily background task ("Find organisation logos" under Settings, Tasks); music labels with a MusicBrainz id keep using their own task.
 - Choose image: the picture in use is always shown first in the dialog, and the empty message now says no provider offers *another* picture.
