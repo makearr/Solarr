@@ -52,10 +52,10 @@ const (
 )
 
 // DefaultComicSources is ComicVine, which names a series and numbers its issues, Metron, then the Grand Comics Database.
-var DefaultComicSources = []string{ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD}
+var DefaultComicSources = []string{ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, SourceWikidata}
 
 // DefaultMangaSources is AniList, which names a manga, then MangaUpdates and MangaDex, whose chapter map gives the volumes.
-var DefaultMangaSources = []string{TVSourceAniList, ComicSourceMangaUpdates, ComicSourceMangaDex, TVSourceMAL, TVSourceAniDB, SourceLastFM, SourceDiscogs, SourceSpotify}
+var DefaultMangaSources = []string{TVSourceAniList, ComicSourceMangaUpdates, ComicSourceMangaDex, TVSourceMAL, TVSourceAniDB, SourceLastFM, SourceDiscogs, SourceSpotify, SourceWikidata}
 
 // The adult providers: Whisparr's server, backed by ThePornDB, and three stash-box servers.
 const (
@@ -182,7 +182,7 @@ const KeyMetadataProviderPaces = "metadata.provider_paces"
 
 // MetadataProviders are the providers a library's order is made of.
 var MetadataProviders = []MetadataProvider{
-	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie", "book", "audiobook", "adult"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
+	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie", "book", "audiobook", "adult", "comic"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
 		PerMinute: 60, Published: "one request at a time; no rate published"},
 	{Key: SourceBrainzMash, Label: "BrainzMash", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"},
 		PerMinute: 600, Published: "none published (its DroppedNeedle pool documents 10 a second)"},

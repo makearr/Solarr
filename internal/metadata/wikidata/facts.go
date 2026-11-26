@@ -21,15 +21,22 @@ const (
 	FactAlbum  FactKind = "P436"
 	// FactBook is Open Library's work id ("OL27482W"), which a literary work's item records.
 	FactBook FactKind = "P648"
+	// FactComic is Comic Vine's volume id ("4050-18166"), FactManga MyAnimeList's manga id.
+	FactComic FactKind = "P5905"
+	FactManga FactKind = "P4087"
 )
+
+var comicVineVolumePattern = regexp.MustCompile(`^4050-[0-9]{1,9}$`)
 
 var numericIDPattern = regexp.MustCompile(`^[0-9]{1,12}$`)
 
 // valid says id has the shape its property holds; anything else would be a syntax error that fails the whole batch.
 func (k FactKind) valid(id string) bool {
 	switch k {
-	case FactFilm, FactSeries:
+	case FactFilm, FactSeries, FactManga:
 		return numericIDPattern.MatchString(id)
+	case FactComic:
+		return comicVineVolumePattern.MatchString(id)
 	case FactAlbum:
 		return musicBrainzIDPattern.MatchString(id)
 	case FactBook:

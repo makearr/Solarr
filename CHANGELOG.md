@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Comics and manga now use Wikidata as a metadata source (switch it on under Settings, Metadata): summary, genres, original language, creators and start year fill what the comic providers leave empty, found by the series' Comic Vine or MyAnimeList id.
 - Organisation pictures: publishers (books, audiobooks, comics), studios, networks and labels without a logo now get one from Wikidata by name, in a daily background task ("Find organisation logos" under Settings, Tasks); music labels with a MusicBrainz id keep using their own task.
 - Choose image: the picture in use is always shown first in the dialog, and the empty message now says no provider offers *another* picture.
 - Collections without a picture of their own (music, and any type whose provider has none) show a mosaic of their members' covers instead of an empty tile.

@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/mangadex"
 	"github.com/makearr/Solarr/internal/metadata/mangaupdates"
 	"github.com/makearr/Solarr/internal/metadata/metron"
+	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
 
 // ErrNoSource means no provider could be asked or none knew the series.
@@ -68,6 +69,11 @@ type MangaDexSource interface {
 	Aggregate(ctx context.Context, id, language string) ([]mangadex.Volume, error)
 }
 
+// WikidataSource is Wikidata as a fetch asks it: what its item says of a series, found by a provider's id for it.
+type WikidataSource interface {
+	FactsOf(ctx context.Context, kind wikidata.FactKind, ids []string) (map[string]wikidata.WorkFacts, error)
+}
+
 // Hint is what a caller already knows of the series, used to find it where an id is missing.
 type Hint struct {
 	Title string
@@ -82,6 +88,7 @@ type Sources struct {
 	AniList      AniListSource
 	MangaUpdates MangaUpdatesSource
 	MangaDex     MangaDexSource
+	Wikidata     WikidataSource
 	// Local asks the media servers a library takes metadata from; nil asks none.
 	Local mediaserver.LocalAsker
 	// Records answers the definition-file provider of a key, nil for one that is not (or no longer) active.
@@ -124,6 +131,8 @@ func (s Sources) fetchComic(ctx context.Context, categoryID int64, series *Serie
 			s.askMetron(ctx, series, hint)
 		case settings.ComicSourceGCD:
 			s.askGCD(ctx, series, hint)
+		case settings.SourceWikidata:
+			s.askWikidata(ctx, series)
 		default:
 			s.askOther(ctx, categoryID, series, key, hint)
 		}
@@ -384,6 +393,8 @@ func (s Sources) fetchManga(ctx context.Context, categoryID int64, series *Serie
 			if ok {
 				aggregate, lastVolume = volumes, dex.LastVolume
 			}
+		case settings.SourceWikidata:
+			s.askWikidata(ctx, series)
 		default:
 			s.askOther(ctx, categoryID, series, key, hint)
 		}
@@ -754,4 +765,44 @@ func firstInt(values ...int) int {
 		}
 	}
 	return 0
+}
+
+// askWikidata fills what the series lacks from the item that records its Comic Vine volume (comics) or MyAnimeList manga
+// id (manga); a series without either id is not found, as Wikidata names no title of its own.
+func (s Sources) askWikidata(ctx context.Context, series *Series) {
+	if s.Wikidata == nil {
+		return
+	}
+	kind, id := wikidata.FactComic, series.IDs[ProviderComicVine]
+	if series.Manga {
+		kind, id = wikidata.FactManga, series.IDs[ProviderMAL]
+	} else if id != "" {
+		id = "4050-" + id
+	}
+	if id == "" {
+		return
+	}
+	facts, err := s.Wikidata.FactsOf(ctx, kind, []string{id})
+	if err != nil {
+		s.warn(settings.SourceWikidata, id, err)
+		series.Failed = append(series.Failed, settings.SourceWikidata)
+		return
+	}
+	found, known := facts[id]
+	if !known {
+		return
+	}
+	year, _ := strconv.Atoi(strings.TrimSpace(found.Date[:min(4, len(found.Date))]))
+	series.fill("", found.Summary, "", "", year, 0)
+	series.addAliases(found.OriginalTitle)
+	series.addGenres(found.Genres...)
+	if series.OriginalLanguage == "" && len(found.Languages) > 0 {
+		series.OriginalLanguage = found.Languages[0]
+	}
+	for _, maker := range found.Makers {
+		if !slices.ContainsFunc(series.Credits, func(held Credit) bool { return sameTitle(held.Name, maker) }) {
+			series.Credits = append(series.Credits, Credit{Name: maker, Role: "creator", Order: len(series.Credits)})
+		}
+	}
+	series.Sources = append(series.Sources, settings.SourceWikidata)
 }

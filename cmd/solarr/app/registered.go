@@ -932,6 +932,7 @@ func (p *process) comicService() comic.Service {
 			AniList:      anilist.New(client(providerAniList)),
 			MangaUpdates: mangaupdates.New(client(settings.ComicSourceMangaUpdates)),
 			MangaDex:     mangadex.New(client(settings.ComicSourceMangaDex)),
+			Wikidata:     p.wikidataFetcher(),
 			Records:      p.comicRecords,
 			Local:        p.localMetadata(),
 			Logger:       p.logger,
