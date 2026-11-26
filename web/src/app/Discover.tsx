@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { ExternalTitle } from "./ExternalItem";
 import { Plus, Undo2, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useState } from "react";
@@ -343,7 +344,9 @@ export function RecommendationCard({
           <Button variant="icon" aria-label={t("discover.dismiss")} title={t("discover.dismiss")} onClick={onDismiss}><X aria-hidden className="size-4" /></Button>
         </div>
       </div>
-      <h3 className="truncate font-medium" title={item.title}>{item.title}</h3>
+      <h3 className="truncate font-medium" title={item.title}>
+        {item.library_id ? item.title : <ExternalTitle categoryId={item.category_id} provider={item.provider} externalId={item.external_id} title={item.title} kind={item.kind} />}
+      </h3>
       <p className="truncate text-xs text-ink-muted">
         {[item.year > 0 ? item.year : "", item.rating > 0 ? `${item.rating.toFixed(1)} (${item.votes})` : "", item.subtitle].filter(Boolean).join(" · ")}
       </p>

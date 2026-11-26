@@ -14,6 +14,7 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
+import { ExternalTitle } from "../ExternalItem";
 import { IgnoreButton } from "@/ui/IgnoreButton";
 
 import { useDebouncedValue } from "../useDebouncedValue";
@@ -173,7 +174,9 @@ export function CandidateCard({
         )}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-sm font-semibold">{candidate.title}</span>
+            <span className="text-sm font-semibold">
+              {held === undefined ? <ExternalTitle categoryId={categoryId} provider={candidate.provider} externalId={candidate.external_id} title={candidate.title} kind={candidate.kind} /> : candidate.title}
+            </span>
             <span className="text-xs text-ink-muted">{[candidate.subtitle, candidate.year, candidate.status].filter(Boolean).join(" · ")}</span>
             {candidate.provider === "tmdb" && <Chip title="TheTVDB does not list it; its episodes come from TMDB">TMDB only</Chip>}
           </div>

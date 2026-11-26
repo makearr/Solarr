@@ -175,6 +175,7 @@ const routes = [
   // shows every pack today. Narrowing this is a real follow-up, not done here.
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/packs", component: Packs }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/duplicates", component: lazyRouteComponent(() => import("./Duplicates"), "Duplicates") }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/external/$provider/$externalId", component: lazyRouteComponent(() => import("./ExternalItem"), "ExternalItem") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/defects", component: lazyRouteComponent(() => import("./Defects"), "Defects") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/import", component: Import }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/activity", component: Activity }),

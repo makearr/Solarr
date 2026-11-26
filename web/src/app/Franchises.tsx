@@ -22,6 +22,7 @@ import { useLibraries } from "@/lib/resources";
 import { subscribe } from "@/lib/eventStream";
 import { useMediaType } from "@/lib/useMediaTypes";
 import { AddToLibrary } from "./work/AddToSolarr";
+import { ExternalTitle } from "./ExternalItem";
 import { CoverArt } from "./CoverArt";
 import { DEFAULT_POSTER_OPTIONS, IndexPoster, type IndexEntry } from "./IndexViews";
 import { usePreference } from "@/lib/usePreference";
@@ -390,7 +391,11 @@ function CollectionDetail({
                 )}
               </span>
               <span className="truncate text-sm font-medium">
-                {member.title}
+                {member.provider && member.external_id && !member.work_id ? (
+                  <ExternalTitle categoryId={categoryId} provider={member.provider} externalId={member.external_id} title={member.title} />
+                ) : (
+                  member.title
+                )}
                 {member.year ? <span className="font-normal text-ink-muted"> ({member.year})</span> : null}
               </span>
               {member.origin_reason === "crossover" && (
