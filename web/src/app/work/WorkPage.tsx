@@ -58,7 +58,6 @@ type TabKey = (typeof TABS)[number];
 export function WorkPage() {
   const params = useParams({ strict: false }) as { categoryId?: string; workId?: string; id?: string; tab?: string };
   const id = Number(params.workId ?? params.id);
-  const showCollections = useShowCollections();
   const tab: TabKey = (TABS as readonly string[]).includes(params.tab ?? "") ? (params.tab as TabKey) : "overview";
   const detail = useQuery({
     queryKey: ["work", id],
@@ -549,6 +548,7 @@ function PeopleLine({ work, info, categoryId }: { work: Work; info: MediaTypeInf
 }
 
 function OverviewTab({ work, info, words, categoryId }: { work: Work; info: MediaTypeInfo | undefined; words: Vocabulary; categoryId: string | undefined }) {
+  const showCollections = useShowCollections();
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
   const changed = () => invalidateWorkLists(queryClient, work.id);
