@@ -300,6 +300,9 @@ export function Duplicates() {
       {categoryId !== undefined && info?.video_files === true && <SimilarVideos scope={{ categoryId: Number(categoryId) }} />}
       {report.isLoading && <p className="text-sm text-ink-muted">Looking…</p>}
       {report.error !== null && !report.isLoading && <p className="text-sm text-danger">{t("duplicates.theReportCouldNot")}</p>}
+      {data && data.files_pending > 0 && (
+        <p className="text-xs text-ink-muted">{t("duplicates.fingerprintPending", { pending: data.files_pending, total: data.files_total })}</p>
+      )}
       {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate {words.parts} found.</p>}
       {data && data.groups.length > 0 && (
         <>

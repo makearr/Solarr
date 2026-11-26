@@ -18,6 +18,11 @@ type Duplicates struct {
 	ByName func(mediaType string) bool
 }
 
+// FingerprintProgress satisfies apiserver.FingerprintProgress.
+func (d Duplicates) FingerprintProgress(ctx context.Context, rootFolderIDs []int64) (total, pending int64, err error) {
+	return d.Store.FingerprintProgress(ctx, rootFolderIDs)
+}
+
 func (d Duplicates) Duplicates(ctx context.Context, categoryID int64, rootFolderIDs []int64, limit int) ([]apiserver.DuplicateGroupRow, error) {
 	category, _ := d.Settings.Snapshot().Category(categoryID)
 	groups, err := d.Store.Groups(ctx, categoryID, rootFolderIDs, limit, d.ByName(category.MediaType))

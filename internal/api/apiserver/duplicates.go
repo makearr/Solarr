@@ -63,6 +63,12 @@ type DuplicateResolver interface {
 	ResolveDuplicatesEverywhere(ctx context.Context, keepMediaObjectID int64, drops []DuplicateDrop) (DuplicateOutcome, error)
 }
 
+// FingerprintProgress is what a DuplicateReader that matches by audio fingerprint may also answer: how many audio files
+// the roots hold and how many still wait for the background sweep, so an empty report can say why.
+type FingerprintProgress interface {
+	FingerprintProgress(ctx context.Context, rootFolderIDs []int64) (total, pending int64, err error)
+}
+
 // duplicateGroupLimit bounds one report.
 const duplicateGroupLimit = 300
 
@@ -115,8 +121,15 @@ func (s *Server) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, i
 	report := struct {
 		ReclaimableBytes int64       `json:"reclaimable_bytes"`
 		Limited          bool        `json:"limited"`
+		FilesTotal       int64       `json:"files_total"`
+		FilesPending     int64       `json:"files_pending"`
 		Groups           []groupView `json:"groups"`
 	}{Groups: make([]groupView, 0, len(groups)), Limited: len(groups) >= duplicateGroupLimit}
+	if progress, ok := s.duplicates.(FingerprintProgress); ok {
+		if total, pending, err := progress.FingerprintProgress(r.Context(), roots); err == nil {
+			report.FilesTotal, report.FilesPending = total, pending
+		}
+	}
 	for _, group := range groups {
 		view := groupView{Artist: group.Artist, Title: group.Title, KeepReason: group.KeepReason}
 		for index, copy := range group.Copies {

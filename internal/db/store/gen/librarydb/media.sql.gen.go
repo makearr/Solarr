@@ -46,6 +46,26 @@ func (q *Queries) AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) 
 	return result.LastInsertId()
 }
 
+const countAudioFingerprints = `-- name: CountAudioFingerprints :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total, CAST(COALESCE(SUM(CASE WHEN o.audio_fp IS NULL THEN 1 ELSE 0 END), 0) AS INTEGER) AS pending
+FROM media_object o
+WHERE o.kind = 'audio' AND EXISTS (SELECT 1 FROM library_path lp WHERE lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+                                    AND lp.root_folder_id IN (SELECT value FROM json_each(?1)))
+`
+
+type CountAudioFingerprintsRow struct {
+	Total   int64
+	Pending int64
+}
+
+// How many audio files of the roots have a fingerprint, and how many are still waiting for the sweep.
+func (q *Queries) CountAudioFingerprints(ctx context.Context, rootFolderIds interface{}) (CountAudioFingerprintsRow, error) {
+	row := q.db.QueryRowContext(ctx, countAudioFingerprints, rootFolderIds)
+	var i CountAudioFingerprintsRow
+	err := row.Scan(&i.Total, &i.Pending)
+	return i, err
+}
+
 const countLibraryPathsByRootFolder = `-- name: CountLibraryPathsByRootFolder :many
 SELECT root_folder_id, CAST(count(*) AS INTEGER) AS total
 FROM library_path GROUP BY root_folder_id ORDER BY root_folder_id

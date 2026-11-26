@@ -655,6 +655,7 @@ const catalogue = {
   "databaseSettings.checksThatTheNewest": "Checks that the newest backup is valid, then removes all older ones.",
   "databaseSettings.theNewestBackupDid": "The newest backup did not pass its check, so nothing was removed.",
   "databaseSettings.thatTaskCouldNot": "That task could not be started.",
+  "duplicates.fingerprintPending": "{pending} of {total} audio files still wait for their fingerprint; duplicates among them appear as the background sweep reaches them.",
   "duplicates.nothingLeftToLink": "Nothing left to link.",
   "duplicates.moveToTheRecycle": "Move to the recycle bin",
   "duplicates.theReportCouldNot": "The report could not be made.",

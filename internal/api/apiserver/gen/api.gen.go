@@ -3185,7 +3185,12 @@ type DrainRefusal struct {
 
 // DuplicateReport defines model for DuplicateReport.
 type DuplicateReport struct {
-	Groups []struct {
+	// FilesPending Audio files still waiting for the background fingerprint sweep; a duplicate among them appears once it reaches them.
+	FilesPending int64 `json:"files_pending"`
+
+	// FilesTotal Audio files of the library the report can compare (those with an audio fingerprint); zero for a type that does not match by fingerprint.
+	FilesTotal int64 `json:"files_total"`
+	Groups     []struct {
 		Artist string `json:"artist"`
 		Copies []struct {
 			Album       string `json:"album"`

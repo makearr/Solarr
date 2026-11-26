@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Duplicates (music): an empty report now says how many audio files still wait for their fingerprint, so you can tell "no duplicates" from "not looked yet".
 - Files, Defective: the scan now finds empty, unreadable and cut-short files (the end of each video and audio file is decoded; switch under Settings, General), lists them with the reason, and offers bulk Re-request (recycle bin, wanted again, searched) and Delete.
 - Settings, Transcode: the hardware card names the GPU and shows how many encode and decode engines it has where they are known (NVIDIA cards in the shipped table), otherwise says "engine count unknown".
 - Comics and manga now use Wikidata as a metadata source (switch it on under Settings, Metadata): summary, genres, original language, creators and start year fill what the comic providers leave empty, found by the series' Comic Vine or MyAnimeList id.

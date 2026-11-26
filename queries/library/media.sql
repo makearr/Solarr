@@ -162,6 +162,13 @@ WHERE o.audio_fp IS NULL AND o.kind = 'audio' AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
+-- How many audio files of the roots have a fingerprint, and how many are still waiting for the sweep.
+-- name: CountAudioFingerprints :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total, CAST(COALESCE(SUM(CASE WHEN o.audio_fp IS NULL THEN 1 ELSE 0 END), 0) AS INTEGER) AS pending
+FROM media_object o
+WHERE o.kind = 'audio' AND EXISTS (SELECT 1 FROM library_path lp WHERE lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+                                    AND lp.root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids))));
+
 -- name: SetAudioFingerprint :exec
 UPDATE media_object SET audio_fp = ?, audio_fp_prefix = ? WHERE id = ?;
 

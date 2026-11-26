@@ -16848,8 +16848,10 @@ components:
 
     DuplicateReport:
       type: object
-      required: [groups, reclaimable_bytes, limited]
+      required: [groups, reclaimable_bytes, limited, files_total, files_pending]
       properties:
+        files_total: { type: integer, format: int64, description: "Audio files of the library the report can compare (those with an audio fingerprint); zero for a type that does not match by fingerprint." }
+        files_pending: { type: integer, format: int64, description: "Audio files still waiting for the background fingerprint sweep; a duplicate among them appears once it reaches them." }
         limited: { type: boolean, description: "True when the library holds more groups than one report shows; the ones with the most to free come first." }
         reclaimable_bytes: { type: integer, format: int64, description: What dropping every copy but the recommended one would free. }
         groups:

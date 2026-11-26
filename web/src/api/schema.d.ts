@@ -12572,6 +12572,16 @@ export interface components {
             monitored: boolean;
         };
         DuplicateReport: {
+            /**
+             * Format: int64
+             * @description Audio files of the library the report can compare (those with an audio fingerprint); zero for a type that does not match by fingerprint.
+             */
+            files_total: number;
+            /**
+             * Format: int64
+             * @description Audio files still waiting for the background fingerprint sweep; a duplicate among them appears once it reaches them.
+             */
+            files_pending: number;
             /** @description True when the library holds more groups than one report shows; the ones with the most to free come first. */
             limited: boolean;
             /**

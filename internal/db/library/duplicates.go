@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -115,6 +116,19 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 		groups = groups[:limit]
 	}
 	return groups, nil
+}
+
+// FingerprintProgress is how many audio files of the roots there are and how many still wait for their fingerprint.
+func (d Duplicates) FingerprintProgress(ctx context.Context, rootFolderIDs []int64) (total, pending int64, err error) {
+	roots, err := json.Marshal(rootFolderIDs)
+	if err != nil {
+		return 0, 0, fmt.Errorf("library: fingerprint roots: %w", err)
+	}
+	row, err := librarydb.New(d.store.Read()).CountAudioFingerprints(ctx, string(roots))
+	if err != nil {
+		return 0, 0, fmt.Errorf("library: fingerprint progress: %w", err)
+	}
+	return row.Total, row.Pending, nil
 }
 
 func duplicateCopyOf(row librarydb.ListTrackFilesWithMetadataRow, path DuplicatePath) *DuplicateCopy {
