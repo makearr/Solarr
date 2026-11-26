@@ -18,6 +18,7 @@ import { AddToCollection } from "./AddToCollection";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { Dialog } from "@/ui/Dialog";
 import { EmptyState } from "@/ui/EmptyState";
+import { IgnoreHeldButton } from "@/ui/IgnoreButton";
 import { HeartButton } from "@/ui/HeartButton";
 import { Image } from "@/ui/Image";
 import { PageHeader } from "@/ui/PageHeader";
@@ -388,6 +389,7 @@ function WorkHeader({
             >
               {monitored ? "Monitored" : t("action.monitor")}
             </Button>
+            {categoryId !== undefined && <IgnoreHeldButton item={{ categoryId: Number(categoryId), subject: "work", id: work.id }} />}
             {work.can_request && groups.length > 0 && (
               <Button busy={search.isPending} busyLabel="Searching…" icon={<Search aria-hidden className="size-4" />} onClick={() => search.mutate()}>
                 {t("action.search")}

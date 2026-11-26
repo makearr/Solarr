@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
@@ -277,5 +278,33 @@ func TestRecommendations_TasteIsTheMostHeldArtistsAndGenresOfOneLibrary(t *testi
 	genres, err := pool.TopGenres(t.Context(), 5, 5)
 	if want := []string{"Folk", "Jazz"}; err != nil || !reflect.DeepEqual(genres, want) {
 		t.Errorf("genres = %v, %v; want %v", genres, err, want)
+	}
+}
+
+func TestRecommendations_IgnoreHeldWorkNamesEveryIDItHasAndUndoes(t *testing.T) {
+	opened, _ := newLibrary(t)
+	result, err := library.NewSeries(opened).Upsert(t.Context(), time.Unix(100, 0), library.SeriesWrite{
+		Work: library.WorkIdentity{MediaType: "movie", CanonicalTitle: "Invented Film", SortTitle: "invented film"},
+		IDs:  []library.ExternalIDWrite{{Provider: "tmdb", ExternalID: "11", Confidence: 1}, {Provider: "imdb", ExternalID: "tt11", Confidence: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := library.NewRecommendations(opened)
+	if err := pool.IgnoreHeld(t.Context(), 7, false, result.WorkID, "", true, 5); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := pool.IgnoredKeys(t.Context(), 7, "movie")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]bool{"tmdb:11": true, "imdb:tt11": true}; !reflect.DeepEqual(keys, want) {
+		t.Errorf("ignored = %v, want %v", keys, want)
+	}
+	if err := pool.IgnoreHeld(t.Context(), 7, false, result.WorkID, "", false, 6); err != nil {
+		t.Fatal(err)
+	}
+	if keys, _ = pool.IgnoredKeys(t.Context(), 7, "movie"); len(keys) != 0 {
+		t.Errorf("after undo = %v", keys)
 	}
 }

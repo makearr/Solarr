@@ -9,7 +9,9 @@ import { t } from "@/lib/i18n";
 import { useLibraries } from "@/lib/resources";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { Button } from "@/ui/Button";
-import { IgnoreButton } from "@/ui/IgnoreButton";
+import { IgnoreButton, IgnoreHeldButton } from "@/ui/IgnoreButton";
+
+import { ExternalTitle } from "./ExternalItem";
 import { Chip } from "@/ui/Chip";
 import { Dialog } from "@/ui/Dialog";
 import { EmptyState } from "@/ui/EmptyState";
@@ -165,6 +167,8 @@ function MemberList({ event, categoryId, onRemove }: { event: Pick<Crossover, "m
               <span className="w-6 text-right tabular-nums text-ink-muted">{part.number}.</span>
               {part.work_id !== undefined ? (
                 <Link {...seriesLink({ work_id: part.work_id }, categoryId)} className="hover:underline">{part.series_title}</Link>
+              ) : addTo !== "" ? (
+                <ExternalTitle categoryId={addTo} provider={part.provider} externalId={part.external_id} title={part.series_title} />
               ) : (
                 <span>{part.series_title}</span>
               )}
@@ -179,6 +183,7 @@ function MemberList({ event, categoryId, onRemove }: { event: Pick<Crossover, "m
                 {part.work_id === undefined && addTo !== "" && (
                   <IgnoreButton item={{ categoryId: Number(addTo), provider: part.provider, externalId: part.external_id, title: part.series_title }} />
                 )}
+                {part.work_id !== undefined && addTo !== "" && <IgnoreHeldButton item={{ categoryId: Number(addTo), subject: "work", id: part.work_id }} />}
               </span>
             </li>
           );
@@ -195,6 +200,7 @@ function MemberList({ event, categoryId, onRemove }: { event: Pick<Crossover, "m
             <span className={`ml-auto text-xs ${member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}`}>
               {member.has_file ? t("crossover.onDisk") : member.monitored ? t("crossover.missing") : t("crossover.unmonitored")}
             </span>
+            {!member.has_file && member.monitored && addTo !== "" && <IgnoreHeldButton item={{ categoryId: Number(addTo), subject: "work", id: member.work_id }} />}
             {onRemove && (
               <Button variant="icon" aria-label={t("crossover.removeMember")} title={t("crossover.removeMember")} onClick={() => onRemove(member)}>
                 <Trash2 aria-hidden className="size-3.5" />

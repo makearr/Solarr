@@ -82,6 +82,30 @@ GROUP BY g.genre ORDER BY items DESC, g.genre;
 -- name: DismissRecommendation :exec
 INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);
 
+-- Ignores a held work under every provider id it has, so every list that knows it by any of them leaves it out.
+-- name: IgnoreHeldWork :exec
+INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at)
+SELECT sqlc.arg(user_id), w.media_type, 'any', e.provider, e.external_id, w.canonical_title, sqlc.arg(created_at)
+FROM work_external_id e JOIN work w ON w.id = e.work_id
+WHERE w.id = sqlc.arg(work_id);
+
+-- name: UnignoreHeldWork :exec
+DELETE FROM recommendation_dismissal
+WHERE user_id = sqlc.arg(user_id) AND kind = 'any'
+  AND (provider, external_id) IN (SELECT e.provider, e.external_id FROM work_external_id e WHERE e.work_id = sqlc.arg(work_id));
+
+-- Ignores a held person under every provider id they have, scoped to the media type of the library asking.
+-- name: IgnoreHeldPerson :exec
+INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at)
+SELECT sqlc.arg(user_id), sqlc.arg(media_type), 'any', e.provider, e.external_id, p.name, sqlc.arg(created_at)
+FROM person_external_id e JOIN person p ON p.id = e.person_id
+WHERE p.id = sqlc.arg(person_id);
+
+-- name: UnignoreHeldPerson :exec
+DELETE FROM recommendation_dismissal
+WHERE user_id = sqlc.arg(user_id) AND kind = 'any' AND media_type = sqlc.arg(media_type)
+  AND (provider, external_id) IN (SELECT e.provider, e.external_id FROM person_external_id e WHERE e.person_id = sqlc.arg(person_id));
+
 -- What a person ignores, and what an administrator ignores for everyone (user 0), of one media type.
 -- name: ListIgnoredKeys :many
 SELECT provider, external_id FROM recommendation_dismissal WHERE user_id IN (sqlc.arg(user_id), 0) AND media_type = sqlc.arg(media_type);

@@ -250,6 +250,50 @@ func (q *Queries) GetRecommendationFeed(ctx context.Context, arg GetRecommendati
 	return i, err
 }
 
+const ignoreHeldPerson = `-- name: IgnoreHeldPerson :exec
+INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at)
+SELECT ?1, ?2, 'any', e.provider, e.external_id, p.name, ?3
+FROM person_external_id e JOIN person p ON p.id = e.person_id
+WHERE p.id = ?4
+`
+
+type IgnoreHeldPersonParams struct {
+	UserID    int64
+	MediaType string
+	CreatedAt int64
+	PersonID  int64
+}
+
+// Ignores a held person under every provider id they have, scoped to the media type of the library asking.
+func (q *Queries) IgnoreHeldPerson(ctx context.Context, arg IgnoreHeldPersonParams) error {
+	_, err := q.db.ExecContext(ctx, ignoreHeldPerson,
+		arg.UserID,
+		arg.MediaType,
+		arg.CreatedAt,
+		arg.PersonID,
+	)
+	return err
+}
+
+const ignoreHeldWork = `-- name: IgnoreHeldWork :exec
+INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at)
+SELECT ?1, w.media_type, 'any', e.provider, e.external_id, w.canonical_title, ?2
+FROM work_external_id e JOIN work w ON w.id = e.work_id
+WHERE w.id = ?3
+`
+
+type IgnoreHeldWorkParams struct {
+	UserID    int64
+	CreatedAt int64
+	WorkID    int64
+}
+
+// Ignores a held work under every provider id it has, so every list that knows it by any of them leaves it out.
+func (q *Queries) IgnoreHeldWork(ctx context.Context, arg IgnoreHeldWorkParams) error {
+	_, err := q.db.ExecContext(ctx, ignoreHeldWork, arg.UserID, arg.CreatedAt, arg.WorkID)
+	return err
+}
+
 const listCollectionRecommendationCandidates = `-- name: ListCollectionRecommendationCandidates :many
 SELECT c.name AS collection_name, w.id AS work_id, w.canonical_title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
        CAST(COALESCE(w.description, '') AS TEXT) AS description,
@@ -791,6 +835,39 @@ func (q *Queries) SetRecommendationFeed(ctx context.Context, arg SetRecommendati
 		arg.PopularityMax,
 		arg.LastError,
 	)
+	return err
+}
+
+const unignoreHeldPerson = `-- name: UnignoreHeldPerson :exec
+DELETE FROM recommendation_dismissal
+WHERE user_id = ?1 AND kind = 'any' AND media_type = ?2
+  AND (provider, external_id) IN (SELECT e.provider, e.external_id FROM person_external_id e WHERE e.person_id = ?3)
+`
+
+type UnignoreHeldPersonParams struct {
+	UserID    int64
+	MediaType string
+	PersonID  int64
+}
+
+func (q *Queries) UnignoreHeldPerson(ctx context.Context, arg UnignoreHeldPersonParams) error {
+	_, err := q.db.ExecContext(ctx, unignoreHeldPerson, arg.UserID, arg.MediaType, arg.PersonID)
+	return err
+}
+
+const unignoreHeldWork = `-- name: UnignoreHeldWork :exec
+DELETE FROM recommendation_dismissal
+WHERE user_id = ?1 AND kind = 'any'
+  AND (provider, external_id) IN (SELECT e.provider, e.external_id FROM work_external_id e WHERE e.work_id = ?2)
+`
+
+type UnignoreHeldWorkParams struct {
+	UserID int64
+	WorkID int64
+}
+
+func (q *Queries) UnignoreHeldWork(ctx context.Context, arg UnignoreHeldWorkParams) error {
+	_, err := q.db.ExecContext(ctx, unignoreHeldWork, arg.UserID, arg.WorkID)
 	return err
 }
 

@@ -99,6 +99,10 @@ func (i Ignores) Ignore(ctx context.Context, userID int64, mediaType, kind, prov
 	})
 }
 
+func (i Ignores) IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at time.Time) error {
+	return i.Store.IgnoreHeld(ctx, userID, person, id, mediaType, ignored, at.Unix())
+}
+
 func (i Ignores) Unignore(ctx context.Context, userID int64, kind, provider, externalID string) error {
 	return i.Store.Restore(ctx, userID, kind, provider, externalID)
 }

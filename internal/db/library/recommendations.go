@@ -335,6 +335,26 @@ func (r Recommendations) Dismiss(ctx context.Context, dismissal RecommendationDi
 	return nil
 }
 
+// IgnoreHeld ignores a held work, or a held person for a media type, under every provider id it has; ignored false undoes it.
+func (r Recommendations) IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at int64) error {
+	err := r.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		switch {
+		case person && ignored:
+			return queries.IgnoreHeldPerson(ctx, librarydb.IgnoreHeldPersonParams{UserID: userID, MediaType: mediaType, CreatedAt: at, PersonID: id})
+		case person:
+			return queries.UnignoreHeldPerson(ctx, librarydb.UnignoreHeldPersonParams{UserID: userID, MediaType: mediaType, PersonID: id})
+		case ignored:
+			return queries.IgnoreHeldWork(ctx, librarydb.IgnoreHeldWorkParams{UserID: userID, CreatedAt: at, WorkID: id})
+		}
+		return queries.UnignoreHeldWork(ctx, librarydb.UnignoreHeldWorkParams{UserID: userID, WorkID: id})
+	})
+	if err != nil {
+		return fmt.Errorf("library: ignore held: %w", err)
+	}
+	return nil
+}
+
 // Restore shows a dismissed recommendation to the person again.
 func (r Recommendations) Restore(ctx context.Context, userID int64, kind, provider, externalID string) error {
 	err := r.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {

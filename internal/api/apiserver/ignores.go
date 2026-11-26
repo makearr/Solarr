@@ -14,6 +14,8 @@ import (
 type IgnoreStore interface {
 	Ignore(ctx context.Context, userID int64, mediaType, kind, provider, externalID, title string, at time.Time) error
 	Unignore(ctx context.Context, userID int64, kind, provider, externalID string) error
+	// IgnoreHeld ignores (or, ignored false, stops ignoring) a work or person the library holds under every id it has.
+	IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at time.Time) error
 	// IgnoredKeys are "provider:external id" of what the person ignores of a media type, and an administrator for everyone.
 	IgnoredKeys(ctx context.Context, userID int64, mediaType string) (map[string]bool, error)
 }
@@ -107,3 +109,54 @@ func (s *Server) ignoredIn(ctx context.Context, mediaType string) map[string]boo
 
 // ignoredKey is how one item is looked up among the ignored.
 func ignoredKey(provider, externalID string) string { return provider + ":" + externalID }
+
+// IgnoreHeld ignores a work or person the library holds, in the caller's name or for everyone, under every provider id it has; a held
+// work is also left unmonitored when the caller may change that, so no list offers it as missing.
+func (s *Server) IgnoreHeld(w http.ResponseWriter, r *http.Request) {
+	var body gen.IgnoreHeldRequest
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected category_id, subject and id") {
+		return
+	}
+	s.changeHeldIgnore(w, r, body, true)
+}
+
+// UnignoreHeld undoes IgnoreHeld; the work stays unmonitored until someone monitors it.
+func (s *Server) UnignoreHeld(w http.ResponseWriter, r *http.Request) {
+	var body gen.IgnoreHeldRequest
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected category_id, subject and id") {
+		return
+	}
+	s.changeHeldIgnore(w, r, body, false)
+}
+
+func (s *Server) changeHeldIgnore(w http.ResponseWriter, r *http.Request, body gen.IgnoreHeldRequest, ignored bool) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	category, err := access.Category(body.CategoryId, settings.PermissionRead)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	owner, ok := s.ignoreOwner(w, r, access, derefOr(body.Everyone, false))
+	if !ok {
+		return
+	}
+	if s.ignores == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "ignoring is not available")
+		return
+	}
+	person := body.Subject == gen.IgnoreHeldRequestSubjectPerson
+	if err := s.ignores.IgnoreHeld(r.Context(), owner, person, body.Id, category.MediaType, ignored, s.auth.Clock.Now()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if ignored && !person && s.worksMonitor != nil && access.Permission(body.CategoryId).AtLeast(settings.PermissionAdd) {
+		if _, err := s.worksMonitor.MonitorWork(r.Context(), body.Id, MonitorScope{Monitored: false}); err != nil {
+			s.logger.WarnContext(r.Context(), "ignored work left monitored", "work_id", body.Id, "error", err)
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

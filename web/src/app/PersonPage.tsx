@@ -23,6 +23,7 @@ import { FollowPanel } from "./FollowPanel";
 import { PersonPicker } from "./PersonPicker";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
+import { IgnoreHeldButton } from "@/ui/IgnoreButton";
 import { HeartButton } from "@/ui/HeartButton";
 import { inputStyle, labelStyle } from "@/ui/form";
 
@@ -177,6 +178,7 @@ export function PersonPage() {
               <span className="flex items-center gap-2">
                 <h1 className="text-xl font-semibold">{person.name}</h1>
                 <HeartButton subject="person" id={person.id} name={person.name} />
+                {from !== undefined && <IgnoreHeldButton item={{ categoryId: from, subject: "person", id: person.id }} />}
               </span>
               {administrator && (
                 <span className="flex shrink-0 gap-2">

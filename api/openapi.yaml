@@ -4840,6 +4840,38 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /ignores/held:
+    post:
+      operationId: ignoreHeld
+      tags: [library]
+      summary: Ignore a work or person the library holds, so no list offers it as missing.
+      description: >-
+        Records the ignore under every provider id the work or person has (the same concept as POST /ignores) and, for a work, leaves it
+        unmonitored when the caller may. Nothing is deleted. An administrator may ignore for everyone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IgnoreHeldRequest" }
+      responses:
+        "204": { description: Ignored. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: unignoreHeld
+      tags: [library]
+      summary: Stop ignoring a work or person the library holds; a work stays unmonitored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IgnoreHeldRequest" }
+      responses:
+        "204": { description: No longer ignored. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /works/lookup:
     get:
       operationId: lookupWorks
@@ -14240,6 +14272,15 @@ components:
         external_id: { type: string }
         title: { type: string }
         everyone: { type: boolean, description: Administrator only; ignores it for every account. }
+
+    IgnoreHeldRequest:
+      type: object
+      required: [category_id, subject, id]
+      properties:
+        category_id: { type: integer, format: int64, description: The library it is shown in; its media type scopes a person's ignore. }
+        subject: { type: string, enum: [work, person] }
+        id: { type: integer, format: int64 }
+        everyone: { type: boolean, description: Administrator only. }
 
     WorkPreview:
       type: object

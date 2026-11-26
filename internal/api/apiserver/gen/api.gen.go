@@ -402,6 +402,12 @@ const (
 	IdentificationAttemptOutcomeRetry      IdentificationAttemptOutcome = "retry"
 )
 
+// Defines values for IgnoreHeldRequestSubject.
+const (
+	IgnoreHeldRequestSubjectPerson IgnoreHeldRequestSubject = "person"
+	IgnoreHeldRequestSubjectWork   IgnoreHeldRequestSubject = "work"
+)
+
 // Defines values for ImportDecisionRecordOutcome.
 const (
 	ImportDecisionRecordOutcomeIMPORT      ImportDecisionRecordOutcome = "IMPORT"
@@ -3838,6 +3844,20 @@ type Identity struct {
 	UserId   int64  `json:"user_id"`
 	Username string `json:"username"`
 }
+
+// IgnoreHeldRequest defines model for IgnoreHeldRequest.
+type IgnoreHeldRequest struct {
+	// CategoryId The library it is shown in; its media type scopes a person's ignore.
+	CategoryId int64 `json:"category_id"`
+
+	// Everyone Administrator only.
+	Everyone *bool                    `json:"everyone,omitempty"`
+	Id       int64                    `json:"id"`
+	Subject  IgnoreHeldRequestSubject `json:"subject"`
+}
+
+// IgnoreHeldRequestSubject defines model for IgnoreHeldRequest.Subject.
+type IgnoreHeldRequestSubject string
 
 // IgnoreRequest defines model for IgnoreRequest.
 type IgnoreRequest struct {
@@ -10282,6 +10302,12 @@ type RunInboundWebhookJSONRequestBody = InboundActionRequest
 // CreateIgnoreJSONRequestBody defines body for CreateIgnore for application/json ContentType.
 type CreateIgnoreJSONRequestBody = IgnoreRequest
 
+// UnignoreHeldJSONRequestBody defines body for UnignoreHeld for application/json ContentType.
+type UnignoreHeldJSONRequestBody = IgnoreHeldRequest
+
+// IgnoreHeldJSONRequestBody defines body for IgnoreHeld for application/json ContentType.
+type IgnoreHeldJSONRequestBody = IgnoreHeldRequest
+
 // UpdateImportListJSONRequestBody defines body for UpdateImportList for application/json ContentType.
 type UpdateImportListJSONRequestBody = ImportListWrite
 
@@ -11097,6 +11123,12 @@ type ServerInterface interface {
 	// Ignore an item the library lacks, so it is never offered as missing.
 	// (POST /ignores)
 	CreateIgnore(w http.ResponseWriter, r *http.Request)
+	// Stop ignoring a work or person the library holds; a work stays unmonitored.
+	// (DELETE /ignores/held)
+	UnignoreHeld(w http.ResponseWriter, r *http.Request)
+	// Ignore a work or person the library holds, so no list offers it as missing.
+	// (POST /ignores/held)
+	IgnoreHeld(w http.ResponseWriter, r *http.Request)
 	// A provider's picture (poster, photo, logo) from Solarr's own cache, fetched once on first use.
 	// (GET /images/remote)
 	GetRemoteImage(w http.ResponseWriter, r *http.Request, params GetRemoteImageParams)
@@ -12930,6 +12962,18 @@ func (_ Unimplemented) DeleteIgnore(w http.ResponseWriter, r *http.Request, para
 // Ignore an item the library lacks, so it is never offered as missing.
 // (POST /ignores)
 func (_ Unimplemented) CreateIgnore(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop ignoring a work or person the library holds; a work stays unmonitored.
+// (DELETE /ignores/held)
+func (_ Unimplemented) UnignoreHeld(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Ignore a work or person the library holds, so no list offers it as missing.
+// (POST /ignores/held)
+func (_ Unimplemented) IgnoreHeld(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -19914,6 +19958,50 @@ func (siw *ServerInterfaceWrapper) CreateIgnore(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateIgnore(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnignoreHeld operation middleware
+func (siw *ServerInterfaceWrapper) UnignoreHeld(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnignoreHeld(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IgnoreHeld operation middleware
+func (siw *ServerInterfaceWrapper) IgnoreHeld(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IgnoreHeld(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -30242,6 +30330,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/ignores", wrapper.CreateIgnore)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/ignores/held", wrapper.UnignoreHeld)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/ignores/held", wrapper.IgnoreHeld)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/images/remote", wrapper.GetRemoteImage)

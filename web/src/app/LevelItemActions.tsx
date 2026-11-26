@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
+import { Bookmark, BookmarkCheck, EyeOff, RefreshCw, Search } from "lucide-react";
 import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
@@ -56,7 +56,19 @@ export function useItemActions(level: string | undefined, id: number, monitored:
     onSuccess: () => invalidateWorkLists(queryClient, id),
     onError: () => setNote("Monitoring could not be changed"),
   });
-  return { album, id, refresh, search, monitor, monitored, note, allowed };
+  // Ignoring a held item: no list offers it as missing again, and an album is left unmonitored.
+  const ignore = useMutation({
+    mutationFn: async () => {
+      if (categoryId === undefined) return;
+      await ok(api.POST("/ignores/held", { body: { category_id: Number(categoryId), subject: album ? "work" : "person", id } }));
+    },
+    onSuccess: () => {
+      invalidateWorkLists(queryClient, id);
+      setNote(t("ignore.ignored"));
+    },
+    onError: () => setNote(t("ignore.failed")),
+  });
+  return { album, id, refresh, search, monitor, ignore, monitored, note, allowed, canIgnore: categoryId !== undefined };
 }
 
 type Actions = ReturnType<typeof useItemActions>;
@@ -115,6 +127,18 @@ export function ActionButtons({ actions, showNote = true }: { actions: Actions; 
       >
         <RefreshCw aria-hidden className={`size-3.5 ${actions.refresh.isPending ? "animate-spin" : ""}`} />
       </button>
+      {actions.canIgnore && (
+        <button
+          type="button"
+          title={t("ignore.help")}
+          aria-label={t("ignore.ignore")}
+          disabled={actions.ignore.isPending}
+          onClick={(event) => stop(event, () => actions.ignore.mutate())}
+          className={button}
+        >
+          <EyeOff aria-hidden className="size-3.5" />
+        </button>
+      )}
       {actions.album && actions.allowed.edit && <EditWorkButton id={actions.id} />}
       {showNote && actions.note && <span className="truncate text-xs text-ink-muted">{actions.note}</span>}
     </span>

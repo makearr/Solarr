@@ -3241,6 +3241,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ignores/held": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ignore a work or person the library holds, so no list offers it as missing.
+         * @description Records the ignore under every provider id the work or person has (the same concept as POST /ignores) and, for a work, leaves it unmonitored when the caller may. Nothing is deleted. An administrator may ignore for everyone.
+         */
+        post: operations["ignoreHeld"];
+        /** Stop ignoring a work or person the library holds; a work stays unmonitored. */
+        delete: operations["unignoreHeld"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/lookup": {
         parameters: {
             query?: never;
@@ -10399,6 +10420,19 @@ export interface components {
             external_id: string;
             title: string;
             /** @description Administrator only; ignores it for every account. */
+            everyone?: boolean;
+        };
+        IgnoreHeldRequest: {
+            /**
+             * Format: int64
+             * @description The library it is shown in; its media type scopes a person's ignore.
+             */
+            category_id: number;
+            /** @enum {string} */
+            subject: "work" | "person";
+            /** Format: int64 */
+            id: number;
+            /** @description Administrator only. */
             everyone?: boolean;
         };
         WorkPreview: {
@@ -19231,6 +19265,55 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No longer ignored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    ignoreHeld: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IgnoreHeldRequest"];
+            };
+        };
+        responses: {
+            /** @description Ignored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    unignoreHeld: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IgnoreHeldRequest"];
+            };
+        };
         responses: {
             /** @description No longer ignored. */
             204: {

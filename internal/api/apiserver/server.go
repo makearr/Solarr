@@ -965,6 +965,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}/duplicates", wrapped.GetCategoryDuplicates)
 			secured.Post("/ignores", server.CreateIgnore)
 			secured.Delete("/ignores", wrapped.DeleteIgnore)
+			secured.Post("/ignores/held", server.IgnoreHeld)
+			secured.Delete("/ignores/held", server.UnignoreHeld)
 			secured.Get("/categories/{id}/defects", wrapped.ListCategoryDefects)
 			secured.Post("/categories/{id}/defects/resolve", wrapped.ResolveCategoryDefects)
 			secured.Get("/categories/{id}/similar-videos", server.routeGetCategorySimilarVideos)

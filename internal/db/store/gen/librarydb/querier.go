@@ -587,6 +587,10 @@ type Querier interface {
 	GetWorkWriteDigest(ctx context.Context, workID int64) ([]byte, error)
 	// A mass vanish is held, not marked: the count and the sweep start a later accept marks against.
 	HoldVanished(ctx context.Context, arg HoldVanishedParams) error
+	// Ignores a held person under every provider id they have, scoped to the media type of the library asking.
+	IgnoreHeldPerson(ctx context.Context, arg IgnoreHeldPersonParams) error
+	// Ignores a held work under every provider id it has, so every list that knows it by any of them leaves it out.
+	IgnoreHeldWork(ctx context.Context, arg IgnoreHeldWorkParams) error
 	// What a library's downloads still on their way will take when they land, so the free-space gate
 	// does not count the same room twice between capacity measurements (ADR-12).
 	InFlightBytesForCategory(ctx context.Context, categoryID int64) (int64, error)
@@ -1547,6 +1551,8 @@ type Querier interface {
 	// The queue holds at most keep entries: what would be sent last goes first (section 10.5).
 	TrimReady(ctx context.Context, keep int64) error
 	UnblockTagSlugs(ctx context.Context, arg UnblockTagSlugsParams) error
+	UnignoreHeldPerson(ctx context.Context, arg UnignoreHeldPersonParams) error
+	UnignoreHeldWork(ctx context.Context, arg UnignoreHeldWorkParams) error
 	UnlinkWorkFilePairs(ctx context.Context, pairs interface{}) error
 	UnlinkWorkFiles(ctx context.Context, workID int64) error
 	UnlinkWorksOfPathFromRoot(ctx context.Context, arg UnlinkWorksOfPathFromRootParams) error
