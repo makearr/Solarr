@@ -10,6 +10,7 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { IgnoreButton } from "@/ui/IgnoreButton";
 
+import { ExternalPreview, useWorkPreview } from "./ExternalPreview";
 import { AddToLibrary } from "./work/AddToSolarr";
 
 interface ExternalSearch {
@@ -48,6 +49,8 @@ export function ExternalItem() {
     enabled: title !== "",
     queryFn: () => ok(api.GET("/works/lookup", { params: { query: { category_id: Number(categoryId), q: title, kind: search.kind, limit: 30 } } })),
   });
+  const described = useWorkPreview(categoryId, provider, externalId, search.kind);
+  const preview = described.data;
   const item = found.data?.find((candidate) => candidate.provider === provider && candidate.external_id === externalId);
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
@@ -56,8 +59,8 @@ export function ExternalItem() {
       </Link>
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="w-40 shrink-0">
-          {item?.poster_url ? (
-            <img src={remoteImage(item.poster_url, "small")} alt="" className="aspect-[2/3] w-full rounded-lg border border-border-subtle object-cover" />
+          {(preview?.poster_url ?? item?.poster_url) ? (
+            <img src={remoteImage((preview?.poster_url ?? item?.poster_url) as string, "small")} alt="" className="aspect-[2/3] w-full rounded-lg border border-border-subtle object-cover" />
           ) : (
             <div className="flex aspect-[2/3] w-full items-center justify-center rounded-lg border border-border-subtle bg-surface text-3xl text-ink-muted">
               {title.trim().charAt(0).toUpperCase() || "?"}
@@ -76,8 +79,9 @@ export function ExternalItem() {
             {item?.ignored && <Chip>{t("ignore.ignored")}</Chip>}
           </div>
           {found.isPending && title !== "" && <p className="text-sm text-ink-muted">{t("external.loading")}</p>}
-          {item?.overview && <p className="max-w-prose text-sm leading-relaxed">{item.overview}</p>}
-          {found.data && !item && <p className="text-sm text-ink-muted">{t("external.notFound")}</p>}
+          {(preview?.overview ?? item?.overview) && <p className="max-w-prose text-sm leading-relaxed">{preview?.overview ?? item?.overview}</p>}
+          {preview?.tagline && <p className="text-sm italic text-ink-muted">{preview.tagline}</p>}
+          {found.data && !item && !preview && <p className="text-sm text-ink-muted">{t("external.notFound")}</p>}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {item?.library_id ? (
               <Link to="/works/$id" params={{ id: String(item.library_id) }} className="text-sm text-ok">
@@ -92,6 +96,7 @@ export function ExternalItem() {
           </div>
         </div>
       </div>
+      {preview && <ExternalPreview preview={preview} categoryId={categoryId} />}
       {adding && (
         <AddToLibrary
           candidate={{ provider, external_id: externalId, title: item?.title ?? title, poster_url: item?.poster_url, year: item?.year, kind: item?.kind ?? search.kind }}

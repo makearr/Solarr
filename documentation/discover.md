@@ -67,3 +67,7 @@ so Load more reads are kept until the next one.
 The TMDB trending and popular import lists no longer exist: an upgrade turns each into Discover settings (trending, adding
 automatically when the list was enabled; popular becomes trending), deletes the lists and the unused discovery jobs table.
 This cannot be undone.
+
+## The page of an item the library lacks
+
+A card for something the library does not hold links to `/library/{id}/external/{provider}/{id}`. The page asks `GET /works/describe`, which goes through the media type's `media.Describing` capability (the add catalog's source implements `works.Describer`): the provider's merged view as a `WorkPreview` with facts (keyed, worded by the interface), genres, ratings on a ten-point scale, cast and crew, and parts grouped the type's own way (episodes by season, tracks by disc, issues in one group). Nothing is stored. A type or kind that cannot describe (a music artist) answers 400 and the page shows the lookup entry alone, with Add and Ignore.

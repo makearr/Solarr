@@ -8679,6 +8679,65 @@ type WorkPlaybackPart struct {
 	Title  string     `json:"title"`
 }
 
+// WorkPreview defines model for WorkPreview.
+type WorkPreview struct {
+	Facts  []WorkPreviewFact `json:"facts"`
+	Genres []string          `json:"genres"`
+
+	// Groups The parts in the type's grouping; a group's number is a season's or a disc's.
+	Groups    []WorkPreviewGroup  `json:"groups"`
+	Overview  *string             `json:"overview,omitempty"`
+	People    []WorkPreviewPerson `json:"people"`
+	PosterUrl *string             `json:"poster_url,omitempty"`
+	Ratings   []WorkPreviewRating `json:"ratings"`
+	Status    *string             `json:"status,omitempty"`
+	Subtitle  *string             `json:"subtitle,omitempty"`
+	Tagline   *string             `json:"tagline,omitempty"`
+	Title     string              `json:"title"`
+	Year      *int64              `json:"year,omitempty"`
+}
+
+// WorkPreviewFact defines model for WorkPreviewFact.
+type WorkPreviewFact struct {
+	// Key One of network, studio, runtime_min, certification, language, first_aired, released, publisher, author, collection, website; the interface words it.
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// WorkPreviewGroup defines model for WorkPreviewGroup.
+type WorkPreviewGroup struct {
+	Number int               `json:"number"`
+	Parts  []WorkPreviewPart `json:"parts"`
+	Title  *string           `json:"title,omitempty"`
+}
+
+// WorkPreviewPart defines model for WorkPreviewPart.
+type WorkPreviewPart struct {
+	Date        *string `json:"date,omitempty"`
+	DurationSec *int    `json:"duration_sec,omitempty"`
+	Number      string  `json:"number"`
+	Title       string  `json:"title"`
+}
+
+// WorkPreviewPerson defines model for WorkPreviewPerson.
+type WorkPreviewPerson struct {
+	Character *string `json:"character,omitempty"`
+	ImageUrl  *string `json:"image_url,omitempty"`
+	Name      string  `json:"name"`
+
+	// Role The credit's vocabulary: actor, director, writer, author, artist ...
+	Role string `json:"role"`
+}
+
+// WorkPreviewRating defines model for WorkPreviewRating.
+type WorkPreviewRating struct {
+	Provider string `json:"provider"`
+
+	// Score Ten-point scale.
+	Score float64 `json:"score"`
+	Votes int64   `json:"votes"`
+}
+
 // WorkScore One metadata provider's rating of a work, normalised to 0 to 10.
 type WorkScore struct {
 	Provider string  `json:"provider"`
@@ -9886,6 +9945,16 @@ type BulkSetWorkMonitoredJSONBody struct {
 
 // BulkSetWorkMonitoredJSONBodyWatched defines parameters for BulkSetWorkMonitored.
 type BulkSetWorkMonitoredJSONBodyWatched string
+
+// DescribeWorkParams defines parameters for DescribeWork.
+type DescribeWorkParams struct {
+	CategoryId int64  `form:"category_id" json:"category_id"`
+	Provider   string `form:"provider" json:"provider"`
+	ExternalId string `form:"external_id" json:"external_id"`
+
+	// Kind One of the type's add_kinds; the first when absent.
+	Kind *string `form:"kind,omitempty" json:"kind,omitempty"`
+}
 
 // RemoveWorkExclusionParams defines parameters for RemoveWorkExclusion.
 type RemoveWorkExclusionParams struct {
@@ -11805,6 +11874,9 @@ type ServerInterface interface {
 	// Monitor or unmonitor every work matching a selection (section 21.7).
 	// (POST /works/bulk/monitor)
 	BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request)
+	// One thing a library's type lacks, as its providers describe it: facts, ratings, people and the parts in the type's grouping (a series' episodes by season, an album's tracks by disc). Nothing is stored.
+	// (GET /works/describe)
+	DescribeWork(w http.ResponseWriter, r *http.Request, params DescribeWorkParams)
 	// Allow a removed work to be added again, by any of the ids it was excluded by. Administrator only.
 	// (DELETE /works/exclusions)
 	RemoveWorkExclusion(w http.ResponseWriter, r *http.Request, params RemoveWorkExclusionParams)
@@ -14412,6 +14484,12 @@ func (_ Unimplemented) BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Req
 // Monitor or unmonitor every work matching a selection (section 21.7).
 // (POST /works/bulk/monitor)
 func (_ Unimplemented) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One thing a library's type lacks, as its providers describe it: facts, ratings, people and the parts in the type's grouping (a series' episodes by season, an album's tracks by disc). Nothing is stored.
+// (GET /works/describe)
+func (_ Unimplemented) DescribeWork(w http.ResponseWriter, r *http.Request, params DescribeWorkParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -28038,6 +28116,86 @@ func (siw *ServerInterfaceWrapper) BulkSetWorkMonitored(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// DescribeWork operation middleware
+func (siw *ServerInterfaceWrapper) DescribeWork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DescribeWorkParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "provider" -------------
+
+	if paramValue := r.URL.Query().Get("provider"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "provider", r.URL.Query(), &params.Provider)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "external_id" -------------
+
+	if paramValue := r.URL.Query().Get("external_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "external_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "external_id", r.URL.Query(), &params.ExternalId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "external_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DescribeWork(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveWorkExclusion operation middleware
 func (siw *ServerInterfaceWrapper) RemoveWorkExclusion(w http.ResponseWriter, r *http.Request) {
 
@@ -30861,6 +31019,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/bulk/monitor", wrapper.BulkSetWorkMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/describe", wrapper.DescribeWork)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/works/exclusions", wrapper.RemoveWorkExclusion)

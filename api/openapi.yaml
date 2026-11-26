@@ -4878,6 +4878,29 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
+  /works/describe:
+    get:
+      operationId: describeWork
+      tags: [library]
+      summary: >-
+        One thing a library's type lacks, as its providers describe it: facts, ratings, people and the parts in the
+        type's grouping (a series' episodes by season, an album's tracks by disc). Nothing is stored.
+      parameters:
+        - { name: category_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: provider, in: query, required: true, schema: { type: string } }
+        - { name: external_id, in: query, required: true, schema: { type: string } }
+        - { name: kind, in: query, description: One of the type's add_kinds; the first when absent., schema: { type: string } }
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkPreview" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
   /works/exclusions:
     get:
       operationId: listWorkExclusions
@@ -14217,6 +14240,67 @@ components:
         external_id: { type: string }
         title: { type: string }
         everyone: { type: boolean, description: Administrator only; ignores it for every account. }
+
+    WorkPreview:
+      type: object
+      required: [title, genres, facts, ratings, people, groups]
+      properties:
+        title: { type: string }
+        subtitle: { type: string }
+        tagline: { type: string }
+        overview: { type: string }
+        poster_url: { type: string }
+        status: { type: string }
+        year: { type: integer, format: int64 }
+        genres: { type: array, items: { type: string } }
+        facts: { type: array, items: { $ref: "#/components/schemas/WorkPreviewFact" } }
+        ratings: { type: array, items: { $ref: "#/components/schemas/WorkPreviewRating" } }
+        people: { type: array, items: { $ref: "#/components/schemas/WorkPreviewPerson" } }
+        groups:
+          type: array
+          description: The parts in the type's grouping; a group's number is a season's or a disc's.
+          items: { $ref: "#/components/schemas/WorkPreviewGroup" }
+
+    WorkPreviewFact:
+      type: object
+      required: [key, value]
+      properties:
+        key: { type: string, description: "One of network, studio, runtime_min, certification, language, first_aired, released, publisher, author, collection, website; the interface words it." }
+        value: { type: string }
+
+    WorkPreviewRating:
+      type: object
+      required: [provider, score, votes]
+      properties:
+        provider: { type: string }
+        score: { type: number, format: double, description: Ten-point scale. }
+        votes: { type: integer, format: int64 }
+
+    WorkPreviewPerson:
+      type: object
+      required: [name, role]
+      properties:
+        name: { type: string }
+        role: { type: string, description: "The credit's vocabulary: actor, director, writer, author, artist ..." }
+        character: { type: string }
+        image_url: { type: string }
+
+    WorkPreviewGroup:
+      type: object
+      required: [number, parts]
+      properties:
+        number: { type: integer }
+        title: { type: string }
+        parts: { type: array, items: { $ref: "#/components/schemas/WorkPreviewPart" } }
+
+    WorkPreviewPart:
+      type: object
+      required: [number, title]
+      properties:
+        number: { type: string }
+        title: { type: string }
+        date: { type: string }
+        duration_sec: { type: integer }
 
     AddCandidate:
       type: object

@@ -106,3 +106,8 @@ func (c SeriesCatalog) ApplyNumbering(ctx context.Context, seriesID int64, basis
 	}
 	return c.Service.ApplyNumbering(ctx, tv.RefreshRequest{WorkID: seriesID, CategoryID: categoryID, ProfileID: profile}, basis)
 }
+
+// DescribeWork implements media.Describing for TV.
+func (c SeriesCatalog) DescribeWork(ctx context.Context, request media.DescribeRequest) (media.WorkPreview, error) {
+	return c.shared().DescribeWork(ctx, request)
+}

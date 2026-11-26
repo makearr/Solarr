@@ -28,6 +28,10 @@ func (f *fakeWorkAdder) Lookup(_ context.Context, categoryID int64, kind, query 
 	return f.candidates, nil
 }
 
+func (f *fakeWorkAdder) Describe(context.Context, int64, string, string, string) (apiserver.WorkPreviewRow, error) {
+	return apiserver.WorkPreviewRow{Title: "Invented Show", Facts: []apiserver.PreviewFactRow{{Key: "network", Value: "Invented Network"}}}, nil
+}
+
 func (f *fakeWorkAdder) Add(_ context.Context, request apiserver.AddWorkRequest) (apiserver.AddWorkResult, error) {
 	f.adds = append(f.adds, request)
 	return f.result, nil
@@ -147,5 +151,29 @@ func TestAddWork_AppliesTagsFieldsAndRootAfterTheAdd(t *testing.T) {
 	}
 	if saved := fixture.workEditor.saved; saved == nil || !reflect.DeepEqual(*saved, want) {
 		t.Errorf("saved edit = %+v, want %+v", saved, want)
+	}
+}
+
+// A describe request reaches the library's adder and renders the preview with its lists never null.
+func TestDescribeWork_RendersThePreview(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, fmt.Sprintf("/api/v1/works/describe?category_id=%d&provider=p&external_id=1", category.ID)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{
+		"title": "Invented Show", "genres": []any{}, "ratings": []any{}, "people": []any{}, "groups": []any{},
+		"facts": []any{map[string]any{"key": "network", "value": "Invented Network"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("preview = %v, want %v", got, want)
 	}
 }

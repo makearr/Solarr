@@ -71,6 +71,45 @@ type ArrCompanion interface {
 type WorkAdder interface {
 	Lookup(ctx context.Context, categoryID int64, kind, query string, limit int) ([]AddCandidateRow, error)
 	Add(ctx context.Context, request AddWorkRequest) (AddWorkResult, error)
+	// Describe is one lookup result as its providers describe it, nothing stored.
+	Describe(ctx context.Context, categoryID int64, kind, provider, externalID string) (WorkPreviewRow, error)
+}
+
+// WorkPreviewRow is a work as its providers describe it before the library holds it; Facts' keys are the interface's to word.
+type WorkPreviewRow struct {
+	Title, Subtitle, Tagline, Overview, PosterURL, Status string
+	Year                                                  int64
+	Genres                                                []string
+	Facts                                                 []PreviewFactRow
+	Ratings                                               []PreviewRatingRow
+	People                                                []PreviewPersonRow
+	Groups                                                []PreviewGroupRow
+}
+
+// PreviewFactRow is one labelled value of a preview.
+type PreviewFactRow struct{ Key, Value string }
+
+// PreviewRatingRow is one provider's score on a ten-point scale.
+type PreviewRatingRow struct {
+	Provider string
+	Score    float64
+	Votes    int64
+}
+
+// PreviewPersonRow is one cast or crew member of a preview.
+type PreviewPersonRow struct{ Name, Role, Character, ImageURL string }
+
+// PreviewGroupRow is one group of parts: a season, a disc.
+type PreviewGroupRow struct {
+	Number int
+	Title  string
+	Parts  []PreviewPartRow
+}
+
+// PreviewPartRow is one part of a group.
+type PreviewPartRow struct {
+	Number, Title, Date string
+	DurationSec         int
 }
 
 func (s *Server) routeLookupWorks(w http.ResponseWriter, r *http.Request) {
@@ -144,6 +183,78 @@ func (s *Server) LookupWorks(w http.ResponseWriter, r *http.Request, params gen.
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
+}
+
+func (s *Server) routeDescribeWork(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	categoryID, err := strconv.ParseInt(query.Get("category_id"), 10, 64)
+	if err != nil || query.Get("provider") == "" || query.Get("external_id") == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "category_id, provider and external_id are required")
+		return
+	}
+	params := gen.DescribeWorkParams{CategoryId: categoryID, Provider: query.Get("provider"), ExternalId: query.Get("external_id")}
+	if raw := query.Get("kind"); raw != "" {
+		params.Kind = &raw
+	}
+	s.DescribeWork(w, r, params)
+}
+
+// DescribeWork answers one lookup result as its providers describe it; read on the library.
+func (s *Server) DescribeWork(w http.ResponseWriter, r *http.Request, params gen.DescribeWorkParams) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if _, err := access.Category(params.CategoryId, settings.PermissionRead); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.workAdder == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "adding is not available")
+		return
+	}
+	row, err := s.workAdder.Describe(r.Context(), params.CategoryId, derefOr(params.Kind, ""), params.Provider, params.ExternalId)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, workPreviewView(row))
+}
+
+func workPreviewView(row WorkPreviewRow) gen.WorkPreview {
+	view := gen.WorkPreview{
+		Title: row.Title, Subtitle: strPtr(row.Subtitle), Tagline: strPtr(row.Tagline), Overview: strPtr(row.Overview),
+		PosterUrl: strPtr(row.PosterURL), Status: strPtr(row.Status), Genres: row.Genres,
+		Facts: []gen.WorkPreviewFact{}, Ratings: []gen.WorkPreviewRating{}, People: []gen.WorkPreviewPerson{}, Groups: []gen.WorkPreviewGroup{},
+	}
+	if view.Genres == nil {
+		view.Genres = []string{}
+	}
+	if row.Year > 0 {
+		view.Year = &row.Year
+	}
+	for _, fact := range row.Facts {
+		view.Facts = append(view.Facts, gen.WorkPreviewFact{Key: fact.Key, Value: fact.Value})
+	}
+	for _, rating := range row.Ratings {
+		view.Ratings = append(view.Ratings, gen.WorkPreviewRating{Provider: rating.Provider, Score: rating.Score, Votes: rating.Votes})
+	}
+	for _, person := range row.People {
+		view.People = append(view.People, gen.WorkPreviewPerson{Name: person.Name, Role: person.Role, Character: strPtr(person.Character), ImageUrl: strPtr(person.ImageURL)})
+	}
+	for _, group := range row.Groups {
+		out := gen.WorkPreviewGroup{Number: group.Number, Title: strPtr(group.Title), Parts: []gen.WorkPreviewPart{}}
+		for _, part := range group.Parts {
+			item := gen.WorkPreviewPart{Number: part.Number, Title: part.Title, Date: strPtr(part.Date)}
+			if part.DurationSec > 0 {
+				item.DurationSec = &part.DurationSec
+			}
+			out.Parts = append(out.Parts, item)
+		}
+		view.Groups = append(view.Groups, out)
+	}
+	return view
 }
 
 // AddWork adds a candidate to a library as intent, never a download; manage on the library, as adding always needed.

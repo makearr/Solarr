@@ -35,6 +35,15 @@ func (w Wiring) AddWork(ctx context.Context, request AddRequest) (AddResult, err
 	return w.Adder.AddWork(ctx, request)
 }
 
+// DescribeWork implements Describing through the Adder when it describes; ErrNotWired otherwise.
+func (w Wiring) DescribeWork(ctx context.Context, request DescribeRequest) (WorkPreview, error) {
+	describer, ok := w.Adder.(Describing)
+	if !ok {
+		return WorkPreview{}, ErrNotWired
+	}
+	return describer.DescribeWork(ctx, request)
+}
+
 // WorkPictures implements Picturing.
 func (w Wiring) WorkPictures(ctx context.Context, workID int64) ([]ImageOption, error) {
 	if w.Pictures == nil {

@@ -851,6 +851,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/works/exclusions", server.routeListWorkExclusions)
 			secured.Delete("/works/exclusions", server.routeRemoveWorkExclusion)
 			secured.Get("/works/lookup", server.routeLookupWorks)
+			secured.Get("/works/describe", server.routeDescribeWork)
 			secured.Post("/works", server.AddWork)
 			secured.Get("/webhooks", server.ListWebhooks)
 			secured.Post("/webhooks", server.AddWebhook)

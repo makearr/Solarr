@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- The page of an item the library lacks (from Discover, search, collections, crossovers) now shows what its providers know, for every media type: facts, genres, ratings, cast and crew, and the parts in the type's grouping (a series' episodes by season, an album's tracks by disc, a comic's issues), beside Add and Ignore.
 - Items the library lacks (Discover cards, search results, collection members) open a page of their own with the provider's description, Add and Ignore.
 - Ignore: an Ignore button on search results, collection members and crossover parts (administrators may ignore for everyone) keeps an item you do not want out of Discover, collections and crossovers; it is the same list as Discover's "not interested", and the library is never touched.
 - Duplicates (music): an empty report now says how many audio files still wait for their fingerprint, so you can tell "no duplicates" from "not looked yet".

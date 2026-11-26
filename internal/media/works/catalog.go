@@ -28,6 +28,20 @@ type Source interface {
 	Add(ctx context.Context, request Add) (media.AddResult, error)
 }
 
+// Describer is a Source that can describe a work by its provider id without adding it.
+type Describer interface {
+	Describe(ctx context.Context, request media.DescribeRequest) (media.WorkPreview, error)
+}
+
+// DescribeWork implements media.Describing when the Source describes; media.ErrNotWired otherwise.
+func (c Catalog) DescribeWork(ctx context.Context, request media.DescribeRequest) (media.WorkPreview, error) {
+	describer, ok := c.Source.(Describer)
+	if !ok {
+		return media.WorkPreview{}, media.ErrNotWired
+	}
+	return describer.Describe(ctx, request)
+}
+
 // Add is one add, with what the catalog worked out of the request.
 type Add struct {
 	media.AddRequest

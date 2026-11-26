@@ -107,6 +107,43 @@ func (a WorkAdding) Lookup(ctx context.Context, categoryID int64, kind, query st
 	return rows, nil
 }
 
+// Describe asks the library's type to describe one lookup result; a type that cannot is not wired for it.
+func (a WorkAdding) Describe(ctx context.Context, categoryID int64, kind, provider, externalID string) (apiserver.WorkPreviewRow, error) {
+	adding, kind, err := a.adder(categoryID, kind)
+	if err != nil {
+		return apiserver.WorkPreviewRow{}, err
+	}
+	describing, ok := adding.(media.Describing)
+	if !ok {
+		return apiserver.WorkPreviewRow{}, apiserver.ErrDiscoverUnsupportedMediaType
+	}
+	preview, err := describing.DescribeWork(ctx, media.DescribeRequest{CategoryID: categoryID, Kind: kind, Provider: provider, ExternalID: externalID})
+	if err != nil {
+		return apiserver.WorkPreviewRow{}, notWired(err)
+	}
+	row := apiserver.WorkPreviewRow{
+		Title: preview.Title, Subtitle: preview.Subtitle, Tagline: preview.Tagline, Overview: preview.Overview, PosterURL: preview.PosterURL,
+		Status: preview.Status, Year: preview.Year, Genres: preview.Genres,
+	}
+	for _, fact := range preview.Facts {
+		row.Facts = append(row.Facts, apiserver.PreviewFactRow{Key: fact.Key, Value: fact.Value})
+	}
+	for _, rating := range preview.Ratings {
+		row.Ratings = append(row.Ratings, apiserver.PreviewRatingRow{Provider: rating.Provider, Score: rating.Score, Votes: rating.Votes})
+	}
+	for _, person := range preview.People {
+		row.People = append(row.People, apiserver.PreviewPersonRow{Name: person.Name, Role: person.Role, Character: person.Character, ImageURL: person.ImageURL})
+	}
+	for _, group := range preview.Groups {
+		out := apiserver.PreviewGroupRow{Number: group.Number, Title: group.Title}
+		for _, part := range group.Parts {
+			out.Parts = append(out.Parts, apiserver.PreviewPartRow{Number: part.Number, Title: part.Title, Date: part.Date, DurationSec: part.DurationSec})
+		}
+		row.Groups = append(row.Groups, out)
+	}
+	return row, nil
+}
+
 // Add adds one candidate through the library's type.
 func (a WorkAdding) Add(ctx context.Context, request apiserver.AddWorkRequest) (apiserver.AddWorkResult, error) {
 	adding, kind, err := a.adder(request.CategoryID, request.Kind)

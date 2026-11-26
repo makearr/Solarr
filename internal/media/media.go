@@ -256,6 +256,72 @@ type Traits struct {
 	Rating           string
 }
 
+// Describing is the capability of a media type that can describe something its library lacks, as its provider holds
+// it: the same facts, people and parts the library's own item page shows for a held work.
+type Describing interface {
+	DescribeWork(ctx context.Context, request DescribeRequest) (WorkPreview, error)
+}
+
+// DescribeRequest names one thing a lookup found.
+type DescribeRequest struct {
+	CategoryID                 int64
+	Kind, Provider, ExternalID string
+}
+
+// WorkPreview is a work as its providers describe it, before the library holds it. Facts carry a stable key the
+// interface words; nothing here is a formatted sentence.
+type WorkPreview struct {
+	Title, Subtitle, Tagline, Overview, PosterURL, Status string
+	Year                                                  int64
+	Genres                                                []string
+	Facts                                                 []PreviewFact
+	Ratings                                               []PreviewRating
+	People                                                []PreviewPerson
+	// Groups are the parts of the work in the type's own grouping: a series' seasons, an album's discs.
+	Groups []PreviewGroup
+}
+
+// Keys of PreviewFact, each worded by the interface.
+const (
+	FactNetwork       = "network"
+	FactStudio        = "studio"
+	FactRuntimeMin    = "runtime_min"
+	FactCertification = "certification"
+	FactLanguage      = "language"
+	FactFirstAired    = "first_aired"
+	FactReleased      = "released"
+	FactPublisher     = "publisher"
+	FactAuthor        = "author"
+	FactCollection    = "collection"
+	FactWebsite       = "website"
+)
+
+// PreviewFact is one labelled value; Key is one of the Fact constants.
+type PreviewFact struct{ Key, Value string }
+
+// PreviewRating is one provider's score on a ten-point scale.
+type PreviewRating struct {
+	Provider string
+	Score    float64
+	Votes    int64
+}
+
+// PreviewPerson is one cast or crew member; Role is the credit's vocabulary (actor, director, writer ...).
+type PreviewPerson struct{ Name, Role, Character, ImageURL string }
+
+// PreviewGroup is one group of parts; Number is the group's own number (a season's, a disc's).
+type PreviewGroup struct {
+	Number int
+	Title  string
+	Parts  []PreviewPart
+}
+
+// PreviewPart is one part of a group; Number is as the type writes it ("5", "1.2").
+type PreviewPart struct {
+	Number, Title, Date string
+	DurationSec         int
+}
+
 // AddRequest is one add a person asked for.
 type AddRequest struct {
 	CategoryID, UserID         int64

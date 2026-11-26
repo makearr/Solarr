@@ -3258,6 +3258,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/describe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One thing a library's type lacks, as its providers describe it: facts, ratings, people and the parts in the type's grouping (a series' episodes by season, an album's tracks by disc). Nothing is stored. */
+        get: operations["describeWork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/exclusions": {
         parameters: {
             query?: never;
@@ -10383,6 +10400,55 @@ export interface components {
             title: string;
             /** @description Administrator only; ignores it for every account. */
             everyone?: boolean;
+        };
+        WorkPreview: {
+            title: string;
+            subtitle?: string;
+            tagline?: string;
+            overview?: string;
+            poster_url?: string;
+            status?: string;
+            /** Format: int64 */
+            year?: number;
+            genres: string[];
+            facts: components["schemas"]["WorkPreviewFact"][];
+            ratings: components["schemas"]["WorkPreviewRating"][];
+            people: components["schemas"]["WorkPreviewPerson"][];
+            /** @description The parts in the type's grouping; a group's number is a season's or a disc's. */
+            groups: components["schemas"]["WorkPreviewGroup"][];
+        };
+        WorkPreviewFact: {
+            /** @description One of network, studio, runtime_min, certification, language, first_aired, released, publisher, author, collection, website; the interface words it. */
+            key: string;
+            value: string;
+        };
+        WorkPreviewRating: {
+            provider: string;
+            /**
+             * Format: double
+             * @description Ten-point scale.
+             */
+            score: number;
+            /** Format: int64 */
+            votes: number;
+        };
+        WorkPreviewPerson: {
+            name: string;
+            /** @description The credit's vocabulary: actor, director, writer, author, artist ... */
+            role: string;
+            character?: string;
+            image_url?: string;
+        };
+        WorkPreviewGroup: {
+            number: number;
+            title?: string;
+            parts: components["schemas"]["WorkPreviewPart"][];
+        };
+        WorkPreviewPart: {
+            number: string;
+            title: string;
+            date?: string;
+            duration_sec?: number;
         };
         AddCandidate: {
             /** @description One of the type's add_kinds. */
@@ -19201,6 +19267,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AddCandidate"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    describeWork: {
+        parameters: {
+            query: {
+                category_id: number;
+                provider: string;
+                external_id: string;
+                /** @description One of the type's add_kinds; the first when absent. */
+                kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkPreview"];
                 };
             };
             400: components["responses"]["Problem"];
