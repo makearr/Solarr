@@ -119,6 +119,21 @@ export function GeneralSettings() {
           {t("settings.recommendations")}
         </label>
       </Card>
+      <Card title={t("settings.interface")} help={t("settings.interfaceHelp")}>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            disabled={!general.data || change.isPending}
+            checked={general.data?.show_collections ?? true}
+            onChange={(event) => change.mutate({ show_collections: event.target.checked })}
+          />
+          <span>
+            {t("settings.showCollections")}
+            <span className="block text-xs text-ink-muted">{t("settings.showCollectionsHelp")}</span>
+          </span>
+        </label>
+      </Card>
       <Card title={t("settings.backgroundWork")} help="Switches for work Solarr does by itself. A search you start yourself works whatever these say.">
         <label className="flex items-start gap-2 text-sm">
           <input

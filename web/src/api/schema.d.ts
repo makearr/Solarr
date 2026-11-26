@@ -12572,6 +12572,8 @@ export interface components {
             hunt_old_missing?: boolean;
             /** @description Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off. */
             recommendations?: boolean;
+            /** @description The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default on. */
+            show_collections?: boolean;
             /**
              * @description How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
              * @enum {string}

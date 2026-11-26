@@ -18,6 +18,7 @@ import { t } from "@/lib/i18n";
 import { useSidebarCollapsed } from "@/list/useNarrow";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { useDiscoverLibraries, useLibraryTree } from "@/lib/resources";
+import { useShowCollections } from "@/lib/useShowCollections";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { useShowCalendar } from "@/lib/interfacePreferences";
 import { useOpenSections } from "@/lib/useOpenSections";
@@ -323,11 +324,12 @@ function LibraryNode({
     categoryId: String(entry.id), label: mediaTypes.find((info) => info.key === entry.media_type)?.work.many ?? entry.media_type,
   }));
   // A mixed library's levels: its own, then each further type's, the type named where a label repeats (L4).
+  const showCollections = useShowCollections();
   const ownLabels = new Set(library.levels.map((level) => level.label));
   const entries = [
     ...(members.length > 0 ? [{ id: categoryId, key: "all", label: "All", count: undefined as number | null | undefined }] : []),
     ...[library, ...members].flatMap((entry, index) =>
-      entry.levels.map((level) => {
+      entry.levels.filter((level) => showCollections || level.key !== "collections").map((level) => {
         const typeName = mediaTypes.find((info) => info.key === entry.media_type)?.work.many ?? entry.media_type;
         const label = index > 0 && ownLabels.has(level.label) ? `${level.label} · ${typeName}` : level.label;
         return { id: String(entry.id), key: level.key, label, count: level.count };

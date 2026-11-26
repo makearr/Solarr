@@ -3591,6 +3591,9 @@ type GeneralSettings struct {
 	// SafeMode The instance runs in safe mode (safe_mode in config.yml, SOLARR_SAFE_MODE): transcoding, the automatic search, the RSS sync, the cutoff check and sending monitoring to an *Arr are off, whatever their settings say. Not changeable here.
 	SafeMode *bool `json:"safe_mode,omitempty"`
 
+	// ShowCollections The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default on.
+	ShowCollections *bool `json:"show_collections,omitempty"`
+
 	// SolarrMode How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
 	SolarrMode *GeneralSettingsSolarrMode `json:"solarr_mode,omitempty"`
 

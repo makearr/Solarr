@@ -193,6 +193,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  "true",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyShowCollections, Kind: KindBool, Tier: TierNormal,
+		Name:     "Show collections",
+		HelpText: "Lists collections in the navigation and on item pages. Off hides them only; collections are still collected in the background.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeySolarrMode, Kind: KindString, Tier: TierNormal,
 		Name: "Solarr mode",
 		HelpText: "normal does everything; read_only never writes into a library; pause_downloads sends nothing to a download client; " +

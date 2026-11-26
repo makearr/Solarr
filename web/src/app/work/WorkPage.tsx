@@ -40,6 +40,7 @@ import { FileThumb } from "../FileThumb";
 import { TargetChip } from "./TargetChip";
 import { externalLinks, fileTagChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
+import { useShowCollections } from "@/lib/useShowCollections";
 import { WorkCollections } from "./WorkCollections";
 import { WorkSearchTab, runInteractiveKey } from "./WorkSearchTab";
 import { PlayButton } from "../player/PlayButton";
@@ -57,6 +58,7 @@ type TabKey = (typeof TABS)[number];
 export function WorkPage() {
   const params = useParams({ strict: false }) as { categoryId?: string; workId?: string; id?: string; tab?: string };
   const id = Number(params.workId ?? params.id);
+  const showCollections = useShowCollections();
   const tab: TabKey = (TABS as readonly string[]).includes(params.tab ?? "") ? (params.tab as TabKey) : "overview";
   const detail = useQuery({
     queryKey: ["work", id],
@@ -606,7 +608,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
       {/* A work with no parts (a film, a scene) shows its file first, as a series shows each episode's. */}
       {!grouped && !info?.part.one && <WholeFiles work={work} />}
       <CastStrip work={work} info={info} categoryId={categoryId} />
-      {categoryId && <WorkCollections workId={work.id} categoryId={categoryId} />}
+      {categoryId && showCollections && <WorkCollections workId={work.id} categoryId={categoryId} />}
       {crossoverPart && categoryId && <CrossoverDialog part={crossoverPart} categoryId={categoryId} onClose={() => setCrossoverPart(undefined)} />}
       {grouped ? (
         groups.map((group) => (
