@@ -8701,6 +8701,60 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/defects:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listCategoryDefects
+      tags: [library]
+      summary: Files of one library the scan found broken or incomplete (read only).
+      description: >-
+        A file the probe could not read twice, an empty file, or one whose end does not decode (a cut-short download), each
+        with why. Cursor-paged by file id.
+      parameters:
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: A page of defective files.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DefectPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /categories/{id}/defects/resolve:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: resolveCategoryDefects
+      tags: [library]
+      summary: Move defective files to the recycle bin and make what they held wanted again (manage access).
+      description: >-
+        Both actions recycle the files (restorable) and reopen the items they satisfied, so they are wanted again. A
+        re-request also answers the works to search for, which the caller then asks to be searched where searching is allowed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DefectResolveRequest" }
+      responses:
+        "200":
+          description: What was done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DefectResolution" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/duplicates/resolve:
     parameters:
       - name: id
@@ -16833,6 +16887,7 @@ components:
         video_previews: { type: boolean, description: "Make a single frame and a 3x3 thumbnail sheet of each video from the frames the hashing reads (scan.video_previews). Turning it on turns video_hashing on. Default off." }
         hunt_old_missing: { type: boolean, description: "The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on." }
         recommendations: { type: boolean, description: "Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off." }
+        verify_files: { type: boolean, description: "The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default on." }
         show_collections: { type: boolean, description: "The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default on." }
         solarr_mode:
           type: string
@@ -17296,6 +17351,44 @@ components:
             properties:
               media_object_id: { type: integer, format: int64 }
               action: { type: string, enum: [link, recycle] }
+
+    DefectPage:
+      type: object
+      required: [total, items]
+      properties:
+        total: { type: integer, format: int64, description: How many files of the library are defective. }
+        next_cursor: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DefectItem" }
+
+    DefectItem:
+      type: object
+      required: [media_object_id, work_id, work_title, path, size_bytes, reason, detail, detected_at]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        work_id: { type: integer, format: int64, description: Zero when no work owns the file. }
+        work_title: { type: string }
+        path: { type: string, description: The file's path under its root folder. }
+        size_bytes: { type: integer, format: int64 }
+        reason: { type: string, enum: [unreadable, empty, decode_error] }
+        detail: { type: string, description: What the tool said; empty for an empty file. }
+        detected_at: { type: integer, format: int64, description: Unix seconds. }
+
+    DefectResolveRequest:
+      type: object
+      required: [action, ids]
+      properties:
+        action: { type: string, enum: [delete, rerequest] }
+        ids: { type: array, items: { type: integer, format: int64 }, maxItems: 500 }
+
+    DefectResolution:
+      type: object
+      required: [resolved, work_ids, problems]
+      properties:
+        resolved: { type: integer }
+        work_ids: { type: array, items: { type: integer, format: int64 }, description: The works whose items are wanted again. }
+        problems: { type: array, items: { type: string } }
 
     SimilarVideoReport:
       type: object

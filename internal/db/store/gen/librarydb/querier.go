@@ -143,6 +143,7 @@ type Querier interface {
 	CountEnabledSubscriptionsForSubject(ctx context.Context, arg CountEnabledSubscriptionsForSubjectParams) (int64, error)
 	CountEnabledSubscriptionsWithoutLibrary(ctx context.Context) (int64, error)
 	CountFailedTranscodeItemsByCategory(ctx context.Context, targetID int64) ([]CountFailedTranscodeItemsByCategoryRow, error)
+	CountFileDefects(ctx context.Context, rootFolderIds interface{}) (int64, error)
 	// The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
 	// work_date of kind on or after the cutoff. Distinct since a work can carry
 	// more than one region's own date row for the same kind.
@@ -320,6 +321,7 @@ type Querier interface {
 	// edition_external_id cascades; import_unit.edition_id does not.
 	DeleteEdition(ctx context.Context, id int64) error
 	DeleteEditionCredits(ctx context.Context, editionID int64) error
+	DeleteFileDefect(ctx context.Context, mediaObjectID int64) error
 	DeleteImportListEntries(ctx context.Context, listID int64) error
 	DeleteImportListState(ctx context.Context, listID int64) error
 	DeleteImportUnitExtras(ctx context.Context, unitID int64) error
@@ -778,6 +780,10 @@ type Querier interface {
 	ListExpiredRecycleBin(ctx context.Context, arg ListExpiredRecycleBinParams) ([]RecycleBin, error)
 	ListExternalIDsOfCollection(ctx context.Context, collectionID int64) ([]ListExternalIDsOfCollectionRow, error)
 	ListFavoriteIDs(ctx context.Context, arg ListFavoriteIDsParams) ([]int64, error)
+	// The roots of the given files, so a bulk action can be checked against the library it was asked in.
+	ListFileDefectRoots(ctx context.Context, ids interface{}) ([]ListFileDefectRootsRow, error)
+	// The defective files on the given roots, the primary path of each and the work it belongs to; keyset on the media object id.
+	ListFileDefects(ctx context.Context, arg ListFileDefectsParams) ([]ListFileDefectsRow, error)
 	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
 	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
 	// Of these works, the ones no file holds and no person asked for.
@@ -1564,6 +1570,7 @@ type Querier interface {
 	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
 	UpsertCrossoverEvent(ctx context.Context, arg UpsertCrossoverEventParams) error
 	UpsertCrossoverMissingPart(ctx context.Context, arg UpsertCrossoverMissingPartParams) error
+	UpsertFileDefect(ctx context.Context, arg UpsertFileDefectParams) error
 	UpsertFileTrackClaim(ctx context.Context, arg UpsertFileTrackClaimParams) error
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
 	// What was known of the release a file came in, kept with the file (QUAL-1).

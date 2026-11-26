@@ -366,6 +366,14 @@ type Favorite struct {
 	CreatedAt   int64
 }
 
+type FileDefect struct {
+	MediaObjectID int64
+	Reason        string
+	Detail        string
+	SizeBytes     int64
+	DetectedAt    int64
+}
+
 type FileTrackClaim struct {
 	MediaObjectID int64
 	Disc          int64

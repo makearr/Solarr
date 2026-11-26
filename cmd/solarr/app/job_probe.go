@@ -25,6 +25,7 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 		Tool:              mediatool.New(nil, 0),
 		FS:                p.fsys,
 		PerceptualHashing: func() bool { return p.cache.Snapshot().VideoPerceptualHash() },
+		VerifyFiles:       func() bool { return p.cache.Snapshot().VerifyFiles() },
 		VideoPreviews:     func() bool { return p.cache.Snapshot().VideoPreviews() },
 		ParallelFiles:     func() int { return p.cache.Snapshot().VideoParallelFiles() },
 		PreviewsDir:       filepath.Join(p.config.Paths.ConfigDir, "previews"),

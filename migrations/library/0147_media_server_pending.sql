@@ -206,3 +206,12 @@ CREATE TABLE transcode_health (
   last_error           TEXT    NOT NULL DEFAULT '',
   run_seq              INTEGER NOT NULL DEFAULT 0
 ) WITHOUT ROWID;
+
+-- A file the probe found broken or incomplete, with why; a later good probe or a changed size clears it.
+CREATE TABLE file_defect (
+  media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
+  reason          TEXT    NOT NULL CHECK (reason IN ('unreadable', 'empty', 'decode_error')),
+  detail          TEXT    NOT NULL DEFAULT '',
+  size_bytes      INTEGER NOT NULL,
+  detected_at     INTEGER NOT NULL
+) WITHOUT ROWID;

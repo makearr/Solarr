@@ -134,6 +134,21 @@ export function GeneralSettings() {
           </span>
         </label>
       </Card>
+      <Card title={t("settings.fileChecks")} help={t("settings.fileChecksHelp")}>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            disabled={!general.data || change.isPending}
+            checked={general.data?.verify_files ?? true}
+            onChange={(event) => change.mutate({ verify_files: event.target.checked })}
+          />
+          <span>
+            {t("settings.verifyFiles")}
+            <span className="block text-xs text-ink-muted">{t("settings.verifyFilesHelp")}</span>
+          </span>
+        </label>
+      </Card>
       <Card title={t("settings.backgroundWork")} help="Switches for work Solarr does by itself. A search you start yourself works whatever these say.">
         <label className="flex items-start gap-2 text-sm">
           <input

@@ -78,6 +78,7 @@ type Job struct {
 	tool        mediatool.Tool
 	fs          fsx.FS
 	hashing     func() bool
+	verifying   func() bool
 	previews    func() bool
 	previewsDir string
 	clock       clock.Clock
@@ -99,6 +100,8 @@ type Config struct {
 	FS fsx.FS
 	// PerceptualHashing says whether videos are hashed this run; nil means always.
 	PerceptualHashing func() bool
+	// VerifyFiles says whether the end of each probed file is decoded to find cut-short ones; nil means never.
+	VerifyFiles func() bool
 	// VideoPreviews says whether the hashing also keeps a single frame and a sheet of each video in PreviewsDir; nil means never.
 	VideoPreviews func() bool
 	PreviewsDir   string
@@ -118,7 +121,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		physical: config.Physical, coverage: config.Coverage, roots: config.Roots,
-		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, previews: config.VideoPreviews, parallel: config.ParallelFiles, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger, waiting: config.OthersWaiting,
+		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, verifying: config.VerifyFiles, previews: config.VideoPreviews, parallel: config.ParallelFiles, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger, waiting: config.OthersWaiting,
 	}
 }
 
@@ -226,6 +229,11 @@ const (
 // AudioFingerprinter is the tool's raw Chromaprint; a Tool without it leaves audio unfingerprinted.
 type AudioFingerprinter interface {
 	AudioFingerprint(ctx context.Context, path string) (mediatool.AudioFingerprint, error)
+}
+
+// TailDecoder is the tool's check that the end of a file decodes; a Tool without it leaves files unverified.
+type TailDecoder interface {
+	DecodeTail(ctx context.Context, path string, duration time.Duration) error
 }
 
 // PerceptualHasher is the tool's frame hash (ADR-35); a Tool without it leaves video unhashed.
@@ -474,6 +482,7 @@ func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute 
 		mismatchJSON = library.MismatchJSON(library.CompareAttributes(claimed, claim))
 	}
 
+	defer j.verifyEnd(ctx, file, absolute, measured.Duration)
 	return j.physical.RecordMeasured(ctx, file.MediaObjectID, claim, library.MeasuredScalars{
 		DurationMs:     measured.Duration.Milliseconds(),
 		Width:          measured.Width,
@@ -568,4 +577,32 @@ func (j *Job) Force(mode PicturesMode) error {
 	}
 	j.forced.Store(mode)
 	return nil
+}
+
+// verifyEnd marks a file defective when the end of it does not decode (a cut-short download), and clears an earlier mark
+// when it does; best effort, a failure of the check itself leaves the file as it was.
+func (j *Job) verifyEnd(ctx context.Context, file library.UnmeasuredFile, absolute string, duration time.Duration) {
+	if j.verifying == nil || !j.verifying() {
+		return
+	}
+	decoder, ok := j.tool.(TailDecoder)
+	if !ok {
+		return
+	}
+	var failure error
+	if err := iogate.OnDisk(ctx, "", []string{absolute}, func() error {
+		failure = decoder.DecodeTail(ctx, absolute, duration)
+		return ctx.Err()
+	}); err != nil {
+		return
+	}
+	if failure == nil {
+		if err := j.physical.ClearDefect(ctx, file.MediaObjectID); err != nil {
+			j.logger.WarnContext(ctx, "clear defect failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+		}
+		return
+	}
+	if err := j.physical.RecordDefect(ctx, file.MediaObjectID, file.SizeBytes, library.DefectDecodeError, failure.Error(), j.clock.Now()); err != nil {
+		j.logger.WarnContext(ctx, "record defect failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+	}
 }

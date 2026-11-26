@@ -39,10 +39,20 @@ func (p Physical) RecordProbeFailure(ctx context.Context, mediaObjectID, sizeByt
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		return queries.UpsertProbeFailure(ctx, librarydb.UpsertProbeFailureParams{
+		if err := queries.UpsertProbeFailure(ctx, librarydb.UpsertProbeFailureParams{
 			MediaObjectID: mediaObjectID, LastError: reason, Raw: raw, At: at.Unix(),
 			RetryAt: at.Add(ProbeRetryAfter(attempts + 1)).Unix(), SizeBytes: sizeBytes,
-		})
+		}); err != nil {
+			return err
+		}
+		// An empty file is defective at once; one that cannot be read, once a second probe agrees.
+		switch {
+		case sizeBytes == 0:
+			return queries.UpsertFileDefect(ctx, librarydb.UpsertFileDefectParams{MediaObjectID: mediaObjectID, Reason: DefectEmpty, Detail: "", SizeBytes: 0, DetectedAt: at.Unix()})
+		case attempts+1 >= defectAfterAttempts:
+			return queries.UpsertFileDefect(ctx, librarydb.UpsertFileDefectParams{MediaObjectID: mediaObjectID, Reason: DefectUnreadable, Detail: reason, SizeBytes: sizeBytes, DetectedAt: at.Unix()})
+		}
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("library: record probe failure %d: %w", mediaObjectID, err)

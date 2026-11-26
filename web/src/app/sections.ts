@@ -130,6 +130,7 @@ function ownSections(categoryId: string): readonly Section[] {
         { label: "Unidentified", path: "/unidentified", search: { category_id: categoryId }, tier: "normal" },
         { label: "Import", path: `${base}/import`, tier: "advanced", administrator: true },
         { label: "Duplicates", path: `${base}/duplicates`, tier: "advanced" },
+        { label: "Defective", path: `${base}/defects`, tier: "normal" },
         { label: "Packs", path: `${base}/packs`, tier: "expert", administrator: true },
         { label: "Belongs elsewhere", path: `${base}/check`, tier: "normal" },
       ],

@@ -5674,6 +5674,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/defects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Files of one library the scan found broken or incomplete (read only).
+         * @description A file the probe could not read twice, an empty file, or one whose end does not decode (a cut-short download), each with why. Cursor-paged by file id.
+         */
+        get: operations["listCategoryDefects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}/defects/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move defective files to the recycle bin and make what they held wanted again (manage access).
+         * @description Both actions recycle the files (restorable) and reopen the items they satisfied, so they are wanted again. A re-request also answers the works to search for, which the caller then asks to be searched where searching is allowed.
+         */
+        post: operations["resolveCategoryDefects"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/duplicates/resolve": {
         parameters: {
             query?: never;
@@ -12572,6 +12616,8 @@ export interface components {
             hunt_old_missing?: boolean;
             /** @description Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off. */
             recommendations?: boolean;
+            /** @description The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default on. */
+            verify_files?: boolean;
             /** @description The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default on. */
             show_collections?: boolean;
             /**
@@ -13076,6 +13122,49 @@ export interface components {
                 /** @enum {string} */
                 action: "link" | "recycle";
             }[];
+        };
+        DefectPage: {
+            /**
+             * Format: int64
+             * @description How many files of the library are defective.
+             */
+            total: number;
+            next_cursor?: string;
+            items: components["schemas"]["DefectItem"][];
+        };
+        DefectItem: {
+            /** Format: int64 */
+            media_object_id: number;
+            /**
+             * Format: int64
+             * @description Zero when no work owns the file.
+             */
+            work_id: number;
+            work_title: string;
+            /** @description The file's path under its root folder. */
+            path: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** @enum {string} */
+            reason: "unreadable" | "empty" | "decode_error";
+            /** @description What the tool said; empty for an empty file. */
+            detail: string;
+            /**
+             * Format: int64
+             * @description Unix seconds.
+             */
+            detected_at: number;
+        };
+        DefectResolveRequest: {
+            /** @enum {string} */
+            action: "delete" | "rerequest";
+            ids: number[];
+        };
+        DefectResolution: {
+            resolved: number;
+            /** @description The works whose items are wanted again. */
+            work_ids: number[];
+            problems: string[];
         };
         SimilarVideoReport: {
             /**
@@ -23464,6 +23553,63 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    listCategoryDefects: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of defective files. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefectPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    resolveCategoryDefects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DefectResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description What was done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefectResolution"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     resolveCategoryDuplicates: {

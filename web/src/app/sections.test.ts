@@ -8,10 +8,10 @@ test("a tab the viewer may not open is absent", () => {
   const [, insights, files, settings] = librarySections("7");
   expect(labels(visibleTabs(insights!, { tier: "normal", administrator: false }))).toEqual(["Statistics"]);
   expect(labels(visibleTabs(insights!, { tier: "advanced", administrator: false }))).toEqual(["Statistics", "Activity"]);
-  expect(labels(visibleTabs(files!, { tier: "normal", administrator: false }))).toEqual(["Unidentified", "Belongs elsewhere"]);
-  expect(labels(visibleTabs(files!, { tier: "advanced", administrator: false }))).toEqual(["Unidentified", "Duplicates", "Belongs elsewhere"]);
+  expect(labels(visibleTabs(files!, { tier: "normal", administrator: false }))).toEqual(["Unidentified", "Defective", "Belongs elsewhere"]);
+  expect(labels(visibleTabs(files!, { tier: "advanced", administrator: false }))).toEqual(["Unidentified", "Duplicates", "Defective", "Belongs elsewhere"]);
   expect(labels(visibleTabs(files!, { tier: "expert", administrator: true }))).toEqual([
-    "Unidentified", "Import", "Duplicates", "Packs", "Belongs elsewhere",
+    "Unidentified", "Import", "Duplicates", "Defective", "Packs", "Belongs elsewhere",
   ]);
   expect(labels(visibleTabs(settings!, { tier: "expert", administrator: false }))).toEqual([]);
   expect(labels(visibleTabs(STORAGE, { tier: "normal", administrator: true }))).toEqual([]);

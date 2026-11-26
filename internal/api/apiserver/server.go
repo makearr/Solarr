@@ -153,6 +153,8 @@ type Config struct {
 	RecycleBinContents RecycleBinContents
 	// DuplicateResolver keeps one copy of a track and links or recycles the others. Optional: nil answers 503.
 	DuplicateResolver DuplicateResolver
+	// FileDefects lists and recycles the files the probe found broken. Optional.
+	FileDefects FileDefects
 	// Links previews and queues the linking of a library's identical copies. Optional: nil answers 503.
 	Links LinkManager
 
@@ -417,6 +419,7 @@ type Server struct {
 	similarVideos           SimilarVideoReader
 	recycleContents         RecycleBinContents
 	duplicateResolver       DuplicateResolver
+	fileDefects             FileDefects
 	links                   LinkManager
 	incompleteDiscographies IncompleteDiscographies
 	workRefresher           WorkRefresher
@@ -584,6 +587,7 @@ func New(config Config) (*Server, error) {
 		similarVideos:           config.SimilarVideos,
 		recycleContents:         config.RecycleBinContents,
 		duplicateResolver:       config.DuplicateResolver,
+		fileDefects:             config.FileDefects,
 		links:                   config.Links,
 		incompleteDiscographies: config.IncompleteDiscographies,
 		workRefresher:           config.WorkRefresher,
@@ -954,6 +958,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}/statistics", wrapped.GetCategoryStatistics)
 			secured.Get("/categories/{id}/target-size", wrapped.GetCategoryTargetSize)
 			secured.Get("/categories/{id}/duplicates", wrapped.GetCategoryDuplicates)
+			secured.Get("/categories/{id}/defects", wrapped.ListCategoryDefects)
+			secured.Post("/categories/{id}/defects/resolve", wrapped.ResolveCategoryDefects)
 			secured.Get("/categories/{id}/similar-videos", server.routeGetCategorySimilarVideos)
 			secured.Post("/categories/{id}/duplicates/resolve", wrapped.ResolveCategoryDuplicates)
 			secured.Get("/duplicates/similar-videos", server.routeGetSimilarVideos)

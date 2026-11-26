@@ -14,9 +14,9 @@ func (s *Server) generalSettings() gen.GeneralSettings {
 	snapshot := s.auth.Settings.Snapshot()
 	hashing, previews, gaps := snapshot.VideoPerceptualHash(), snapshot.VideoPreviews(), snapshot.HuntGaps()
 	mode := gen.GeneralSettingsSolarrMode(snapshot.SolarrMode())
-	recommendations, collections := snapshot.DiscoverGlobal().Enabled, snapshot.ShowCollections()
+	recommendations, collections, verify := snapshot.DiscoverGlobal().Enabled, snapshot.ShowCollections(), snapshot.VerifyFiles()
 	safe := s.auth.SafeMode
-	return gen.GeneralSettings{VideoHashing: &hashing, VideoPreviews: &previews, HuntOldMissing: &gaps, Recommendations: &recommendations, ShowCollections: &collections, SolarrMode: &mode, SafeMode: &safe}
+	return gen.GeneralSettings{VideoHashing: &hashing, VideoPreviews: &previews, HuntOldMissing: &gaps, Recommendations: &recommendations, ShowCollections: &collections, VerifyFiles: &verify, SolarrMode: &mode, SafeMode: &safe}
 }
 
 // GetGeneralSettings answers the instance-wide switches of Settings -> General.
@@ -48,6 +48,12 @@ func (s *Server) PatchGeneralSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.HuntOldMissing != nil {
 		if err := s.auth.Settings.SetHuntGaps(r.Context(), s.auth.Clock, *body.HuntOldMissing); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+	}
+	if body.VerifyFiles != nil {
+		if err := s.auth.Settings.SetVerifyFiles(r.Context(), s.auth.Clock, *body.VerifyFiles); err != nil {
 			writeError(w, s.logger, err)
 			return
 		}

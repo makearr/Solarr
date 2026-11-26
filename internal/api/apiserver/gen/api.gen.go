@@ -173,6 +173,19 @@ const (
 	DecisionOutcomeREJECT DecisionOutcome = "REJECT"
 )
 
+// Defines values for DefectItemReason.
+const (
+	DefectItemReasonDecodeError DefectItemReason = "decode_error"
+	DefectItemReasonEmpty       DefectItemReason = "empty"
+	DefectItemReasonUnreadable  DefectItemReason = "unreadable"
+)
+
+// Defines values for DefectResolveRequestAction.
+const (
+	DefectResolveRequestActionDelete    DefectResolveRequestAction = "delete"
+	DefectResolveRequestActionRerequest DefectResolveRequestAction = "rerequest"
+)
+
 // Defines values for DiscoverTypeSettingsType.
 const (
 	DiscoverTypeSettingsTypeClassics     DiscoverTypeSettingsType = "classics"
@@ -2715,6 +2728,55 @@ type DefaultLanguages struct {
 	Languages []string `json:"languages"`
 }
 
+// DefectItem defines model for DefectItem.
+type DefectItem struct {
+	// Detail What the tool said; empty for an empty file.
+	Detail string `json:"detail"`
+
+	// DetectedAt Unix seconds.
+	DetectedAt    int64 `json:"detected_at"`
+	MediaObjectId int64 `json:"media_object_id"`
+
+	// Path The file's path under its root folder.
+	Path      string           `json:"path"`
+	Reason    DefectItemReason `json:"reason"`
+	SizeBytes int64            `json:"size_bytes"`
+
+	// WorkId Zero when no work owns the file.
+	WorkId    int64  `json:"work_id"`
+	WorkTitle string `json:"work_title"`
+}
+
+// DefectItemReason defines model for DefectItem.Reason.
+type DefectItemReason string
+
+// DefectPage defines model for DefectPage.
+type DefectPage struct {
+	Items      []DefectItem `json:"items"`
+	NextCursor *string      `json:"next_cursor,omitempty"`
+
+	// Total How many files of the library are defective.
+	Total int64 `json:"total"`
+}
+
+// DefectResolution defines model for DefectResolution.
+type DefectResolution struct {
+	Problems []string `json:"problems"`
+	Resolved int      `json:"resolved"`
+
+	// WorkIds The works whose items are wanted again.
+	WorkIds []int64 `json:"work_ids"`
+}
+
+// DefectResolveRequest defines model for DefectResolveRequest.
+type DefectResolveRequest struct {
+	Action DefectResolveRequestAction `json:"action"`
+	Ids    []int64                    `json:"ids"`
+}
+
+// DefectResolveRequestAction defines model for DefectResolveRequest.Action.
+type DefectResolveRequestAction string
+
 // Deferral A reason this candidate is not actionable yet.
 type Deferral struct {
 	Reason string `json:"reason"`
@@ -3596,6 +3658,9 @@ type GeneralSettings struct {
 
 	// SolarrMode How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
 	SolarrMode *GeneralSettingsSolarrMode `json:"solarr_mode,omitempty"`
+
+	// VerifyFiles The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default on.
+	VerifyFiles *bool `json:"verify_files,omitempty"`
 
 	// VideoHashing Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off.
 	VideoHashing *bool `json:"video_hashing,omitempty"`
@@ -8713,6 +8778,12 @@ type OrderCategoriesJSONBody struct {
 	Ids []int64 `json:"ids"`
 }
 
+// ListCategoryDefectsParams defines parameters for ListCategoryDefects.
+type ListCategoryDefectsParams struct {
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // PreviewLibraryFileSettingParams defines parameters for PreviewLibraryFileSetting.
 type PreviewLibraryFileSettingParams struct {
 	Option string `form:"option" json:"option"`
@@ -9988,6 +10059,9 @@ type OrderCategoriesJSONRequestBody OrderCategoriesJSONBody
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = CategoryWrite
 
+// ResolveCategoryDefectsJSONRequestBody defines body for ResolveCategoryDefects for application/json ContentType.
+type ResolveCategoryDefectsJSONRequestBody = DefectResolveRequest
+
 // ResolveCategoryDuplicatesJSONRequestBody defines body for ResolveCategoryDuplicates for application/json ContentType.
 type ResolveCategoryDuplicatesJSONRequestBody = DuplicateResolveRequest
 
@@ -10596,6 +10670,12 @@ type ServerInterface interface {
 	// The library's works whose rules point to another library, and the kinds of library that do not exist yet although some of its works would go there.
 	// (GET /categories/{id}/check)
 	CheckLibrary(w http.ResponseWriter, r *http.Request, id int64)
+	// Files of one library the scan found broken or incomplete (read only).
+	// (GET /categories/{id}/defects)
+	ListCategoryDefects(w http.ResponseWriter, r *http.Request, id int64, params ListCategoryDefectsParams)
+	// Move defective files to the recycle bin and make what they held wanted again (manage access).
+	// (POST /categories/{id}/defects/resolve)
+	ResolveCategoryDefects(w http.ResponseWriter, r *http.Request, id int64)
 	// Tracks one library holds more than once, found by audio fingerprint, else by artist, title and length (read only).
 	// (GET /categories/{id}/duplicates)
 	GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64)
@@ -12090,6 +12170,18 @@ func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id
 // The library's works whose rules point to another library, and the kinds of library that do not exist yet although some of its works would go there.
 // (GET /categories/{id}/check)
 func (_ Unimplemented) CheckLibrary(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Files of one library the scan found broken or incomplete (read only).
+// (GET /categories/{id}/defects)
+func (_ Unimplemented) ListCategoryDefects(w http.ResponseWriter, r *http.Request, id int64, params ListCategoryDefectsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Move defective files to the recycle bin and make what they held wanted again (manage access).
+// (POST /categories/{id}/defects/resolve)
+func (_ Unimplemented) ResolveCategoryDefects(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -15949,6 +16041,91 @@ func (siw *ServerInterfaceWrapper) CheckLibrary(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CheckLibrary(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCategoryDefects operation middleware
+func (siw *ServerInterfaceWrapper) ListCategoryDefects(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCategoryDefectsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCategoryDefects(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveCategoryDefects operation middleware
+func (siw *ServerInterfaceWrapper) ResolveCategoryDefects(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveCategoryDefects(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -29429,6 +29606,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/check", wrapper.CheckLibrary)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/defects", wrapper.ListCategoryDefects)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/defects/resolve", wrapper.ResolveCategoryDefects)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/duplicates", wrapper.GetCategoryDuplicates)
