@@ -297,7 +297,7 @@ export function Duplicates() {
         </p>
       </header>
       {categoryId !== undefined && <IdenticalCopies categoryId={Number(categoryId)} />}
-      {categoryId !== undefined && <SimilarVideos scope={{ categoryId: Number(categoryId) }} />}
+      {categoryId !== undefined && info?.video_files === true && <SimilarVideos scope={{ categoryId: Number(categoryId) }} />}
       {report.isLoading && <p className="text-sm text-ink-muted">Looking…</p>}
       {report.error !== null && !report.isLoading && <p className="text-sm text-danger">{t("duplicates.theReportCouldNot")}</p>}
       {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate {words.parts} found.</p>}

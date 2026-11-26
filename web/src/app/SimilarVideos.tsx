@@ -257,7 +257,7 @@ export function SimilarVideos({ scope }: { scope: SimilarScope }) {
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-medium">Similar videos</h2>
+        <h2 className="text-sm font-medium">{t("similarVideos.title")}</h2>
         {scope === "everywhere" && (
           <label className="ml-auto flex items-center gap-1.5 text-xs text-ink-muted">
             Library

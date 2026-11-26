@@ -143,9 +143,10 @@ func (Module) PlacementKey(subject media.PlacementSubject) string {
 
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
-		Key:       media.Key(MediaType),
-		Label:     "Movies",
-		GenreTree: screen.GenreTree,
+		VideoFiles: true,
+		Key:        media.Key(MediaType),
+		Label:      "Movies",
+		GenreTree:  screen.GenreTree,
 		Vocabulary: media.Vocabulary{
 			Work:         media.Term{One: "Movie", Many: "Movies"},
 			LeadPeople:   media.Term{One: "Director", Many: "Directors"},

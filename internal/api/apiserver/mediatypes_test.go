@@ -58,7 +58,7 @@ func TestListMediaTypes_AnswersOnlyTheRegisteredTypesInOrder(t *testing.T) {
 			"roles": []any{map[string]any{
 				"key": "artist", "label": "Artist", "lead": true, "followable": true, "part_scoped": false, "character": false,
 			}},
-			"follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false, "commit_guess_floor": float64(0), "duplicates_by_name": false,
+			"follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false, "commit_guess_floor": float64(0), "duplicates_by_name": false, "video_files": false,
 			"file_settings": []any{map[string]any{"key": "change_file_date", "label": "Change File Date", "help": "On import.",
 				"options": []any{map[string]any{"key": "release_date", "label": "Album Release Date"}}}},
 			"scan_monitor": map[string]any{"setting": "monitor_discovered", "label": "Monitor discovered",
@@ -67,7 +67,7 @@ func TestListMediaTypes_AnswersOnlyTheRegisteredTypesInOrder(t *testing.T) {
 		},
 		{
 			"key": "tv", "label": "TV", "work": term("Series", "Series"), "part": term("", ""), "group": term("", ""),
-			"lead_people": term("", ""), "organisation": term("", ""), "roles": []any{}, "follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false, "commit_guess_floor": float64(0), "duplicates_by_name": false,
+			"lead_people": term("", ""), "organisation": term("", ""), "roles": []any{}, "follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false, "commit_guess_floor": float64(0), "duplicates_by_name": false, "video_files": false,
 			"kinds":         []any{map[string]any{"key": "series", "label": "Series"}, map[string]any{"key": "anime", "label": "Anime", "help": "Anime."}},
 			"file_settings": []any{}, "scan_monitor": map[string]any{"setting": "", "label": "", "options": []any{}},
 			"unidentified_retry": "tv_retry", "searches_library": false, "cover_sources": false, "release_filters": true, "part_coverage": false, "previewable_settings": []any{},

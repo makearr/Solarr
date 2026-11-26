@@ -55,6 +55,8 @@ type MediaTypeInfo struct {
 	CommitsHeldImports bool
 	// DuplicatesByName says a duplicate is one recording under any work, matched by name and length.
 	DuplicatesByName bool
+	// VideoFiles says the type's files are video, so the similar-videos report applies.
+	VideoFiles bool
 	// ExtraFiles is the type's "Import Extra Files" for a library that has not chosen; both fields are set.
 	ExtraFiles settings.ExtraFiles
 	// GuessFloor is the least confidence "Commit anyway" takes a held unit's best guess at; 0 takes any.
@@ -176,7 +178,7 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				MonitorOptions: choiceViews(info.MonitorOptions), SearchTerms: choiceViews(info.SearchTerms),
 				WorkImage: gen.MediaTypeInfoWorkImage(info.WorkImage), WantedGrain: gen.MediaTypeInfoWantedGrain(info.WantedGrain),
 				AddKinds: choiceViews(info.AddKinds), CommitsHeldImports: info.CommitsHeldImports, CommitGuessFloor: &info.GuessFloor,
-				DuplicatesByName: info.DuplicatesByName, Kinds: kindViews(info.Kinds),
+				DuplicatesByName: info.DuplicatesByName, VideoFiles: info.VideoFiles, Kinds: kindViews(info.Kinds),
 				FileSettings: fileSettingViews(info.FileSettings), ScanMonitor: scanMonitorView(info.ScanMonitor),
 				UnidentifiedRetry: strPtr(info.UnidentifiedRetry), SearchesLibrary: info.SearchesLibrary,
 				CoverSources: info.CoverSources, ReleaseFilters: info.ReleaseFilters, PartCoverage: info.PartCoverage, PreviewableSettings: nonNilStrings(info.PreviewableSettings),

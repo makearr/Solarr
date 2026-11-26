@@ -263,6 +263,7 @@ func (Module) Descriptor() media.Descriptor {
 		MonitorOptions: monitorChoices,
 		WorkImage:      media.ImagePoster,
 		WantedGrain:    media.WantedParts,
+		VideoFiles:     true,
 		AddKinds:       []media.Choice{{Key: "series", Label: "Series"}},
 		// The consumer refuses to add an excluded series (Service.excluded).
 		CommitsHeldImports:    true,

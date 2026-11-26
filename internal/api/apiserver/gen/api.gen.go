@@ -5225,6 +5225,9 @@ type MediaTypeInfo struct {
 	// UnidentifiedRetry The schedule that tries a library's unidentified files again (POST /schedules/{key}/run); absent when the type has none.
 	UnidentifiedRetry *string `json:"unidentified_retry,omitempty"`
 
+	// VideoFiles The type's files are video, so the similar-videos report applies to its libraries.
+	VideoFiles bool `json:"video_files"`
+
 	// WantedGrain What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts).
 	WantedGrain MediaTypeInfoWantedGrain `json:"wanted_grain"`
 	Work        MediaTerm                `json:"work"`

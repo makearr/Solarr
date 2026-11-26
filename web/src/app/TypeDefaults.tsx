@@ -8,6 +8,7 @@ import { moveItem } from "@/lib/typeDefaults";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
+import { ProviderOffChip } from "@/ui/ProviderOffChip";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
@@ -65,7 +66,7 @@ export function MetadataTypeTab({ entry }: { entry: TypeDefaults }) {
             <li key={key} className="flex flex-wrap items-center gap-2 py-2">
               <span className="w-5 text-right tabular-nums text-ink-muted">{index + 1}.</span>
               <span className="font-medium">{info(key)?.label ?? key}</span>
-              {!info(key)?.enabled && <Chip tone="warn">switched off under Providers</Chip>}
+              {!info(key)?.enabled && <ProviderOffChip />}
               <span className="min-w-0 flex-1 text-xs text-ink-muted">{info(key)?.carries.join(", ")}</span>
               <Button variant="icon" aria-label={`Move ${info(key)?.label ?? key} up`} disabled={index === 0 || save.isPending} onClick={() => set(moveItem(sources, index, -1))}>
                 <ArrowUp aria-hidden className="size-4" />
@@ -86,9 +87,13 @@ export function MetadataTypeTab({ entry }: { entry: TypeDefaults }) {
               <div key={provider.key} className="flex flex-wrap items-center gap-2">
                 <span>{provider.label}</span>
                 <span className="min-w-0 flex-1 text-xs text-ink-muted">{provider.carries.join(", ")}</span>
-                <Button busy={save.isPending} onClick={() => set([...sources, provider.key])}>
-                  {t("typeDefaults.turnOnLast")}
-                </Button>
+                {provider.enabled ? (
+                  <Button busy={save.isPending} onClick={() => set([...sources, provider.key])}>
+                    {t("typeDefaults.turnOnLast")}
+                  </Button>
+                ) : (
+                  <ProviderOffChip />
+                )}
               </div>
             ))}
           </div>

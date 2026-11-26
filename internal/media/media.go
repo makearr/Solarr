@@ -91,6 +91,8 @@ type Descriptor struct {
 	// DuplicatesByName says a duplicate is one recording under any work, matched by artist, title and length (music);
 	// otherwise two files are duplicates only when they cover the same part.
 	DuplicatesByName bool
+	// VideoFiles says the type's files are video, so the perceptual-hash similarity report applies to its libraries.
+	VideoFiles bool
 	// CommitsHeldImports says a held import unit of the type is committed by hand, anyway or as a work named.
 	CommitsHeldImports bool
 	// ScanHonoursExclusions says the type's scan leaves an excluded work's files out, so a work removed and excluded

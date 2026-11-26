@@ -12002,7 +12002,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, genre_tree, ratings, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters, part_coverage, previewable_settings]
+      required: [key, label, genre_tree, ratings, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, video_files, file_settings, scan_monitor, searches_library, cover_sources, release_filters, part_coverage, previewable_settings]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -12071,6 +12071,7 @@ components:
           format: double
           description: The least confidence "Commit anyway" places a held unit's best guess at; below it the unit is named with Identify as. 0 takes any.
         duplicates_by_name: { type: boolean, description: "A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part." }
+        video_files: { type: boolean, description: "The type's files are video, so the similar-videos report applies to its libraries." }
         file_settings:
           type: array
           description: The File Management settings that mean something for the type, in its words; one left out is not offered. The rest of File Management is the same for every type.

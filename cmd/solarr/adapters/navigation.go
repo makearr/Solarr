@@ -228,6 +228,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		info.MonitorOptions, info.AddKinds = mediaChoices(descriptor.MonitorOptions), mediaChoices(descriptor.AddKinds)
 		info.CommitsHeldImports = descriptor.CommitsHeldImports
 		info.DuplicatesByName = descriptor.DuplicatesByName
+		info.VideoFiles = descriptor.VideoFiles
 		info.ExtraFiles = settings.ExtraFiles{Import: &descriptor.ExtraFiles.Import, Extensions: descriptor.ExtraFiles.Extensions}
 		info.GuessFloor = descriptor.GuessFloor
 		for _, kind := range descriptor.Kinds {

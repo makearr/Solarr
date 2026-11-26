@@ -8410,6 +8410,8 @@ export interface components {
             commit_guess_floor?: number;
             /** @description A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part. */
             duplicates_by_name: boolean;
+            /** @description The type's files are video, so the similar-videos report applies to its libraries. */
+            video_files: boolean;
             /** @description The File Management settings that mean something for the type, in its words; one left out is not offered. The rest of File Management is the same for every type. */
             file_settings: {
                 /** @enum {string} */

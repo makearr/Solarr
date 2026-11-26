@@ -6,6 +6,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
+import { ProviderOffChip } from "@/ui/ProviderOffChip";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
 import { useLibrary } from "@/lib/useLibrary";
@@ -108,7 +109,7 @@ export function LibraryMetadata() {
                       Use last
                     </Button>
                   ) : (
-                    <Chip tone="warn">switched off under Settings, Metadata</Chip>
+                    <ProviderOffChip />
                   )}
                 </div>
               ))}
