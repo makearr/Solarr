@@ -36,3 +36,28 @@ func TestLabelLogosAreReadInBulkByMusicBrainzLabelID(t *testing.T) {
 		t.Errorf("queries = %q, want one naming only the valid id", transport.queries)
 	}
 }
+
+type nameTransport struct{ queries []string }
+
+func (n *nameTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	n.queries = append(n.queries, request.URL.Query().Get("query"))
+	body := `{"results":{"bindings":[
+	  {"name":{"value":"Lantern House"},"logo":{"value":"http://commons.wikimedia.org/wiki/Special:FilePath/Lantern%20House.svg"}}]}}`
+	return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+}
+
+func TestOrganisationLogosAreFoundByExactEnglishLabel(t *testing.T) {
+	transport := &nameTransport{}
+	fetcher := wikidata.New(wikidata.Config{WikidataClient: newTestClient(t, transport, "wikidata"), WikipediaClient: newTestClient(t, transport, "wikipedia")})
+	logos, err := fetcher.OrganisationLogos(t.Context(), []string{"Lantern House", "Say \"hi\"", "bad\nname", ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"Lantern House": "https://commons.wikimedia.org/wiki/Special:FilePath/Lantern%20House.svg?width=500"}
+	if !reflect.DeepEqual(logos, want) {
+		t.Errorf("logos = %v, want %v", logos, want)
+	}
+	if len(transport.queries) != 1 || !strings.Contains(transport.queries[0], `"Say \"hi\""@en`) || strings.Contains(transport.queries[0], "bad") {
+		t.Errorf("queries = %q, want one with the escaped name and without the refused one", transport.queries)
+	}
+}

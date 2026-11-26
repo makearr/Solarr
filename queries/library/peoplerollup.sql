@@ -67,6 +67,15 @@ JOIN organisation_external_id x ON x.organisation_id = o.id AND x.provider = sql
 WHERE o.kind = sqlc.arg(kind) AND o.id > sqlc.arg(after_id) AND json_extract(COALESCE(o.fields_json, '{}'), '$.logo_asked') IS NULL
 ORDER BY o.id LIMIT sqlc.arg(page_size);
 
+-- Organisations of the kinds with no logo, never asked for one by name, and not those a provider id asks for instead.
+-- name: ListOrganisationsLogoUnaskedByName :many
+SELECT o.id, o.name FROM organisation o
+WHERE o.kind IN (SELECT value FROM json_each(sqlc.arg(kinds))) AND o.id > sqlc.arg(after_id)
+  AND json_extract(COALESCE(o.fields_json, '{}'), '$.logo_asked') IS NULL
+  AND json_extract(COALESCE(o.fields_json, '{}'), '$.logo') IS NULL
+  AND NOT EXISTS (SELECT 1 FROM organisation_external_id x WHERE x.organisation_id = o.id AND x.provider = sqlc.arg(skip_provider))
+ORDER BY o.id LIMIT sqlc.arg(page_size);
+
 -- name: SetOrganisationLogoAsked :exec
 UPDATE organisation SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.logo_asked', sqlc.arg(asked_at))
 WHERE id = sqlc.arg(id);

@@ -890,6 +890,8 @@ type Querier interface {
 	ListOrganisationsForWork(ctx context.Context, workID int64) ([]WorkOrganisation, error)
 	// Organisations of a kind with an id at a provider whose logo was never asked for.
 	ListOrganisationsLogoUnasked(ctx context.Context, arg ListOrganisationsLogoUnaskedParams) ([]ListOrganisationsLogoUnaskedRow, error)
+	// Organisations of the kinds with no logo, never asked for one by name, and not those a provider id asks for instead.
+	ListOrganisationsLogoUnaskedByName(ctx context.Context, arg ListOrganisationsLogoUnaskedByNameParams) ([]ListOrganisationsLogoUnaskedByNameRow, error)
 	ListOrganisationsOfWork(ctx context.Context, workID int64) ([]int64, error)
 	ListPackItems(ctx context.Context, packID int64) ([]PackItem, error)
 	// Cursor-paginated by id ascending, the same plain cursor /blocked and

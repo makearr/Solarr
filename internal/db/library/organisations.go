@@ -390,6 +390,32 @@ func (o Organisations) LogosToAsk(ctx context.Context, kind, provider string, af
 	return out, nil
 }
 
+// NameToAsk is an organisation whose logo can only be asked for by its name.
+type NameToAsk struct {
+	OrganisationID int64
+	Name           string
+}
+
+// LogosToAskByName pages the organisations of the kinds that have no logo and were never asked for one, leaving out
+// those with an id at skipProvider (a job that asks by that id has them).
+func (o Organisations) LogosToAskByName(ctx context.Context, kinds []string, skipProvider string, afterID int64, limit int) ([]NameToAsk, error) {
+	encoded, err := json.Marshal(kinds)
+	if err != nil {
+		return nil, fmt.Errorf("library: logo kinds: %w", err)
+	}
+	rows, err := librarydb.New(o.store.Read()).ListOrganisationsLogoUnaskedByName(ctx, librarydb.ListOrganisationsLogoUnaskedByNameParams{
+		Kinds: string(encoded), AfterID: afterID, SkipProvider: skipProvider, PageSize: int64(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: logos to ask by name: %w", err)
+	}
+	out := make([]NameToAsk, len(rows))
+	for i, row := range rows {
+		out[i] = NameToAsk{OrganisationID: row.ID, Name: row.Name}
+	}
+	return out, nil
+}
+
 // AnswerLogos records the logos found, and that each organisation asked was asked, in one write.
 func (o Organisations) AnswerLogos(ctx context.Context, at time.Time, asked []int64, logos map[int64]string) error {
 	err := o.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

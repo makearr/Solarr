@@ -719,6 +719,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerPeopleJobs(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerOrganisationLogoJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerCoverJobs(registry, executor); err != nil {
 		return err
 	}

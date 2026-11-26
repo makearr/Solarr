@@ -193,6 +193,56 @@ func (q *Queries) ListOrganisationsLogoUnasked(ctx context.Context, arg ListOrga
 	return items, nil
 }
 
+const listOrganisationsLogoUnaskedByName = `-- name: ListOrganisationsLogoUnaskedByName :many
+SELECT o.id, o.name FROM organisation o
+WHERE o.kind IN (SELECT value FROM json_each(?1)) AND o.id > ?2
+  AND json_extract(COALESCE(o.fields_json, '{}'), '$.logo_asked') IS NULL
+  AND json_extract(COALESCE(o.fields_json, '{}'), '$.logo') IS NULL
+  AND NOT EXISTS (SELECT 1 FROM organisation_external_id x WHERE x.organisation_id = o.id AND x.provider = ?3)
+ORDER BY o.id LIMIT ?4
+`
+
+type ListOrganisationsLogoUnaskedByNameParams struct {
+	Kinds        interface{}
+	AfterID      int64
+	SkipProvider string
+	PageSize     int64
+}
+
+type ListOrganisationsLogoUnaskedByNameRow struct {
+	ID   int64
+	Name string
+}
+
+// Organisations of the kinds with no logo, never asked for one by name, and not those a provider id asks for instead.
+func (q *Queries) ListOrganisationsLogoUnaskedByName(ctx context.Context, arg ListOrganisationsLogoUnaskedByNameParams) ([]ListOrganisationsLogoUnaskedByNameRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOrganisationsLogoUnaskedByName,
+		arg.Kinds,
+		arg.AfterID,
+		arg.SkipProvider,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrganisationsLogoUnaskedByNameRow{}
+	for rows.Next() {
+		var i ListOrganisationsLogoUnaskedByNameRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrganisationsOfWork = `-- name: ListOrganisationsOfWork :many
 SELECT DISTINCT organisation_id FROM work_organisation WHERE work_id = ? ORDER BY organisation_id
 `

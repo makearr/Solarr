@@ -102,6 +102,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(p.imdbTask())
 	registry.MustRegister(p.automaticRenameTask())
 	registry.MustRegister(p.peopleConvergeTask())
+	registry.MustRegister(p.organisationLogosTask())
 	registry.MustRegister(p.coverShardTask())
 	registry.MustRegister(jobs.Task{
 		Key: "tv_crossovers", Name: "Find crossover episodes", DefaultCadence: crossoverPassScheduleCron,
