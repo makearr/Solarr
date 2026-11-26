@@ -904,6 +904,7 @@ const catalogue = {
   "rootFolders.notInAnyLibrary": "Not in any library -- nothing will place files here until it is added to one.",
   "rootFolders.thatCouldNotBe": "That could not be added -- check the path exists and is mounted inside the container, and the library name is not empty.",
   "rootFolders.thatWasRefused": "That was refused.",
+  "addDialog.safeModeNoArr": "Safe mode is on: this add is not sent to any *Arr, even where a connection sends monitoring back.",
   "settings.interface": "Interface",
   "settings.interfaceHelp": "What every account sees.",
   "settings.showCollections": "Show collections",

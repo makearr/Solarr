@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Adding an item now reaches the connected *Arr (Radarr, Sonarr, Lidarr, Readarr, Whisparr) whenever that connection sends monitoring back, not only in companion mode; in safe mode the add dialog says nothing is sent.
 - Settings, General: a switch to hide collections from the navigation and item pages; they are still collected in the background.
 - Settings, Providers: a search box over every provider tab (name, host, media type) and a note that a listed provider does nothing until it is switched on.
 - Collections: the sort order, favourites filter and search are kept when you leave the list and come back, like every other list.

@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
@@ -67,6 +67,8 @@ export function AddToSolarr({
   const [chosenTarget, setChosenTarget] = useState<string>();
   const [manual, setManual] = useState<AddResult>();
   const finished = useRef(false);
+  // Safe mode keeps every add away from the *Arrs, whatever a connection's send-back switch says.
+  const safeMode = useQuery({ queryKey: ["general-settings"], queryFn: () => ok(api.GET("/settings/general")) }).data?.safe_mode === true;
   const profiles = useQualityProfiles();
   const { quality } = useLibraryQuality(Number(categoryId));
   const editable = info.facets.filter((facet) => facet.editable && facet.kind === "enum" && facet.key !== "air_time_zone");
@@ -163,6 +165,7 @@ export function AddToSolarr({
   return (
     <Dialog
       title={requestOnly ? t("addDialog.requestTitle") : t("collection.request")}
+      description={safeMode ? t("addDialog.safeModeNoArr") : undefined}
       onClose={onClose}
       actions={
         add.data?.data.request_id ? (

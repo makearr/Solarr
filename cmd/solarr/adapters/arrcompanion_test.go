@@ -146,3 +146,25 @@ func TestSonarrMonitor_MapsTheAddDialogsOptions(t *testing.T) {
 		t.Errorf("an option Sonarr lacks = %q, %q, want none with a warning", got, warning)
 	}
 }
+
+func TestSendsAdds_FollowsTheSendBackRuleAndNeverInSafeMode(t *testing.T) {
+	asked, silent := settings.ArrInstance{PushMonitoring: true}, settings.ArrInstance{}
+	cases := []struct {
+		name     string
+		safe     bool
+		mode     settings.SolarrMode
+		instance settings.ArrInstance
+		want     bool
+	}{
+		{"normal, connection asked", false, settings.ModeNormal, asked, true},
+		{"normal, connection did not ask", false, settings.ModeNormal, silent, false},
+		{"companion sends for every connection", false, settings.ModeArrCompanion, silent, true},
+		{"observe sends nothing", false, settings.ModeObserve, asked, false},
+		{"safe mode sends nothing", true, settings.ModeArrCompanion, asked, false},
+	}
+	for _, c := range cases {
+		if got := sendsAdds(c.safe, c.mode, c.instance); got != c.want {
+			t.Errorf("%s: sendsAdds = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

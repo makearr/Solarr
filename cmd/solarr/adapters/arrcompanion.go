@@ -14,11 +14,16 @@ import (
 	"github.com/makearr/Solarr/internal/importing/arrmap"
 )
 
-// Added is what Solarr does, as an *Arr's companion, when someone adds an item here: the *Arr is told to monitor it
-// (added with a search when it lacks it) and searches and downloads itself; Solarr finds the file at its next scan.
-// Movies by TMDB id go to Radarr and series by TVDB id to Sonarr; anything else is left to the person.
+// sendsAdds is whether an add reaches a connection's *Arr: the same rule as sending monitoring back (every connection in
+// a companion, those that asked otherwise, none in observe), and never in safe mode.
+func sendsAdds(safeMode bool, mode settings.SolarrMode, instance settings.ArrInstance) bool {
+	return !safeMode && mode.PushesMonitoring(instance.PushMonitoring)
+}
+
+// Added tells the connected *Arr about an item added here, when the connection sends monitoring back (always in a companion).
+// Movies go to Radarr, series to Sonarr, albums and artists to Lidarr, books to Readarr, scenes to Whisparr; the rest is left to the person.
 func (a ArrSync) Added(ctx context.Context, added apiserver.AddedWork) error {
-	if a.SafeMode || a.Cache.Snapshot().SolarrMode() != settings.ModeArrCompanion {
+	if a.SafeMode || a.Cache.Snapshot().SolarrMode() == settings.ModeObserve {
 		return nil
 	}
 	if target, ok := mediaTarget(added); ok {
@@ -29,7 +34,7 @@ func (a ArrSync) Added(ctx context.Context, added apiserver.AddedWork) error {
 		return nil
 	}
 	instance, found, err := a.companionInstance(ctx, app, added.CategoryID)
-	if err != nil || !found {
+	if err != nil || !found || !sendsAdds(a.SafeMode, a.Cache.Snapshot().SolarrMode(), instance) {
 		return err
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instance.ID)
@@ -270,7 +275,7 @@ func mediaTarget(added apiserver.AddedWork) (mediaRef, bool) {
 // companionMedia hands an added album, artist or scene to Lidarr or Whisparr, which monitor and search for it.
 func (a ArrSync) companionMedia(ctx context.Context, added apiserver.AddedWork, target mediaRef) error {
 	instance, found, err := a.companionInstance(ctx, target.app, added.CategoryID)
-	if err != nil || !found {
+	if err != nil || !found || !sendsAdds(a.SafeMode, a.Cache.Snapshot().SolarrMode(), instance) {
 		return err
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instance.ID)
