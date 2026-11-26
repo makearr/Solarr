@@ -56,6 +56,11 @@ export const useUserDefaults = () => useQuery({ queryKey: ["user-defaults"], que
 /** The whole tag tree, every genre tree's and the free labels; screens narrow it themselves. */
 export const useTagTree = () => useQuery({ queryKey: ["tags"], queryFn: () => ok(api.GET("/tags")) });
 
+const ADD_SURFACE_KEYS = [
+  "work-lookup", "known-for", "person", "discover-recommendations", "discover-dashboard", "franchises", "franchise",
+  "work-franchises", "crossovers", "crossover", "work-crossovers",
+] as const;
+
 /** After a work changes: its page, and every list and count that shows it (each has its own key, so none sees it alone). */
 export function invalidateWorkLists(queryClient: QueryClient, workId?: number) {
   if (workId !== undefined) void queryClient.invalidateQueries({ queryKey: ["work", workId] });
@@ -63,6 +68,8 @@ export function invalidateWorkLists(queryClient: QueryClient, workId?: number) {
   void queryClient.invalidateQueries({ queryKey: ["wanted"] });
   void queryClient.invalidateQueries({ queryKey: ["libraries"] });
   void queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith("library-level") });
+  // Every screen that offers Add flips an item it lists to "in your library" from these.
+  for (const key of ADD_SURFACE_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });
 }
 
 /** After a person or organisation changes: their lists are named per scope ("people-all-artist"), so no plain key matches them. */
