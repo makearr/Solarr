@@ -485,6 +485,8 @@ const catalogue = {
   "providerDefs.tab.indexer": "Indexers",
   "providerDefs.tab.download": "Download clients",
   "providerDefs.tab.webhook": "Webhook presets",
+  "providerDefs.search": "Search by name, host or media type",
+  "providerDefs.catalogNote": "This is every provider Solarr found. A provider does nothing until you switch it on (State), and some then need a key or an address.",
   "providerDefs.filter.origin": "Origin",
   "providerDefs.filter.state": "State",
   "providerDefs.filter.all": "All",

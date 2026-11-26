@@ -62,7 +62,7 @@ function filterOf<T extends string>(value: unknown, allowed: readonly T[]): T | 
 }
 
 function DefinitionTable({ kind }: { kind: Kind }) {
-  const search = useSearch({ strict: false }) as { origin?: string; state?: string };
+  const search = useSearch({ strict: false }) as { origin?: string; state?: string; q?: string };
   const navigate = useNavigate();
   const origin = filterOf(search.origin, ORIGINS);
   const state = filterOf(search.state, STATES);
@@ -86,14 +86,29 @@ function DefinitionTable({ kind }: { kind: Kind }) {
     mutationFn: async (definition: Definition) => ({ definition, text: (await ok(api.GET("/provider-definitions/{kind}/{key}", { params: { path: { kind, key: definition.key } } }))).text }),
     onSuccess: setEditing,
   });
-  const rows = (list.data ?? []).filter((row) => (origin === undefined || row.origin === origin) && (state === undefined || row.state === state));
+  const needle = String(search.q ?? "").trim().toLowerCase();
+  const rows = (list.data ?? []).filter(
+    (row) =>
+      (origin === undefined || row.origin === origin) &&
+      (state === undefined || row.state === state) &&
+      (needle === "" || [row.name, row.key, row.description, ...row.hosts, ...row.media_types].some((text) => text.toLowerCase().includes(needle))),
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => scrollRef.current, estimateSize: () => ROW_HEIGHT, overscan: 8 });
-  const setFilter = (name: "origin" | "state", value: string) =>
+  const setFilter = (name: "origin" | "state" | "q", value: string) =>
     void navigate({ to: ".", replace: true, search: (previous: Record<string, unknown>) => ({ ...previous, [name]: value || undefined }) });
   return (
     <div className="flex flex-col gap-3">
+      <p className="text-xs text-ink-muted">{t("providerDefs.catalogNote")}</p>
       <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
+        <input
+          type="search"
+          aria-label={t("providerDefs.search")}
+          placeholder={t("providerDefs.search")}
+          className="w-56 rounded-md border border-border-subtle bg-surface px-2 py-1 text-ink"
+          value={String(search.q ?? "")}
+          onChange={(event) => setFilter("q", event.target.value)}
+        />
         <label className="flex items-center gap-1">
           {t("providerDefs.filter.origin")}
           <select className="rounded-md border border-border-subtle bg-surface px-2 py-1 text-ink" value={origin ?? ""} onChange={(event) => setFilter("origin", event.target.value)}>
