@@ -4,7 +4,8 @@
 
 Discover shows each library a poster wall of works it does not hold (or holds but does not monitor), taken from the charts
 of the sources behind its media type. Everything is off until the owner switches it on under **Settings, General** and then
-enables it per library under **Settings, Discover**. A dashboard row shows the most popular of your libraries.
+enables it per library under **Settings, Discover**. The very first switch-on enables every library once (recorded, so it
+never repeats); a library you switch off afterwards stays off. A dashboard row shows the most popular of your libraries.
 
 ## Sources
 

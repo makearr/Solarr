@@ -1205,6 +1205,7 @@ const catalogue = {
   "discover.title": "Recommendations",
   "discover.help": "Suggests films, series and more that your libraries do not hold, from the charts of their metadata sources. Each person can dismiss what they are not interested in.",
   "discover.switch": "Recommend what is not in your libraries yet",
+  "discover.switchHelp": "The first time you switch this on, every library is enabled; a library you switch off afterwards stays off.",
   "discover.neverGenres": "Never recommend these genres",
   "discover.neverNetworks": "Never recommend these networks and studios",
   "discover.save": "Save",

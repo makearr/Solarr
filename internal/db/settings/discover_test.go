@@ -123,3 +123,42 @@ func TestDiscoverTravelsThroughTheConfigurationExport(t *testing.T) {
 		t.Errorf("global = %+v, want %+v", got, want)
 	}
 }
+
+func TestFirstSwitchOnEnablesEveryLibraryOnlyOnce(t *testing.T) {
+	cache, cl := newCache(t)
+	movies, _ := cache.CreateCategory(t.Context(), "movie", "Movies", 10)
+	series, _ := cache.CreateCategory(t.Context(), "tv", "Series", 20)
+	enabled := func(id int64) bool {
+		one, err := cache.LibraryDiscover(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return one.Enabled
+	}
+	if enabled(movies.ID) || enabled(series.ID) {
+		t.Fatal("a library starts with Discover off")
+	}
+	if err := cache.SetDiscoverGlobal(t.Context(), cl, settings.DiscoverGlobal{Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !enabled(movies.ID) || !enabled(series.ID) {
+		t.Fatal("the first switch-on enables every library")
+	}
+	off, _ := cache.LibraryDiscover(t.Context(), series.ID)
+	off.Enabled = false
+	if err := cache.SetLibraryDiscover(t.Context(), off); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetDiscoverEnabled(t.Context(), cl, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetDiscoverEnabled(t.Context(), cl, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetDiscoverGlobal(t.Context(), cl, settings.DiscoverGlobal{Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !enabled(movies.ID) || enabled(series.ID) {
+		t.Fatal("a library switched off stays off after later switch-ons")
+	}
+}

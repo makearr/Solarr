@@ -61,6 +61,7 @@ export function DiscoverSettings() {
           />
           {t("discover.switch")}
         </label>
+        <p className="text-xs text-ink-muted">{t("discover.switchHelp")}</p>
         <TermChips label={t("discover.neverGenres")} value={genres} onChange={setGenres} suggestions={COMMON_GENRES} />
         <TermChips label={t("discover.neverNetworks")} value={networks} onChange={setNetworks} />
         <div>

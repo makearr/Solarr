@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Discover: the first time Discover is switched on (Settings, General or Settings, Discover) it is enabled for every library at once; a library you switch off afterwards stays off, and later switch-ons do not turn it back on.
 - Ignore: every Ignore button now shows Ignored with Stop ignoring after a reload, and stopping the ignore of a work you hold puts its monitoring back as it was before; the contents list on an unadded item's page scrolls in place instead of offering Show more.
 - Comics and manga: a cbz, cbr, cb7 or cbt archive that cannot be read, or holds no page image, is marked defective when it is scanned and listed under Files, Defective beside the other broken files.
 - Ignore works for things you already hold too: an Ignore button on library cards and rows, the item page, the person page and crossover rows leaves the item out of every list that offers things as missing (wanted, collections, crossovers, search, Discover); a work is left unmonitored, nothing is deleted, and an administrator may ignore for everyone. Crossover series the library lacks now link to their provider page.

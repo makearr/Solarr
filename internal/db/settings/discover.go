@@ -79,15 +79,62 @@ func (s *Snapshot) DiscoverGlobal() DiscoverGlobal {
 	}
 }
 
-// SetDiscoverEnabled switches Discover on or off for the instance.
+// discoverEnabledAllRepair records that the first global switch-on already enabled every library.
+const discoverEnabledAllRepair = "discover_enable_all_libraries"
+
+// SetDiscoverEnabled switches Discover on or off for the instance; the first switch-on enables every library.
 func (c *Cache) SetDiscoverEnabled(ctx context.Context, cl clock.Clock, enabled bool) error {
-	return c.setPolicy(ctx, cl, KeyDiscoverEnabled, boolPolicy(enabled))
+	libraries, err := c.librariesToEnableOnce(ctx, enabled)
+	if err != nil {
+		return err
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if err := setInstanceSettings(ctx, queries, cl, map[string]string{KeyDiscoverEnabled: boolPolicy(enabled)}); err != nil {
+			return err
+		}
+		return enableLibrariesOnce(ctx, queries, cl, libraries)
+	})
 }
 
-// SetDiscoverGlobal writes the switch and both exclusion lists together.
+// librariesToEnableOnce answers every library with Discover enabled when this is the first switch-on, otherwise nil.
+func (c *Cache) librariesToEnableOnce(ctx context.Context, enabled bool) ([]LibraryDiscover, error) {
+	if !enabled || c.Snapshot().OneOffDone(discoverEnabledAllRepair) {
+		return nil, nil
+	}
+	libraries, err := c.LibraryDiscovers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range libraries {
+		libraries[i].Enabled = true
+	}
+	return libraries, nil
+}
+
+// enableLibrariesOnce saves the libraries enabled and records the one-time enable; nil libraries (not the first switch-on) do nothing.
+func enableLibrariesOnce(ctx context.Context, queries *settingsdb.Queries, cl clock.Clock, libraries []LibraryDiscover) error {
+	if libraries == nil {
+		return nil
+	}
+	for _, one := range libraries {
+		if err := writeLibraryDiscover(ctx, queries, one); err != nil {
+			return err
+		}
+	}
+	return setInstanceSettings(ctx, queries, cl, map[string]string{oneOffPrefix + discoverEnabledAllRepair: "true"})
+}
+
+// SetDiscoverGlobal writes the switch and both exclusion lists together; the first switch-on enables every library.
 func (c *Cache) SetDiscoverGlobal(ctx context.Context, cl clock.Clock, global DiscoverGlobal) error {
+	libraries, err := c.librariesToEnableOnce(ctx, global.Enabled)
+	if err != nil {
+		return err
+	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return setDiscoverGlobal(ctx, queries, cl, global)
+		if err := setDiscoverGlobal(ctx, queries, cl, global); err != nil {
+			return err
+		}
+		return enableLibrariesOnce(ctx, queries, cl, libraries)
 	})
 }
 
