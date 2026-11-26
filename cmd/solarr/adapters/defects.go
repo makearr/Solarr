@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
 )
 
@@ -99,8 +100,26 @@ func (i Ignores) Ignore(ctx context.Context, userID int64, mediaType, kind, prov
 	})
 }
 
-func (i Ignores) IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at time.Time) error {
+func (i Ignores) IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at time.Time) (bool, error) {
 	return i.Store.IgnoreHeld(ctx, userID, person, id, mediaType, ignored, at.Unix())
+}
+
+func (i Ignores) IgnoredState(ctx context.Context, userID int64, mediaType string) (gen.IgnoreState, error) {
+	state, err := i.Store.IgnoredState(ctx, userID, mediaType)
+	if err != nil {
+		return gen.IgnoreState{}, err
+	}
+	out := gen.IgnoreState{Items: make([]gen.IgnoredItem, len(state.Items)), Works: make([]gen.IgnoredHeld, len(state.Works)), Persons: make([]gen.IgnoredHeld, len(state.Persons))}
+	for index, item := range state.Items {
+		out.Items[index] = gen.IgnoredItem{Kind: item.Kind, Provider: item.Provider, ExternalId: item.ExternalID, Everyone: item.Everyone}
+	}
+	for index, work := range state.Works {
+		out.Works[index] = gen.IgnoredHeld{Id: work.ID, Everyone: work.Everyone}
+	}
+	for index, person := range state.Persons {
+		out.Persons[index] = gen.IgnoredHeld{Id: person.ID, Everyone: person.Everyone}
+	}
+	return out, nil
 }
 
 func (i Ignores) Unignore(ctx context.Context, userID int64, kind, provider, externalID string) error {

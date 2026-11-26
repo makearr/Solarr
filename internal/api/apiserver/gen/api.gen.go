@@ -3872,6 +3872,31 @@ type IgnoreRequest struct {
 	Title      string `json:"title"`
 }
 
+// IgnoreState defines model for IgnoreState.
+type IgnoreState struct {
+	// Items Ignored items as their provider knows them; the caller's own come before those ignored for everyone.
+	Items   []IgnoredItem `json:"items"`
+	Persons []IgnoredHeld `json:"persons"`
+
+	// Works Held works any ignore names.
+	Works []IgnoredHeld `json:"works"`
+}
+
+// IgnoredHeld defines model for IgnoredHeld.
+type IgnoredHeld struct {
+	// Everyone An administrator ignored it for every account.
+	Everyone bool  `json:"everyone"`
+	Id       int64 `json:"id"`
+}
+
+// IgnoredItem defines model for IgnoredItem.
+type IgnoredItem struct {
+	Everyone   bool   `json:"everyone"`
+	ExternalId string `json:"external_id"`
+	Kind       string `json:"kind"`
+	Provider   string `json:"provider"`
+}
+
 // ImageOption defines model for ImageOption.
 type ImageOption struct {
 	// Label What it shows
@@ -9179,6 +9204,11 @@ type DeleteIgnoreParams struct {
 	Everyone *bool `form:"everyone,omitempty" json:"everyone,omitempty"`
 }
 
+// ListIgnoresParams defines parameters for ListIgnores.
+type ListIgnoresParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
 // GetRemoteImageParams defines parameters for GetRemoteImage.
 type GetRemoteImageParams struct {
 	Url  string                    `form:"url" json:"url"`
@@ -11120,6 +11150,9 @@ type ServerInterface interface {
 	// Stop ignoring an item.
 	// (DELETE /ignores)
 	DeleteIgnore(w http.ResponseWriter, r *http.Request, params DeleteIgnoreParams)
+	// What the caller (and everyone) ignores in one library's media type, so an Ignore button shows its state after a reload.
+	// (GET /ignores)
+	ListIgnores(w http.ResponseWriter, r *http.Request, params ListIgnoresParams)
 	// Ignore an item the library lacks, so it is never offered as missing.
 	// (POST /ignores)
 	CreateIgnore(w http.ResponseWriter, r *http.Request)
@@ -12956,6 +12989,12 @@ func (_ Unimplemented) GetHuntBudget(w http.ResponseWriter, r *http.Request) {
 // Stop ignoring an item.
 // (DELETE /ignores)
 func (_ Unimplemented) DeleteIgnore(w http.ResponseWriter, r *http.Request, params DeleteIgnoreParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What the caller (and everyone) ignores in one library's media type, so an Ignore button shows its state after a reload.
+// (GET /ignores)
+func (_ Unimplemented) ListIgnores(w http.ResponseWriter, r *http.Request, params ListIgnoresParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -19936,6 +19975,48 @@ func (siw *ServerInterfaceWrapper) DeleteIgnore(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteIgnore(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIgnores operation middleware
+func (siw *ServerInterfaceWrapper) ListIgnores(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIgnoresParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIgnores(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -30327,6 +30408,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/ignores", wrapper.DeleteIgnore)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/ignores", wrapper.ListIgnores)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/ignores", wrapper.CreateIgnore)

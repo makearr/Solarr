@@ -132,6 +132,8 @@ CREATE TABLE recommendation_dismissal (
   external_id TEXT    NOT NULL,
   title       TEXT    NOT NULL,
   created_at  INTEGER NOT NULL,
+  -- Whether a held work was monitored when ignored, so stopping the ignore restores it.
+  monitored_before INTEGER NOT NULL DEFAULT 0 CHECK (monitored_before IN (0, 1)),
   PRIMARY KEY (user_id, provider, external_id, kind)
 ) WITHOUT ROWID;
 

@@ -276,8 +276,9 @@ func (q *Queries) IgnoreHeldPerson(ctx context.Context, arg IgnoreHeldPersonPara
 }
 
 const ignoreHeldWork = `-- name: IgnoreHeldWork :exec
-INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at)
-SELECT ?1, w.media_type, 'any', e.provider, e.external_id, w.canonical_title, ?2
+INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at, monitored_before)
+SELECT ?1, w.media_type, 'any', e.provider, e.external_id, w.canonical_title, ?2,
+       CAST(COALESCE((SELECT MAX(di.monitored) FROM desired_item di WHERE di.work_id = w.id), 0) AS INTEGER)
 FROM work_external_id e JOIN work w ON w.id = e.work_id
 WHERE w.id = ?3
 `
@@ -361,6 +362,52 @@ func (q *Queries) ListCollectionRecommendationCandidates(ctx context.Context, ar
 	return items, nil
 }
 
+const listIgnoredItems = `-- name: ListIgnoredItems :many
+SELECT user_id, kind, provider, external_id FROM recommendation_dismissal
+WHERE user_id IN (?1, 0) AND media_type = ?2 ORDER BY user_id DESC, provider, external_id, kind
+`
+
+type ListIgnoredItemsParams struct {
+	UserID    int64
+	MediaType string
+}
+
+type ListIgnoredItemsRow struct {
+	UserID     int64
+	Kind       string
+	Provider   string
+	ExternalID string
+}
+
+// The ignores of one media type with the owner; the person's own rows come before the everyone ones.
+func (q *Queries) ListIgnoredItems(ctx context.Context, arg ListIgnoredItemsParams) ([]ListIgnoredItemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIgnoredItems, arg.UserID, arg.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListIgnoredItemsRow{}
+	for rows.Next() {
+		var i ListIgnoredItemsRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Kind,
+			&i.Provider,
+			&i.ExternalID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIgnoredKeys = `-- name: ListIgnoredKeys :many
 SELECT provider, external_id FROM recommendation_dismissal WHERE user_id IN (?1, 0) AND media_type = ?2
 `
@@ -399,19 +446,113 @@ func (q *Queries) ListIgnoredKeys(ctx context.Context, arg ListIgnoredKeysParams
 	return items, nil
 }
 
+const listIgnoredPersonIDs = `-- name: ListIgnoredPersonIDs :many
+SELECT e.person_id, CAST(MAX(CASE WHEN d.user_id = 0 THEN 1 ELSE 0 END) AS INTEGER) AS everyone
+FROM recommendation_dismissal d
+JOIN person_external_id e ON e.provider = d.provider AND e.external_id = d.external_id
+WHERE d.user_id IN (?1, 0) AND d.media_type = ?2
+GROUP BY e.person_id ORDER BY e.person_id
+`
+
+type ListIgnoredPersonIDsParams struct {
+	UserID    int64
+	MediaType string
+}
+
+type ListIgnoredPersonIDsRow struct {
+	PersonID int64
+	Everyone int64
+}
+
+func (q *Queries) ListIgnoredPersonIDs(ctx context.Context, arg ListIgnoredPersonIDsParams) ([]ListIgnoredPersonIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIgnoredPersonIDs, arg.UserID, arg.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListIgnoredPersonIDsRow{}
+	for rows.Next() {
+		var i ListIgnoredPersonIDsRow
+		if err := rows.Scan(&i.PersonID, &i.Everyone); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIgnoredWorkIDs = `-- name: ListIgnoredWorkIDs :many
+SELECT e.work_id, CAST(MAX(CASE WHEN d.user_id = 0 THEN 1 ELSE 0 END) AS INTEGER) AS everyone
+FROM recommendation_dismissal d
+JOIN work_external_id e ON e.provider = d.provider AND e.external_id = d.external_id
+JOIN work w ON w.id = e.work_id AND w.media_type = d.media_type
+WHERE d.user_id IN (?1, 0) AND d.media_type = ?2
+GROUP BY e.work_id ORDER BY e.work_id
+`
+
+type ListIgnoredWorkIDsParams struct {
+	UserID    int64
+	MediaType string
+}
+
+type ListIgnoredWorkIDsRow struct {
+	WorkID   int64
+	Everyone int64
+}
+
+// Held works named by any ignore of the person or of everyone; everyone is 1 when an ignore for everyone names it.
+func (q *Queries) ListIgnoredWorkIDs(ctx context.Context, arg ListIgnoredWorkIDsParams) ([]ListIgnoredWorkIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIgnoredWorkIDs, arg.UserID, arg.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListIgnoredWorkIDsRow{}
+	for rows.Next() {
+		var i ListIgnoredWorkIDsRow
+		if err := rows.Scan(&i.WorkID, &i.Everyone); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecommendationDismissals = `-- name: ListRecommendationDismissals :many
 SELECT user_id, media_type, kind, provider, external_id, title, created_at FROM recommendation_dismissal WHERE user_id = ? ORDER BY created_at DESC, external_id
 `
 
-func (q *Queries) ListRecommendationDismissals(ctx context.Context, userID int64) ([]RecommendationDismissal, error) {
+type ListRecommendationDismissalsRow struct {
+	UserID     int64
+	MediaType  string
+	Kind       string
+	Provider   string
+	ExternalID string
+	Title      string
+	CreatedAt  int64
+}
+
+func (q *Queries) ListRecommendationDismissals(ctx context.Context, userID int64) ([]ListRecommendationDismissalsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listRecommendationDismissals, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []RecommendationDismissal{}
+	items := []ListRecommendationDismissalsRow{}
 	for rows.Next() {
-		var i RecommendationDismissal
+		var i ListRecommendationDismissalsRow
 		if err := rows.Scan(
 			&i.UserID,
 			&i.MediaType,
@@ -952,6 +1093,25 @@ func (q *Queries) UpsertRecommendationFeedItem(ctx context.Context, arg UpsertRe
 		arg.Rank,
 	)
 	return err
+}
+
+const wasHeldWorkMonitoredBeforeIgnore = `-- name: WasHeldWorkMonitoredBeforeIgnore :one
+SELECT CAST(COALESCE(MAX(monitored_before), 0) AS INTEGER) FROM recommendation_dismissal
+WHERE user_id = ?1 AND kind = 'any'
+  AND (provider, external_id) IN (SELECT e.provider, e.external_id FROM work_external_id e WHERE e.work_id = ?2)
+`
+
+type WasHeldWorkMonitoredBeforeIgnoreParams struct {
+	UserID int64
+	WorkID int64
+}
+
+// Whether the work was monitored when it was ignored.
+func (q *Queries) WasHeldWorkMonitoredBeforeIgnore(ctx context.Context, arg WasHeldWorkMonitoredBeforeIgnoreParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, wasHeldWorkMonitoredBeforeIgnore, arg.UserID, arg.WorkID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const wasRecommendationAutoAdded = `-- name: WasRecommendationAutoAdded :one

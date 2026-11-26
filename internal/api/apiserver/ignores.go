@@ -15,7 +15,10 @@ type IgnoreStore interface {
 	Ignore(ctx context.Context, userID int64, mediaType, kind, provider, externalID, title string, at time.Time) error
 	Unignore(ctx context.Context, userID int64, kind, provider, externalID string) error
 	// IgnoreHeld ignores (or, ignored false, stops ignoring) a work or person the library holds under every id it has.
-	IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at time.Time) error
+	// Stopping a work's ignore reports whether the work was monitored when it was ignored.
+	IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at time.Time) (wasMonitored bool, err error)
+	// IgnoredState is every ignore that applies to the person in a media type.
+	IgnoredState(ctx context.Context, userID int64, mediaType string) (gen.IgnoreState, error)
 	// IgnoredKeys are "provider:external id" of what the person ignores of a media type, and an administrator for everyone.
 	IgnoredKeys(ctx context.Context, userID int64, mediaType string) (map[string]bool, error)
 }
@@ -55,6 +58,30 @@ func (s *Server) CreateIgnore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListIgnores answers what the caller and everyone ignore in one library's media type.
+func (s *Server) ListIgnores(w http.ResponseWriter, r *http.Request, params gen.ListIgnoresParams) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	category, err := access.Category(params.CategoryId, settings.PermissionRead)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.ignores == nil {
+		writeJSON(w, s.logger, http.StatusOK, gen.IgnoreState{Items: []gen.IgnoredItem{}, Works: []gen.IgnoredHeld{}, Persons: []gen.IgnoredHeld{}})
+		return
+	}
+	state, err := s.ignores.IgnoredState(r.Context(), access.UserID(), category.MediaType)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, state)
 }
 
 // DeleteIgnore undoes an ignore of the caller's, or of everyone's for an administrator.
@@ -149,13 +176,16 @@ func (s *Server) changeHeldIgnore(w http.ResponseWriter, r *http.Request, body g
 		return
 	}
 	person := body.Subject == gen.IgnoreHeldRequestSubjectPerson
-	if err := s.ignores.IgnoreHeld(r.Context(), owner, person, body.Id, category.MediaType, ignored, s.auth.Clock.Now()); err != nil {
+	wasMonitored, err := s.ignores.IgnoreHeld(r.Context(), owner, person, body.Id, category.MediaType, ignored, s.auth.Clock.Now())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	if ignored && !person && s.worksMonitor != nil && access.Permission(body.CategoryId).AtLeast(settings.PermissionAdd) {
-		if _, err := s.worksMonitor.MonitorWork(r.Context(), body.Id, MonitorScope{Monitored: false}); err != nil {
-			s.logger.WarnContext(r.Context(), "ignored work left monitored", "work_id", body.Id, "error", err)
+	// Ignoring unmonitors the work; stopping puts back what it was before.
+	monitor := !ignored && wasMonitored
+	if (ignored || monitor) && !person && s.worksMonitor != nil && access.Permission(body.CategoryId).AtLeast(settings.PermissionAdd) {
+		if _, err := s.worksMonitor.MonitorWork(r.Context(), body.Id, MonitorScope{Monitored: monitor}); err != nil {
+			s.logger.WarnContext(r.Context(), "ignored work monitoring not changed", "work_id", body.Id, "error", err)
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)

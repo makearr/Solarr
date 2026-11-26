@@ -963,6 +963,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}/statistics", wrapped.GetCategoryStatistics)
 			secured.Get("/categories/{id}/target-size", wrapped.GetCategoryTargetSize)
 			secured.Get("/categories/{id}/duplicates", wrapped.GetCategoryDuplicates)
+			secured.Get("/ignores", wrapped.ListIgnores)
 			secured.Post("/ignores", server.CreateIgnore)
 			secured.Delete("/ignores", wrapped.DeleteIgnore)
 			secured.Post("/ignores/held", server.IgnoreHeld)

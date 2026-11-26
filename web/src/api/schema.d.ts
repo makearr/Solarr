@@ -3227,7 +3227,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** What the caller (and everyone) ignores in one library's media type, so an Ignore button shows its state after a reload. */
+        get: operations["listIgnores"];
         put?: never;
         /**
          * Ignore an item the library lacks, so it is never offered as missing.
@@ -10421,6 +10422,25 @@ export interface components {
             title: string;
             /** @description Administrator only; ignores it for every account. */
             everyone?: boolean;
+        };
+        IgnoreState: {
+            /** @description Ignored items as their provider knows them; the caller's own come before those ignored for everyone. */
+            items: components["schemas"]["IgnoredItem"][];
+            /** @description Held works any ignore names. */
+            works: components["schemas"]["IgnoredHeld"][];
+            persons: components["schemas"]["IgnoredHeld"][];
+        };
+        IgnoredItem: {
+            kind: string;
+            provider: string;
+            external_id: string;
+            everyone: boolean;
+        };
+        IgnoredHeld: {
+            /** Format: int64 */
+            id: number;
+            /** @description An administrator ignored it for every account. */
+            everyone: boolean;
         };
         IgnoreHeldRequest: {
             /**
@@ -19224,6 +19244,31 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listIgnores: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ignored items, held works and held people. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IgnoreState"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     createIgnore: {

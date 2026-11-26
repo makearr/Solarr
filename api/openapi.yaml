@@ -4809,6 +4809,21 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
 
   /ignores:
+    get:
+      operationId: listIgnores
+      tags: [library]
+      summary: What the caller (and everyone) ignores in one library's media type, so an Ignore button shows its state after a reload.
+      parameters:
+        - { name: category_id, in: query, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The ignored items, held works and held people.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IgnoreState" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
     post:
       operationId: createIgnore
       tags: [library]
@@ -14272,6 +14287,38 @@ components:
         external_id: { type: string }
         title: { type: string }
         everyone: { type: boolean, description: Administrator only; ignores it for every account. }
+
+    IgnoreState:
+      type: object
+      required: [items, works, persons]
+      properties:
+        items:
+          type: array
+          description: Ignored items as their provider knows them; the caller's own come before those ignored for everyone.
+          items: { $ref: "#/components/schemas/IgnoredItem" }
+        works:
+          type: array
+          description: Held works any ignore names.
+          items: { $ref: "#/components/schemas/IgnoredHeld" }
+        persons:
+          type: array
+          items: { $ref: "#/components/schemas/IgnoredHeld" }
+
+    IgnoredItem:
+      type: object
+      required: [kind, provider, external_id, everyone]
+      properties:
+        kind: { type: string }
+        provider: { type: string }
+        external_id: { type: string }
+        everyone: { type: boolean }
+
+    IgnoredHeld:
+      type: object
+      required: [id, everyone]
+      properties:
+        id: { type: integer, format: int64 }
+        everyone: { type: boolean, description: An administrator ignored it for every account. }
 
     IgnoreHeldRequest:
       type: object

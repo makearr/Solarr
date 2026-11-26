@@ -878,13 +878,14 @@ type RecommendationAutoAdd struct {
 }
 
 type RecommendationDismissal struct {
-	UserID     int64
-	MediaType  string
-	Kind       string
-	Provider   string
-	ExternalID string
-	Title      string
-	CreatedAt  int64
+	UserID          int64
+	MediaType       string
+	Kind            string
+	Provider        string
+	ExternalID      string
+	Title           string
+	CreatedAt       int64
+	MonitoredBefore int64
 }
 
 type RecommendationFeed struct {

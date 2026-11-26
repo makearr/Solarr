@@ -336,8 +336,9 @@ func (r Recommendations) Dismiss(ctx context.Context, dismissal RecommendationDi
 }
 
 // IgnoreHeld ignores a held work, or a held person for a media type, under every provider id it has; ignored false undoes it.
-func (r Recommendations) IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at int64) error {
-	err := r.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+// Undoing a work's ignore reports whether the work was monitored when it was ignored.
+func (r Recommendations) IgnoreHeld(ctx context.Context, userID int64, person bool, id int64, mediaType string, ignored bool, at int64) (wasMonitored bool, err error) {
+	err = r.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		switch {
 		case person && ignored:
@@ -347,12 +348,66 @@ func (r Recommendations) IgnoreHeld(ctx context.Context, userID int64, person bo
 		case ignored:
 			return queries.IgnoreHeldWork(ctx, librarydb.IgnoreHeldWorkParams{UserID: userID, CreatedAt: at, WorkID: id})
 		}
+		before, err := queries.WasHeldWorkMonitoredBeforeIgnore(ctx, librarydb.WasHeldWorkMonitoredBeforeIgnoreParams{UserID: userID, WorkID: id})
+		if err != nil {
+			return err
+		}
+		wasMonitored = before == 1
 		return queries.UnignoreHeldWork(ctx, librarydb.UnignoreHeldWorkParams{UserID: userID, WorkID: id})
 	})
 	if err != nil {
-		return fmt.Errorf("library: ignore held: %w", err)
+		return false, fmt.Errorf("library: ignore held: %w", err)
 	}
-	return nil
+	return wasMonitored, nil
+}
+
+// IgnoredItem is one ignored item of a media type as its provider knows it.
+type IgnoredItem struct {
+	Kind       string
+	Provider   string
+	ExternalID string
+	Everyone   bool
+}
+
+// IgnoredHeld is a held work or person that an ignore names.
+type IgnoredHeld struct {
+	ID       int64
+	Everyone bool
+}
+
+// IgnoredState is everything the person (and everyone) ignores of a media type, so a button can show it after a reload.
+type IgnoredState struct {
+	Items   []IgnoredItem
+	Works   []IgnoredHeld
+	Persons []IgnoredHeld
+}
+
+// IgnoredState answers the ignores that apply to the person in one media type.
+func (r Recommendations) IgnoredState(ctx context.Context, userID int64, mediaType string) (IgnoredState, error) {
+	queries := librarydb.New(r.store.Read())
+	items, err := queries.ListIgnoredItems(ctx, librarydb.ListIgnoredItemsParams{UserID: userID, MediaType: mediaType})
+	if err != nil {
+		return IgnoredState{}, fmt.Errorf("library: ignored items: %w", err)
+	}
+	works, err := queries.ListIgnoredWorkIDs(ctx, librarydb.ListIgnoredWorkIDsParams{UserID: userID, MediaType: mediaType})
+	if err != nil {
+		return IgnoredState{}, fmt.Errorf("library: ignored works: %w", err)
+	}
+	persons, err := queries.ListIgnoredPersonIDs(ctx, librarydb.ListIgnoredPersonIDsParams{UserID: userID, MediaType: mediaType})
+	if err != nil {
+		return IgnoredState{}, fmt.Errorf("library: ignored persons: %w", err)
+	}
+	state := IgnoredState{Items: []IgnoredItem{}, Works: []IgnoredHeld{}, Persons: []IgnoredHeld{}}
+	for _, row := range items {
+		state.Items = append(state.Items, IgnoredItem{Kind: row.Kind, Provider: row.Provider, ExternalID: row.ExternalID, Everyone: row.UserID == 0})
+	}
+	for _, row := range works {
+		state.Works = append(state.Works, IgnoredHeld{ID: row.WorkID, Everyone: row.Everyone == 1})
+	}
+	for _, row := range persons {
+		state.Persons = append(state.Persons, IgnoredHeld{ID: row.PersonID, Everyone: row.Everyone == 1})
+	}
+	return state, nil
 }
 
 // Restore shows a dismissed recommendation to the person again.

@@ -84,10 +84,17 @@ INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provi
 
 -- Ignores a held work under every provider id it has, so every list that knows it by any of them leaves it out.
 -- name: IgnoreHeldWork :exec
-INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at)
-SELECT sqlc.arg(user_id), w.media_type, 'any', e.provider, e.external_id, w.canonical_title, sqlc.arg(created_at)
+INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at, monitored_before)
+SELECT sqlc.arg(user_id), w.media_type, 'any', e.provider, e.external_id, w.canonical_title, sqlc.arg(created_at),
+       CAST(COALESCE((SELECT MAX(di.monitored) FROM desired_item di WHERE di.work_id = w.id), 0) AS INTEGER)
 FROM work_external_id e JOIN work w ON w.id = e.work_id
 WHERE w.id = sqlc.arg(work_id);
+
+-- Whether the work was monitored when it was ignored.
+-- name: WasHeldWorkMonitoredBeforeIgnore :one
+SELECT CAST(COALESCE(MAX(monitored_before), 0) AS INTEGER) FROM recommendation_dismissal
+WHERE user_id = sqlc.arg(user_id) AND kind = 'any'
+  AND (provider, external_id) IN (SELECT e.provider, e.external_id FROM work_external_id e WHERE e.work_id = sqlc.arg(work_id));
 
 -- name: UnignoreHeldWork :exec
 DELETE FROM recommendation_dismissal
@@ -109,6 +116,27 @@ WHERE user_id = sqlc.arg(user_id) AND kind = 'any' AND media_type = sqlc.arg(med
 -- What a person ignores, and what an administrator ignores for everyone (user 0), of one media type.
 -- name: ListIgnoredKeys :many
 SELECT provider, external_id FROM recommendation_dismissal WHERE user_id IN (sqlc.arg(user_id), 0) AND media_type = sqlc.arg(media_type);
+
+-- The ignores of one media type with the owner; the person's own rows come before the everyone ones.
+-- name: ListIgnoredItems :many
+SELECT user_id, kind, provider, external_id FROM recommendation_dismissal
+WHERE user_id IN (sqlc.arg(user_id), 0) AND media_type = sqlc.arg(media_type) ORDER BY user_id DESC, provider, external_id, kind;
+
+-- Held works named by any ignore of the person or of everyone; everyone is 1 when an ignore for everyone names it.
+-- name: ListIgnoredWorkIDs :many
+SELECT e.work_id, CAST(MAX(CASE WHEN d.user_id = 0 THEN 1 ELSE 0 END) AS INTEGER) AS everyone
+FROM recommendation_dismissal d
+JOIN work_external_id e ON e.provider = d.provider AND e.external_id = d.external_id
+JOIN work w ON w.id = e.work_id AND w.media_type = d.media_type
+WHERE d.user_id IN (sqlc.arg(user_id), 0) AND d.media_type = sqlc.arg(media_type)
+GROUP BY e.work_id ORDER BY e.work_id;
+
+-- name: ListIgnoredPersonIDs :many
+SELECT e.person_id, CAST(MAX(CASE WHEN d.user_id = 0 THEN 1 ELSE 0 END) AS INTEGER) AS everyone
+FROM recommendation_dismissal d
+JOIN person_external_id e ON e.provider = d.provider AND e.external_id = d.external_id
+WHERE d.user_id IN (sqlc.arg(user_id), 0) AND d.media_type = sqlc.arg(media_type)
+GROUP BY e.person_id ORDER BY e.person_id;
 
 -- name: RestoreRecommendation :exec
 DELETE FROM recommendation_dismissal WHERE user_id = ? AND provider = ? AND external_id = ? AND kind = ?;

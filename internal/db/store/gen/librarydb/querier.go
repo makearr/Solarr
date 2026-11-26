@@ -820,8 +820,13 @@ type Querier interface {
 	// detail's own "last searched" column. Absent means never.
 	ListHuntSearchTimesForWork(ctx context.Context, workID int64) ([]ListHuntSearchTimesForWorkRow, error)
 	ListIdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
+	// The ignores of one media type with the owner; the person's own rows come before the everyone ones.
+	ListIgnoredItems(ctx context.Context, arg ListIgnoredItemsParams) ([]ListIgnoredItemsRow, error)
 	// What a person ignores, and what an administrator ignores for everyone (user 0), of one media type.
 	ListIgnoredKeys(ctx context.Context, arg ListIgnoredKeysParams) ([]ListIgnoredKeysRow, error)
+	ListIgnoredPersonIDs(ctx context.Context, arg ListIgnoredPersonIDsParams) ([]ListIgnoredPersonIDsRow, error)
+	// Held works named by any ignore of the person or of everyone; everyone is 1 when an ignore for everyone names it.
+	ListIgnoredWorkIDs(ctx context.Context, arg ListIgnoredWorkIDsParams) ([]ListIgnoredWorkIDsRow, error)
 	ListImportDecisionsForWork(ctx context.Context, arg ListImportDecisionsForWorkParams) ([]ImportDecision, error)
 	// Import list entries and state (migration 0099, ADR-38). Column lists follow table order.
 	ListImportListEntries(ctx context.Context, listID int64) ([]ImportListEntry, error)
@@ -970,7 +975,7 @@ type Querier interface {
 	// in a WHERE, and decoding one bounded page in Go is the same discipline every
 	// cross-database composition here already uses.
 	ListQueuedWithNewestAttempt(ctx context.Context, arg ListQueuedWithNewestAttemptParams) ([]ListQueuedWithNewestAttemptRow, error)
-	ListRecommendationDismissals(ctx context.Context, userID int64) ([]RecommendationDismissal, error)
+	ListRecommendationDismissals(ctx context.Context, userID int64) ([]ListRecommendationDismissalsRow, error)
 	ListRecommendationFeedTypesOf(ctx context.Context, ids interface{}) ([]ListRecommendationFeedTypesOfRow, error)
 	ListRecommendationFeeds(ctx context.Context, categoryID int64) ([]RecommendationFeed, error)
 	// The genre facet of a library and kind.
@@ -1610,6 +1615,8 @@ type Querier interface {
 	// Series (TV works) refresh: provider data written without disturbing what a person set.
 	// A refresh never changes monitoring: monitored is left out of the update.
 	UpsertWorkPart(ctx context.Context, arg UpsertWorkPartParams) (WorkPart, error)
+	// Whether the work was monitored when it was ignored.
+	WasHeldWorkMonitoredBeforeIgnore(ctx context.Context, arg WasHeldWorkMonitoredBeforeIgnoreParams) (int64, error)
 	WasRecommendationAutoAdded(ctx context.Context, arg WasRecommendationAutoAddedParams) (int64, error)
 	// A placeholder whose release no source knows any more, replaced by one chosen from the files:
 	// no longer a placeholder, so enrichment stops asking about it.

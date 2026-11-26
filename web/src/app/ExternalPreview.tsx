@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -7,7 +8,6 @@ import { t, type MessageKey } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaType } from "@/lib/useMediaTypes";
-import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 
 type Preview = components["schemas"]["WorkPreview"];
@@ -41,7 +41,8 @@ const factLabel = (key: string) => {
   return label ? t(label) : key;
 };
 
-const SHOWN_PARTS = 30;
+const PART_ROW_HEIGHT = 32;
+const PARTS_VIEWPORT_ROWS = 12;
 
 function duration(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -108,26 +109,32 @@ export function ExternalPreview({ preview, categoryId }: { preview: Preview; cat
 }
 
 function PreviewGroup({ group, groupName }: { group: Preview["groups"][number]; groupName: string }) {
-  const [all, setAll] = useState(false);
-  const parts = all ? group.parts : group.parts.slice(0, SHOWN_PARTS);
+  const scroller = useRef<HTMLDivElement>(null);
+  const rows = useVirtualizer({ count: group.parts.length, getScrollElement: () => scroller.current, estimateSize: () => PART_ROW_HEIGHT, overscan: 8 });
+  const height = Math.min(group.parts.length, PARTS_VIEWPORT_ROWS) * PART_ROW_HEIGHT;
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-xs font-semibold text-ink-muted">{group.title || t("external.group", { group: groupName, number: group.number }).trim()}</h3>
-      <ol className="flex flex-col divide-y divide-border-subtle rounded-md border border-border-subtle text-sm">
-        {parts.map((part, index) => (
-          <li key={`${part.number}-${index}`} className="flex items-baseline gap-3 px-3 py-1.5">
-            <span className="w-10 shrink-0 text-right tabular-nums text-ink-muted">{part.number}</span>
-            <span className="min-w-0 flex-1 truncate">{part.title}</span>
-            {part.date && <span className="shrink-0 text-xs text-ink-muted">{part.date}</span>}
-            {part.duration_sec ? <span className="w-12 shrink-0 text-right text-xs tabular-nums text-ink-muted">{duration(part.duration_sec)}</span> : null}
-          </li>
-        ))}
-      </ol>
-      {!all && group.parts.length > SHOWN_PARTS && (
-        <Button variant="ghost" onClick={() => setAll(true)}>
-          {t("external.more", { count: group.parts.length - SHOWN_PARTS })}
-        </Button>
-      )}
+      <div ref={scroller} className="overflow-auto rounded-md border border-border-subtle text-sm" style={{ height }}>
+        <ol className="relative" style={{ height: rows.getTotalSize() }}>
+          {rows.getVirtualItems().map((row) => {
+            const part = group.parts[row.index];
+            if (!part) return null;
+            return (
+              <li
+                key={row.index}
+                className="absolute inset-x-0 flex items-center gap-3 border-b border-border-subtle px-3"
+                style={{ top: 0, height: PART_ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
+              >
+                <span className="w-10 shrink-0 text-right tabular-nums text-ink-muted">{part.number}</span>
+                <span className="min-w-0 flex-1 truncate">{part.title}</span>
+                {part.date && <span className="shrink-0 text-xs text-ink-muted">{part.date}</span>}
+                {part.duration_sec ? <span className="w-12 shrink-0 text-right text-xs tabular-nums text-ink-muted">{duration(part.duration_sec)}</span> : null}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
     </div>
   );
 }

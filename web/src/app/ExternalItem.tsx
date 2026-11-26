@@ -76,7 +76,6 @@ export function ExternalItem() {
           <div className="flex flex-wrap items-center gap-2">
             {item?.status && <Chip>{item.status}</Chip>}
             <Chip title={t("external.providerHelp")}>{provider}</Chip>
-            {item?.ignored && <Chip>{t("ignore.ignored")}</Chip>}
           </div>
           {found.isPending && title !== "" && <p className="text-sm text-ink-muted">{t("external.loading")}</p>}
           {(preview?.overview ?? item?.overview) && <p className="max-w-prose text-sm leading-relaxed">{preview?.overview ?? item?.overview}</p>}
@@ -92,7 +91,7 @@ export function ExternalItem() {
                 {t("discover.add")}
               </Button>
             )}
-            {!item?.library_id && !item?.ignored && <IgnoreButton item={{ categoryId: Number(categoryId), provider, externalId, title: item?.title ?? title }} />}
+            {!item?.library_id && <IgnoreButton item={{ categoryId: Number(categoryId), provider, externalId, title: item?.title ?? title }} />}
           </div>
         </div>
       </div>

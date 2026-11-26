@@ -64,6 +64,7 @@ export function useItemActions(level: string | undefined, id: number, monitored:
     },
     onSuccess: () => {
       invalidateWorkLists(queryClient, id);
+      void queryClient.invalidateQueries({ queryKey: ["ignores"] });
       setNote(t("ignore.ignored"));
     },
     onError: () => setNote(t("ignore.failed")),

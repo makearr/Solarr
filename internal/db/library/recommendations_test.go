@@ -291,7 +291,7 @@ func TestRecommendations_IgnoreHeldWorkNamesEveryIDItHasAndUndoes(t *testing.T) 
 		t.Fatal(err)
 	}
 	pool := library.NewRecommendations(opened)
-	if err := pool.IgnoreHeld(t.Context(), 7, false, result.WorkID, "", true, 5); err != nil {
+	if _, err := pool.IgnoreHeld(t.Context(), 7, false, result.WorkID, "", true, 5); err != nil {
 		t.Fatal(err)
 	}
 	keys, err := pool.IgnoredKeys(t.Context(), 7, "movie")
@@ -301,10 +301,49 @@ func TestRecommendations_IgnoreHeldWorkNamesEveryIDItHasAndUndoes(t *testing.T) 
 	if want := map[string]bool{"tmdb:11": true, "imdb:tt11": true}; !reflect.DeepEqual(keys, want) {
 		t.Errorf("ignored = %v, want %v", keys, want)
 	}
-	if err := pool.IgnoreHeld(t.Context(), 7, false, result.WorkID, "", false, 6); err != nil {
+	if _, err := pool.IgnoreHeld(t.Context(), 7, false, result.WorkID, "", false, 6); err != nil {
 		t.Fatal(err)
 	}
 	if keys, _ = pool.IgnoredKeys(t.Context(), 7, "movie"); len(keys) != 0 {
 		t.Errorf("after undo = %v", keys)
+	}
+}
+
+func TestRecommendations_StoppingAnIgnoreReportsWhetherTheWorkWasMonitoredAndStateListsIt(t *testing.T) {
+	opened, _ := newLibrary(t)
+	pool := library.NewRecommendations(opened)
+	var ids [2]int64
+	for index, monitored := range []int{1, 0} {
+		result, err := library.NewSeries(opened).Upsert(t.Context(), time.Unix(100, 0), library.SeriesWrite{
+			Work: library.WorkIdentity{MediaType: "movie", CanonicalTitle: fmt.Sprintf("Invented Film %d", index), SortTitle: fmt.Sprintf("invented film %d", index)},
+			IDs:  []library.ExternalIDWrite{{Provider: "tmdb", ExternalID: fmt.Sprint(20 + index), Confidence: 1}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[index] = result.WorkID
+		err = opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `INSERT INTO desired_item (work_id, category_id, profile_id, monitored, state) VALUES (?, 5, 1, ?, 'MISSING')`, result.WorkID, monitored)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.IgnoreHeld(t.Context(), 7, false, result.WorkID, "", true, 5); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := pool.IgnoredState(t.Context(), 7, "movie")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []library.IgnoredHeld{{ID: ids[0]}, {ID: ids[1]}}; !reflect.DeepEqual(state.Works, want) {
+		t.Errorf("works = %v, want %v", state.Works, want)
+	}
+	for index, want := range []bool{true, false} {
+		got, err := pool.IgnoreHeld(t.Context(), 7, false, ids[index], "", false, 6)
+		if err != nil || got != want {
+			t.Errorf("work %d: was monitored = %v, %v; want %v", index, got, err, want)
+		}
 	}
 }
