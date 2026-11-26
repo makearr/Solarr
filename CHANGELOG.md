@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Libraries with Discover on get a "Recommended" entry under their name in the sidebar, opening Discover on that library; it disappears when Discover or that library is switched off.
 - Dashboard: when Discover is on but no library uses it, or nothing was fetched yet, the Discover row says so instead of staying empty.
 - Adding an item now reaches the connected *Arr (Radarr, Sonarr, Lidarr, Readarr, Whisparr) whenever that connection sends monitoring back, not only in companion mode; in safe mode the add dialog says nothing is sent.
 - Settings, General: a switch to hide collections from the navigation and item pages; they are still collected in the background.

@@ -1218,6 +1218,7 @@ const catalogue = {
   "discover.noLibrariesOn": "Discover is on, but no library uses it yet: switch it on per library.",
   "discover.nothingYet": "Discover has nothing to show yet: its sources are still being read, or none is switched on or keyed.",
   "discover.openSettings": "Open Settings, Discover",
+  "discover.recommended": "Recommended",
   "discover.inLibrary": "In your library",
   "discover.seeAll": "See all",
   "discover.add": "Add",

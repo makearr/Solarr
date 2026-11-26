@@ -325,6 +325,10 @@ function LibraryNode({
   }));
   // A mixed library's levels: its own, then each further type's, the type named where a label repeats (L4).
   const showCollections = useShowCollections();
+  // One entry per library with recommendations on, the same list the Discover page offers; none while Discover is off.
+  const recommended = (useDiscoverLibraries().data ?? []).some((entry) => entry.category_id === library.id);
+  const onDiscover = useRouterState({ select: (state) => state.location.pathname.startsWith("/discover") });
+  const discoverLibrary = (useSearch({ strict: false }) as { library?: string | number }).library;
   const ownLabels = new Set(library.levels.map((level) => level.label));
   const entries = [
     ...(members.length > 0 ? [{ id: categoryId, key: "all", label: "All", count: undefined as number | null | undefined }] : []),
@@ -380,6 +384,13 @@ function LibraryNode({
               </li>
             );
           })}
+          {recommended && (
+            <li>
+              <Link to="/discover" search={{ library: library.id }} className={sectionLinkClass(onDiscover && String(discoverLibrary) === categoryId, false)}>
+                <span className="truncate">{t("discover.recommended")}</span>
+              </Link>
+            </li>
+          )}
           {/* After its own levels every library has the same four entries, each with tabs (2026-10-04). */}
           {librarySections(categoryId, kinds).map((section) => {
             const tab = entryTab(section, { tier, administrator });
