@@ -6,6 +6,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import { useDiscoverLibraries } from "@/lib/resources";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 
 import { RecommendationCard } from "./Discover";
 import { AddToLibrary } from "./work/AddToSolarr";
@@ -31,7 +32,15 @@ export function DiscoverRow() {
       void queryClient.invalidateQueries({ queryKey: ["discover-recommendations"] });
     },
   });
-  if (!row.data || row.data.length === 0) return null;
+  const administrator = useIsAdministrator();
+  // Discover is on but nothing shows: say why instead of leaving the dashboard silent.
+  if (libraries.data && libraries.data.length === 0) {
+    return administrator ? <p className="text-xs text-ink-muted">{t("discover.noLibrariesOn")} <Link to="/settings/discover" className="text-accent">{t("discover.openSettings")}</Link></p> : null;
+  }
+  if (row.data && row.data.length === 0) {
+    return <p className="text-xs text-ink-muted">{t("discover.nothingYet")} {administrator && <Link to="/settings/discover" className="text-accent">{t("discover.openSettings")}</Link>}</p>;
+  }
+  if (!row.data) return null;
   const canAdd = (item: Recommendation) => libraries.data?.find((library) => library.category_id === item.category_id)?.can_add ?? false;
   return (
     <section className="flex flex-col gap-2">
