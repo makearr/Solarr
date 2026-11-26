@@ -10,6 +10,7 @@ import { useIsAdministrator } from "@/lib/useAdministrator";
 import { remoteImage } from "@/lib/remoteImage";
 
 import { bumpArtwork } from "./artworkVersion";
+import { CoverArt } from "./CoverArt";
 
 type Subject = "works" | "people";
 
@@ -97,6 +98,19 @@ function ImagePicker({ subject, id, title, shape = "cover", onChosen, onClose }:
             <p className="text-sm text-danger">{t("chooseImage.thatImageCouldNot")}</p>
           )}
           <ul className="grid grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
+            <li>
+              {/* The picture in use is always listed, so a picture that no provider offers (embedded, uploaded) is still visible here. */}
+              <div className="flex w-full flex-col gap-1 rounded-md border border-accent p-1.5 text-left">
+                <CoverArt
+                  subject={subject}
+                  workId={id}
+                  title={title}
+                  size="small"
+                  className={`w-full rounded object-cover ${shape === "poster" ? "aspect-[2/3]" : "aspect-square"}`}
+                />
+                <span className="text-xs">{t("chooseImage.current")}</span>
+              </div>
+            </li>
             {list.map((option) => (
               <li key={option.url}>
                 <button
