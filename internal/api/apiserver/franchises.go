@@ -102,9 +102,29 @@ func (s *Server) ListFranchises(w http.ResponseWriter, r *http.Request, params g
 			return
 		}
 	}
+	ignored := s.ignoredIn(r.Context(), category.MediaType)
+	for i := range franchises {
+		franchises[i] = withoutIgnoredMembers(franchises[i], ignored)
+	}
 	writeJSON(w, s.logger, http.StatusOK, struct {
 		Franchises []gen.Franchise `json:"franchises"`
 	}{franchises})
+}
+
+// withoutIgnoredMembers leaves out the works the library lacks that the caller ignores; a held work stays.
+func withoutIgnoredMembers(franchise gen.Franchise, ignored map[string]bool) gen.Franchise {
+	if len(ignored) == 0 {
+		return franchise
+	}
+	kept := make([]gen.FranchiseMember, 0, len(franchise.Members))
+	for _, member := range franchise.Members {
+		if member.WorkId == nil && member.Provider != nil && member.ExternalId != nil && ignored[ignoredKey(*member.Provider, *member.ExternalId)] {
+			continue
+		}
+		kept = append(kept, member)
+	}
+	franchise.Members = kept
+	return franchise
 }
 
 // ListWorkFranchises answers the collections a work is part of.
@@ -152,7 +172,7 @@ func (s *Server) GetFranchise(w http.ResponseWriter, r *http.Request, id int64, 
 		}
 		franchise.Links = &readable
 	}
-	writeJSON(w, s.logger, http.StatusOK, franchise)
+	writeJSON(w, s.logger, http.StatusOK, withoutIgnoredMembers(franchise, s.ignoredIn(r.Context(), category.MediaType)))
 }
 
 // CreateFranchise makes an empty collection by hand.

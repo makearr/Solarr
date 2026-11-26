@@ -9,6 +9,7 @@ import { t } from "@/lib/i18n";
 import { useLibraries } from "@/lib/resources";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { Button } from "@/ui/Button";
+import { IgnoreButton } from "@/ui/IgnoreButton";
 import { Chip } from "@/ui/Chip";
 import { Dialog } from "@/ui/Dialog";
 import { EmptyState } from "@/ui/EmptyState";
@@ -174,6 +175,9 @@ function MemberList({ event, categoryId, onRemove }: { event: Pick<Crossover, "m
                 {part.work_id === undefined ? t("crossover.seriesNotInLibrary") : t("crossover.missing")}
                 {part.work_id === undefined && addTo !== "" && (
                   <Button onClick={() => setAdding(part)}>{t("crossover.addSeries")}</Button>
+                )}
+                {part.work_id === undefined && addTo !== "" && (
+                  <IgnoreButton item={{ categoryId: Number(addTo), provider: part.provider, externalId: part.external_id, title: part.series_title }} />
                 )}
               </span>
             </li>

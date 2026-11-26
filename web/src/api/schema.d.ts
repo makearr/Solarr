@@ -3220,6 +3220,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ignores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ignore an item the library lacks, so it is never offered as missing.
+         * @description One ignore concept for every media type, kept per person; an administrator may ignore for everyone. It hides the item from the places that offer it as missing and never touches the library.
+         */
+        post: operations["createIgnore"];
+        /** Stop ignoring an item. */
+        delete: operations["deleteIgnore"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/lookup": {
         parameters: {
             query?: never;
@@ -10350,6 +10371,19 @@ export interface components {
             died?: string;
             monitored: boolean;
         };
+        IgnoreRequest: {
+            /**
+             * Format: int64
+             * @description The library the item was found for; its media type scopes the ignore.
+             */
+            category_id: number;
+            kind: string;
+            provider: string;
+            external_id: string;
+            title: string;
+            /** @description Administrator only; ignores it for every account. */
+            everyone?: boolean;
+        };
         AddCandidate: {
             /** @description One of the type's add_kinds. */
             kind: string;
@@ -10369,6 +10403,8 @@ export interface components {
              */
             library_id?: number;
             suggestion?: components["schemas"]["LibrarySuggestion"];
+            /** @description The caller (or an administrator, for everyone) ignores it: it is left out of Discover, collections and crossovers. */
+            ignored?: boolean;
         };
         /** @description The library a work belongs in by the libraries' rules (ADR-56), and why; absent when no rule says. Only libraries the caller may add to are suggested. */
         LibrarySuggestion: {
@@ -19088,6 +19124,57 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    createIgnore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IgnoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Ignored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deleteIgnore: {
+        parameters: {
+            query: {
+                kind: string;
+                provider: string;
+                external_id: string;
+                /** @description Administrator only; undoes the ignore for everyone. */
+                everyone?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No longer ignored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     lookupWorks: {

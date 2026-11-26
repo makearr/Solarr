@@ -68,6 +68,10 @@ func (s *Server) ListCrossovers(w http.ResponseWriter, r *http.Request, params g
 		writeError(w, s.logger, err)
 		return
 	}
+	ignored := s.ignoredIn(r.Context(), category.MediaType)
+	for i := range events {
+		events[i] = withoutIgnoredParts(events[i], ignored)
+	}
 	writeJSON(w, s.logger, http.StatusOK, struct {
 		Events      []gen.Crossover             `json:"events"`
 		Suggestions []gen.SameContentSuggestion `json:"suggestions"`
@@ -127,6 +131,21 @@ func (s *Server) GetCrossover(w http.ResponseWriter, r *http.Request, id int64) 
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, event)
+}
+
+// withoutIgnoredParts leaves out the missing parts of a series the caller ignores.
+func withoutIgnoredParts(event gen.Crossover, ignored map[string]bool) gen.Crossover {
+	if len(ignored) == 0 {
+		return event
+	}
+	kept := make([]gen.CrossoverMissingPart, 0, len(event.Missing))
+	for _, part := range event.Missing {
+		if !ignored[ignoredKey(part.Provider, part.ExternalId)] {
+			kept = append(kept, part)
+		}
+	}
+	event.Missing = kept
+	return event
 }
 
 // crossoverVisible reports whether the caller can see a work of one of the event's members.

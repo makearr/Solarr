@@ -1033,6 +1033,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Recycler: p.fileRemover(), Settings: p.cache, Desired: library.NewDesired(p.library),
 			Realign: adapters.WorkMerger{Identity: library.NewIdentity(p.library), Registry: p.media, Logger: p.logger}.Realign,
 		},
+		Ignores:     adapters.Ignores{Store: library.NewRecommendations(p.library)},
 		FileDefects: adapters.FileDefects{Defects: library.NewFileDefects(p.library), Desired: library.NewDesired(p.library), Recycler: p.fileRemover()},
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
 			Coverage: statistics.NewRollup(p.statistics), People: library.NewPeople(p.library),

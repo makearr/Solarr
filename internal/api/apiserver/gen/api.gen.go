@@ -1663,6 +1663,9 @@ type AddArrInstanceRequest struct {
 type AddCandidate struct {
 	ExternalId string `json:"external_id"`
 
+	// Ignored The caller (or an administrator, for everyone) ignores it: it is left out of Discover, collections and crossovers.
+	Ignored *bool `json:"ignored,omitempty"`
+
 	// Kind One of the type's add_kinds.
 	Kind string `json:"kind"`
 
@@ -3834,6 +3837,19 @@ type Identity struct {
 	Role     Role   `json:"role"`
 	UserId   int64  `json:"user_id"`
 	Username string `json:"username"`
+}
+
+// IgnoreRequest defines model for IgnoreRequest.
+type IgnoreRequest struct {
+	// CategoryId The library the item was found for; its media type scopes the ignore.
+	CategoryId int64 `json:"category_id"`
+
+	// Everyone Administrator only; ignores it for every account.
+	Everyone   *bool  `json:"everyone,omitempty"`
+	ExternalId string `json:"external_id"`
+	Kind       string `json:"kind"`
+	Provider   string `json:"provider"`
+	Title      string `json:"title"`
 }
 
 // ImageOption defines model for ImageOption.
@@ -9074,6 +9090,16 @@ type ListHistoryParams struct {
 	WorkId *int64 `form:"work_id,omitempty" json:"work_id,omitempty"`
 }
 
+// DeleteIgnoreParams defines parameters for DeleteIgnore.
+type DeleteIgnoreParams struct {
+	Kind       string `form:"kind" json:"kind"`
+	Provider   string `form:"provider" json:"provider"`
+	ExternalId string `form:"external_id" json:"external_id"`
+
+	// Everyone Administrator only; undoes the ignore for everyone.
+	Everyone *bool `form:"everyone,omitempty" json:"everyone,omitempty"`
+}
+
 // GetRemoteImageParams defines parameters for GetRemoteImage.
 type GetRemoteImageParams struct {
 	Url  string                    `form:"url" json:"url"`
@@ -10184,6 +10210,9 @@ type MonitorFranchiseJSONRequestBody MonitorFranchiseJSONBody
 // RunInboundWebhookJSONRequestBody defines body for RunInboundWebhook for application/json ContentType.
 type RunInboundWebhookJSONRequestBody = InboundActionRequest
 
+// CreateIgnoreJSONRequestBody defines body for CreateIgnore for application/json ContentType.
+type CreateIgnoreJSONRequestBody = IgnoreRequest
+
 // UpdateImportListJSONRequestBody defines body for UpdateImportList for application/json ContentType.
 type UpdateImportListJSONRequestBody = ImportListWrite
 
@@ -10993,6 +11022,12 @@ type ServerInterface interface {
 	// Where the hourly search budget went in the last hour (F23).
 	// (GET /hunt/budget)
 	GetHuntBudget(w http.ResponseWriter, r *http.Request)
+	// Stop ignoring an item.
+	// (DELETE /ignores)
+	DeleteIgnore(w http.ResponseWriter, r *http.Request, params DeleteIgnoreParams)
+	// Ignore an item the library lacks, so it is never offered as missing.
+	// (POST /ignores)
+	CreateIgnore(w http.ResponseWriter, r *http.Request)
 	// A provider's picture (poster, photo, logo) from Solarr's own cache, fetched once on first use.
 	// (GET /images/remote)
 	GetRemoteImage(w http.ResponseWriter, r *http.Request, params GetRemoteImageParams)
@@ -12811,6 +12846,18 @@ func (_ Unimplemented) RunInboundWebhook(w http.ResponseWriter, r *http.Request,
 // Where the hourly search budget went in the last hour (F23).
 // (GET /hunt/budget)
 func (_ Unimplemented) GetHuntBudget(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop ignoring an item.
+// (DELETE /ignores)
+func (_ Unimplemented) DeleteIgnore(w http.ResponseWriter, r *http.Request, params DeleteIgnoreParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Ignore an item the library lacks, so it is never offered as missing.
+// (POST /ignores)
+func (_ Unimplemented) CreateIgnore(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -19687,6 +19734,108 @@ func (siw *ServerInterfaceWrapper) GetHuntBudget(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHuntBudget(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteIgnore operation middleware
+func (siw *ServerInterfaceWrapper) DeleteIgnore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteIgnoreParams
+
+	// ------------- Required query parameter "kind" -------------
+
+	if paramValue := r.URL.Query().Get("kind"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "provider" -------------
+
+	if paramValue := r.URL.Query().Get("provider"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "provider", r.URL.Query(), &params.Provider)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "external_id" -------------
+
+	if paramValue := r.URL.Query().Get("external_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "external_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "external_id", r.URL.Query(), &params.ExternalId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "external_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "everyone" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "everyone", r.URL.Query(), &params.Everyone)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "everyone", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteIgnore(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIgnore operation middleware
+func (siw *ServerInterfaceWrapper) CreateIgnore(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIgnore(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -29929,6 +30078,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/hunt/budget", wrapper.GetHuntBudget)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/ignores", wrapper.DeleteIgnore)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/ignores", wrapper.CreateIgnore)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/images/remote", wrapper.GetRemoteImage)

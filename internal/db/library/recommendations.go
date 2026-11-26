@@ -346,6 +346,20 @@ func (r Recommendations) Restore(ctx context.Context, userID int64, kind, provid
 	return nil
 }
 
+// IgnoredKeys answers what the person ignores of a media type, and what an administrator ignores for everyone, each as
+// "provider:external id".
+func (r Recommendations) IgnoredKeys(ctx context.Context, userID int64, mediaType string) (map[string]bool, error) {
+	rows, err := librarydb.New(r.store.Read()).ListIgnoredKeys(ctx, librarydb.ListIgnoredKeysParams{UserID: userID, MediaType: mediaType})
+	if err != nil {
+		return nil, fmt.Errorf("library: ignored keys: %w", err)
+	}
+	keys := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		keys[row.Provider+":"+row.ExternalID] = true
+	}
+	return keys, nil
+}
+
 // Dismissals answers what one person is not interested in, newest first.
 func (r Recommendations) Dismissals(ctx context.Context, userID int64) ([]RecommendationDismissal, error) {
 	rows, err := librarydb.New(r.store.Read()).ListRecommendationDismissals(ctx, userID)

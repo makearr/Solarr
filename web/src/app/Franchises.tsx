@@ -28,6 +28,7 @@ import { usePreference } from "@/lib/usePreference";
 import { useRouteView } from "@/list/useRouteView";
 import { LetterRail } from "@/ui/LetterRail";
 import { HeartButton } from "@/ui/HeartButton";
+import { IgnoreButton } from "@/ui/IgnoreButton";
 import { ToolbarFavorites } from "@/ui/Toolbar";
 import { useFavoriteIds } from "@/lib/useFavorites";
 import { inputStyle } from "@/ui/form";
@@ -421,6 +422,7 @@ function CollectionDetail({
                   >
                     {t("collection.request")}
                   </button>
+                  <IgnoreButton item={{ categoryId: Number(categoryId), provider: member.provider, externalId: member.external_id, title: member.title }} />
                   {adding === key && (
                     <AddToLibrary
                       candidate={{ provider: member.provider, external_id: member.external_id, title: member.title, poster_url: member.poster_url, year: member.year }}

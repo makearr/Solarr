@@ -4808,6 +4808,38 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /ignores:
+    post:
+      operationId: createIgnore
+      tags: [library]
+      summary: "Ignore an item the library lacks, so it is never offered as missing."
+      description: >-
+        One ignore concept for every media type, kept per person; an administrator may ignore for everyone. It hides the item
+        from the places that offer it as missing and never touches the library.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IgnoreRequest" }
+      responses:
+        "204": { description: Ignored. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteIgnore
+      tags: [library]
+      summary: Stop ignoring an item.
+      parameters:
+        - { name: kind, in: query, required: true, schema: { type: string } }
+        - { name: provider, in: query, required: true, schema: { type: string } }
+        - { name: external_id, in: query, required: true, schema: { type: string } }
+        - { name: everyone, in: query, schema: { type: boolean }, description: Administrator only; undoes the ignore for everyone. }
+      responses:
+        "204": { description: No longer ignored. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /works/lookup:
     get:
       operationId: lookupWorks
@@ -14175,6 +14207,17 @@ components:
         died: { type: string }
         monitored: { type: boolean }
 
+    IgnoreRequest:
+      type: object
+      required: [category_id, kind, provider, external_id, title]
+      properties:
+        category_id: { type: integer, format: int64, description: The library the item was found for; its media type scopes the ignore. }
+        kind: { type: string }
+        provider: { type: string }
+        external_id: { type: string }
+        title: { type: string }
+        everyone: { type: boolean, description: Administrator only; ignores it for every account. }
+
     AddCandidate:
       type: object
       required: [kind, provider, external_id, title]
@@ -14190,6 +14233,7 @@ components:
         year: { type: integer, format: int64 }
         library_id: { type: integer, format: int64, description: The work or person the library already holds for it. }
         suggestion: { $ref: "#/components/schemas/LibrarySuggestion" }
+        ignored: { type: boolean, description: "The caller (or an administrator, for everyone) ignores it: it is left out of Discover, collections and crossovers." }
 
     LibrarySuggestion:
       type: object

@@ -816,6 +816,8 @@ type Querier interface {
 	// detail's own "last searched" column. Absent means never.
 	ListHuntSearchTimesForWork(ctx context.Context, workID int64) ([]ListHuntSearchTimesForWorkRow, error)
 	ListIdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
+	// What a person ignores, and what an administrator ignores for everyone (user 0), of one media type.
+	ListIgnoredKeys(ctx context.Context, arg ListIgnoredKeysParams) ([]ListIgnoredKeysRow, error)
 	ListImportDecisionsForWork(ctx context.Context, arg ListImportDecisionsForWorkParams) ([]ImportDecision, error)
 	// Import list entries and state (migration 0099, ADR-38). Column lists follow table order.
 	ListImportListEntries(ctx context.Context, listID int64) ([]ImportListEntry, error)

@@ -14,6 +14,7 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
+import { IgnoreButton } from "@/ui/IgnoreButton";
 
 import { useDebouncedValue } from "../useDebouncedValue";
 import { AddToSolarr } from "./AddToSolarr";
@@ -192,9 +193,16 @@ export function CandidateCard({
                 <Check aria-hidden className="size-3.5" /> {added ? "Added: open it" : "Already in your library"}
               </Link>
             ) : (
-              <Button icon={open ? undefined : <Plus aria-hidden className="size-3.5" />} onClick={onToggle}>
-                {open ? t("action.cancel") : "Add…"}
-              </Button>
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <Button icon={open ? undefined : <Plus aria-hidden className="size-3.5" />} onClick={onToggle}>
+                  {open ? t("action.cancel") : "Add…"}
+                </Button>
+                {candidate.ignored ? (
+                  <Chip>{t("ignore.ignored")}</Chip>
+                ) : (
+                  <IgnoreButton item={{ categoryId: Number(categoryId), provider: candidate.provider, externalId: candidate.external_id, title: candidate.title }} />
+                )}
+              </span>
             )}
           </div>
         </div>

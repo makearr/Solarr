@@ -89,3 +89,20 @@ func (f FileDefects) ResolveDefects(ctx context.Context, rootFolderIDs, mediaObj
 	}
 	return outcome, nil
 }
+
+// Ignores satisfies apiserver.IgnoreStore over the table Discover's "not interested" already used, so there is one ignore concept.
+type Ignores struct{ Store library.Recommendations }
+
+func (i Ignores) Ignore(ctx context.Context, userID int64, mediaType, kind, provider, externalID, title string, at time.Time) error {
+	return i.Store.Dismiss(ctx, library.RecommendationDismissal{
+		UserID: userID, MediaType: mediaType, Kind: kind, Provider: provider, ExternalID: externalID, Title: title, CreatedAt: at.Unix(),
+	})
+}
+
+func (i Ignores) Unignore(ctx context.Context, userID int64, kind, provider, externalID string) error {
+	return i.Store.Restore(ctx, userID, kind, provider, externalID)
+}
+
+func (i Ignores) IgnoredKeys(ctx context.Context, userID int64, mediaType string) (map[string]bool, error) {
+	return i.Store.IgnoredKeys(ctx, userID, mediaType)
+}

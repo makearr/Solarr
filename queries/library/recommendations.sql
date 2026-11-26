@@ -60,7 +60,7 @@ WHERE r.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids)))
   AND (sqlc.arg(title) = '' OR instr(lower(r.title), lower(sqlc.arg(title))) > 0)
   AND (sqlc.arg(has_cursor) = 0 OR r.popularity < sqlc.arg(after_popularity) OR (r.popularity = sqlc.arg(after_popularity) AND r.id < sqlc.arg(after_id)))
   AND NOT EXISTS (SELECT 1 FROM recommendation_dismissal d
-                  WHERE d.user_id = sqlc.arg(user_id) AND d.provider = r.provider AND d.external_id = r.external_id AND d.kind = r.kind)
+                  WHERE d.user_id IN (sqlc.arg(user_id), 0) AND d.provider = r.provider AND d.external_id = r.external_id AND d.kind IN (r.kind, 'any'))
   AND NOT EXISTS (SELECT 1 FROM work_external_id e JOIN desired_item di ON di.work_id = e.work_id
                   WHERE e.provider = r.provider AND e.external_id = r.external_id AND di.monitored = 1)
 ORDER BY r.popularity DESC, r.id DESC
@@ -81,6 +81,10 @@ GROUP BY g.genre ORDER BY items DESC, g.genre;
 
 -- name: DismissRecommendation :exec
 INSERT OR IGNORE INTO recommendation_dismissal (user_id, media_type, kind, provider, external_id, title, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- What a person ignores, and what an administrator ignores for everyone (user 0), of one media type.
+-- name: ListIgnoredKeys :many
+SELECT provider, external_id FROM recommendation_dismissal WHERE user_id IN (sqlc.arg(user_id), 0) AND media_type = sqlc.arg(media_type);
 
 -- name: RestoreRecommendation :exec
 DELETE FROM recommendation_dismissal WHERE user_id = ? AND provider = ? AND external_id = ? AND kind = ?;

@@ -102,7 +102,8 @@ func (s *Server) LookupWorks(w http.ResponseWriter, r *http.Request, params gen.
 		writeError(w, s.logger, err)
 		return
 	}
-	if _, err := access.Category(params.CategoryId, settings.PermissionRead); err != nil {
+	category, err := access.Category(params.CategoryId, settings.PermissionRead)
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -116,6 +117,7 @@ func (s *Server) LookupWorks(w http.ResponseWriter, r *http.Request, params gen.
 		writeError(w, s.logger, err)
 		return
 	}
+	ignored := s.ignoredIn(r.Context(), category.MediaType)
 	views := make([]gen.AddCandidate, len(found))
 	for i, candidate := range found {
 		views[i] = gen.AddCandidate{
@@ -128,6 +130,10 @@ func (s *Server) LookupWorks(w http.ResponseWriter, r *http.Request, params gen.
 		}
 		if candidate.LibraryID != 0 {
 			views[i].LibraryId = &candidate.LibraryID
+		}
+		if ignored[ignoredKey(candidate.Provider, candidate.ExternalID)] {
+			yes := true
+			views[i].Ignored = &yes
 		}
 		// Only a library the caller may add to is suggested.
 		if suggestion := candidate.Suggestion; suggestion != nil {

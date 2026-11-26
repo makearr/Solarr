@@ -317,6 +317,44 @@ func (q *Queries) ListCollectionRecommendationCandidates(ctx context.Context, ar
 	return items, nil
 }
 
+const listIgnoredKeys = `-- name: ListIgnoredKeys :many
+SELECT provider, external_id FROM recommendation_dismissal WHERE user_id IN (?1, 0) AND media_type = ?2
+`
+
+type ListIgnoredKeysParams struct {
+	UserID    int64
+	MediaType string
+}
+
+type ListIgnoredKeysRow struct {
+	Provider   string
+	ExternalID string
+}
+
+// What a person ignores, and what an administrator ignores for everyone (user 0), of one media type.
+func (q *Queries) ListIgnoredKeys(ctx context.Context, arg ListIgnoredKeysParams) ([]ListIgnoredKeysRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIgnoredKeys, arg.UserID, arg.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListIgnoredKeysRow{}
+	for rows.Next() {
+		var i ListIgnoredKeysRow
+		if err := rows.Scan(&i.Provider, &i.ExternalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecommendationDismissals = `-- name: ListRecommendationDismissals :many
 SELECT user_id, media_type, kind, provider, external_id, title, created_at FROM recommendation_dismissal WHERE user_id = ? ORDER BY created_at DESC, external_id
 `
@@ -501,7 +539,7 @@ WHERE r.category_id IN (SELECT value FROM json_each(?1))
   AND (?5 = '' OR instr(lower(r.title), lower(?5)) > 0)
   AND (?6 = 0 OR r.popularity < ?7 OR (r.popularity = ?7 AND r.id < ?8))
   AND NOT EXISTS (SELECT 1 FROM recommendation_dismissal d
-                  WHERE d.user_id = ?9 AND d.provider = r.provider AND d.external_id = r.external_id AND d.kind = r.kind)
+                  WHERE d.user_id IN (?9, 0) AND d.provider = r.provider AND d.external_id = r.external_id AND d.kind IN (r.kind, 'any'))
   AND NOT EXISTS (SELECT 1 FROM work_external_id e JOIN desired_item di ON di.work_id = e.work_id
                   WHERE e.provider = r.provider AND e.external_id = r.external_id AND di.monitored = 1)
 ORDER BY r.popularity DESC, r.id DESC
