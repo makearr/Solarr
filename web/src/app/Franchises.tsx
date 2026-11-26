@@ -25,6 +25,7 @@ import { AddToLibrary } from "./work/AddToSolarr";
 import { CoverArt } from "./CoverArt";
 import { DEFAULT_POSTER_OPTIONS, IndexPoster, type IndexEntry } from "./IndexViews";
 import { usePreference } from "@/lib/usePreference";
+import { useRouteView } from "@/list/useRouteView";
 import { LetterRail } from "@/ui/LetterRail";
 import { HeartButton } from "@/ui/HeartButton";
 import { ToolbarFavorites } from "@/ui/Toolbar";
@@ -42,6 +43,8 @@ interface SavedView {
   onlyFavorites: boolean;
 }
 type Sort = "name" | "items" | "missing" | "newest" | "monitored";
+const SORTS: readonly Sort[] = ["name", "items", "missing", "newest", "monitored"];
+const COLLECTION_FILTER_KEYS: readonly string[] = ["q", "favorites"];
 
 function sortOf(franchises: Franchise[], sort: Sort): Franchise[] {
   const sorted = [...franchises];
@@ -87,10 +90,16 @@ export function FranchiseIndex() {
   const administrator = useIsAdministrator();
   const queryClient = useQueryClient();
   const [view, setView] = usePreference<View>(`franchises.view.${categoryId}`, "poster");
-  const [filter, setFilter] = useState("");
-  const [onlyFavorites, setOnlyFavorites] = useState(false);
+  // In the URL and remembered per list like every other list, so sort and filters survive leaving and coming back.
+  const { query: view_, setQuery } = useRouteView(COLLECTION_FILTER_KEYS);
+  const filter = view_.filters.q ?? "";
+  const onlyFavorites = view_.filters.favorites === "1";
+  const sort: Sort = SORTS.find((entry) => entry === view_.sort) ?? "name";
+  const setFilters = (change: Record<string, string>) => setQuery({ ...view_, filters: { ...view_.filters, ...change } });
+  const setFilter = (value: string) => setFilters({ q: value });
+  const setOnlyFavorites = (value: boolean) => setFilters({ favorites: value ? "1" : "" });
+  const setSort = (value: Sort) => setQuery({ ...view_, sort: value === "name" ? null : value, direction: "asc" });
   const favorites = useFavoriteIds("collection");
-  const [sort, setSort] = useState<Sort>("name");
   const navigate = useNavigate();
   const [jump, setJump] = useState("");
   const frame = useRef<HTMLDivElement>(null);
@@ -164,9 +173,7 @@ export function FranchiseIndex() {
             onChange={(event) => {
               const chosen = views.find((entry) => entry.name === event.target.value);
               if (!chosen) return;
-              setFilter(chosen.filter);
-              setSort(chosen.sort);
-              setOnlyFavorites(chosen.onlyFavorites);
+              setQuery({ filters: { q: chosen.filter, favorites: chosen.onlyFavorites ? "1" : "" }, sort: chosen.sort === "name" ? null : chosen.sort, direction: "asc" });
             }}
           >
             <option value="">{t("franchise.views")}</option>
