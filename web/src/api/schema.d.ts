@@ -333,7 +333,7 @@ export interface paths {
         };
         /**
          * Configuration and operational problems with this instance (Lidarr's System health).
-         * @description Distinct from /library/health, which reports on the library's own data. This reports on the instance: things the operator has not configured yet, a root folder that is offline or unwritable, and backups that have stopped running. Each check names itself so the interface can link somewhere useful, and an empty list means everything checked is fine.
+         * @description Distinct from /library/health, which reports on the library's own data. This reports on the instance: things the operator has not configured yet, a root folder that is offline or unwritable, and backups that have stopped running. Each check names itself so the interface can link somewhere useful, and an empty list means everything checked is fine. Administrators only: the checks name configuration and paths.
          */
         get: operations["getSystemHealth"];
         put?: never;
@@ -14075,6 +14075,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     login: {
@@ -16932,8 +16933,9 @@ export interface operations {
     };
     listRecommendations: {
         parameters: {
-            query: {
-                category_id: number;
+            query?: {
+                /** @description One library; absent is every library the caller may see that has recommendations on. */
+                category_id?: number;
                 /** @description The add kind (an album, a performer); absent is every kind. */
                 kind?: string;
                 /** @description One recommendation list; absent is all of them. */

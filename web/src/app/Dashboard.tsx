@@ -1,19 +1,23 @@
 import { tr } from "@/lib/i18nRich";
 import { t } from "@/lib/i18n";
+import { Fragment } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Plus, XCircle } from "lucide-react";
+import { AlertTriangle, Plus, SlidersHorizontal, XCircle } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { healthMessage } from "@/lib/healthMessage";
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
+import { ADMINISTRATOR_WIDGETS, useDashboardWidgets, type DashboardWidget } from "@/lib/interfacePreferences";
 import { useLibraryTree } from "@/lib/resources";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 import { ArtistCoverMark, Poster } from "./Poster";
 import { DiscoverRow } from "./DiscoverRow";
 import { DashboardDownloads } from "./DashboardDownloads";
+import { SetupChecklist } from "./DashboardSetup";
 import { SearchBox } from "./SearchBox";
 import { pageTier } from "./sections";
 import { defaultLevelKey } from "./Sidebar";
@@ -74,10 +78,14 @@ export function Dashboard() {
     })),
   });
 
+  // The checks name configuration and paths, which only an administrator may read.
+  const administrator = useIsAdministrator();
   const health = useQuery({
     queryKey: ["system-health"],
     queryFn: () => ok(api.GET("/system/health")),
+    enabled: administrator,
   });
+  const [widgets] = useDashboardWidgets();
 
   const scans = useQuery({
     queryKey: ["scans"],
@@ -90,35 +98,10 @@ export function Dashboard() {
   const tier = useTier();
   const checks = health.data?.filter((check) => check.link == null || isTierVisible(tier, pageTier(check.link)));
 
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 p-6">
-        <h1 className="sr-only">Dashboard</h1>
-        <section className="flex flex-col gap-3">
-          <SearchBox variant="hero" />
-          <div className="flex flex-wrap gap-2">
-            {firstLibrary && (
-              <Link
-                to="/add"
-                className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm text-accent-ink
-                           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                <Plus aria-hidden className="size-4" />
-                {t("addAnywhere.addToLibrary")}
-              </Link>
-            )}
-            <Link
-              to="/libraries"
-              className="rounded-md border border-border-subtle px-4 py-2 text-sm text-ink-muted
-                         hover:border-accent hover:text-ink focus-visible:outline-2
-                         focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              Browse libraries
-            </Link>
-          </div>
-        </section>
-
-        {checks && checks.length > 0 && (
+  const nodes: Record<DashboardWidget, React.ReactNode> = {
+    setup: <SetupChecklist />,
+    attention: (
+        checks && checks.length > 0 && (
           <Section title={t("dashboard.needsAttention")}>
             <ul className="flex flex-col gap-1">
               {checks.map((check) => (
@@ -145,9 +128,10 @@ export function Dashboard() {
               ))}
             </ul>
           </Section>
-        )}
-
-        {scans.data && scans.data.scans.length > 0 && (
+        )
+    ),
+    scanning: (
+        scans.data && scans.data.scans.length > 0 && (
           <Section title="Scanning">
             <ul className="flex flex-col gap-2">
               {scans.data.scans.map((scan) => (
@@ -155,14 +139,15 @@ export function Dashboard() {
               ))}
             </ul>
           </Section>
-        )}
-
+        )
+    ),
+    downloads: (
         <Section title="Downloads">
           <DashboardDownloads />
         </Section>
-
-        <DiscoverRow />
-
+    ),
+    discover: <DiscoverRow />,
+    recent: (
         <Section title={t("dashboard.recentlyAdded")}>
           {recent.isLoading && <Note>Loading…</Note>}
           {recent.error != null && <Note>{t("dashboard.recentlyAddedCouldNot")}</Note>}
@@ -186,23 +171,49 @@ export function Dashboard() {
             </ul>
           )}
         </Section>
+    ),
+    libraries: <LibraryStrip libraries={libraries.data ?? []} />,
+  };
 
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-5xl flex-col gap-8 p-6">
+        <h1 className="sr-only">Dashboard</h1>
+        <section className="flex flex-col gap-3">
+          <SearchBox variant="hero" />
+          <div className="flex flex-wrap gap-2">
+            {firstLibrary && (
+              <Link
+                to="/add"
+                className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm text-accent-ink
+                           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <Plus aria-hidden className="size-4" />
+                {t("addAnywhere.addToLibrary")}
+              </Link>
+            )}
+            <Link
+              to="/libraries"
+              className="rounded-md border border-border-subtle px-4 py-2 text-sm text-ink-muted
+                         hover:border-accent hover:text-ink focus-visible:outline-2
+                         focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              Browse libraries
+            </Link>
+            <Link
+              to="/settings/webui"
+              className="ml-auto flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-ink-muted hover:text-ink
+                         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <SlidersHorizontal aria-hidden className="size-4" />
+              {t("dashboard.customise")}
+            </Link>
+          </div>
+        </section>
 
-        <Section title="Libraries">
-          {libraries.data && libraries.data.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {libraries.data.map((entry) => (
-                <LibraryCard key={entry.id} library={entry} />
-              ))}
-            </div>
-          ) : (
-            <Note>
-              {tr("dashboard.noLibrary", { link: <Link to="/libraries" className="text-accent underline underline-offset-2">
-                Add one
-              </Link> })}
-            </Note>
-          )}
-        </Section>
+        {widgets.filter((entry) => entry.shown && (administrator || !ADMINISTRATOR_WIDGETS.has(entry.widget))).map((entry) => (
+          <Fragment key={entry.widget}>{nodes[entry.widget]}</Fragment>
+        ))}
 
         {summary.isLoading && <Note>Loading…</Note>}
         {(summary.error !== null || !summary.data) && !summary.isLoading && (
@@ -230,36 +241,53 @@ function StatusPanels({ summary }: { summary: components["schemas"]["DashboardSu
   );
 }
 
-function LibraryCard({ library }: { library: LibraryEntry }) {
-  const target = defaultLevelKey(library);
-  const primaryLevel = library.levels[0];
-  const Icon = mediaTypeIcon(library.media_type);
-
-  const body = (
-    <>
-      <span className="flex items-center gap-2">
-        <Icon aria-hidden className="size-4 shrink-0 text-accent" />
-        <span className="truncate font-medium">{library.name}</span>
-      </span>
-      <span className="text-xs text-ink-muted">
-        {mediaTypeName(library.media_type)}
-        {primaryLevel?.count != null && ` · ${primaryLevel.count.toLocaleString()} ${primaryLevel.label.toLowerCase()}`}
-      </span>
-    </>
-  );
-  const className =
-    "flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3 hover:border-accent " +
-    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-
-  if (!target) return <div className={className}>{body}</div>;
+/** One slim row per library: what it holds and what it still wants; a click opens it. */
+function LibraryStrip({ libraries }: { libraries: readonly LibraryEntry[] }) {
+  if (libraries.length === 0) {
+    return (
+      <Section title={t("dashboard.widget.libraries")}>
+        <Note>
+          {tr("dashboard.noLibrary", { link: <Link to="/settings/libraries" className="text-accent underline underline-offset-2">
+            Add one
+          </Link> })}
+        </Note>
+      </Section>
+    );
+  }
   return (
-    <Link
-      to="/library/$categoryId/$level"
-      params={{ categoryId: String(library.id), level: target }}
-      className={className}
-    >
-      {body}
-    </Link>
+    <Section title={t("dashboard.widget.libraries")}>
+      <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface text-sm">
+        {libraries.map((library) => {
+          const target = defaultLevelKey(library);
+          const primary = library.levels[0];
+          const Icon = mediaTypeIcon(library.media_type);
+          const row = (
+            <>
+              <Icon aria-hidden className="size-4 shrink-0 text-accent" />
+              <span className="min-w-0 flex-1 truncate font-medium">{library.name}</span>
+              {primary?.count != null && (
+                <span className="shrink-0 tabular-nums text-ink-muted">
+                  {t("dashboard.libraryItems", { count: primary.count.toLocaleString(), label: primary.label.toLowerCase() })}
+                </span>
+              )}
+              {(library.wanted ?? 0) > 0 && (
+                <span className="shrink-0 tabular-nums text-warn">{t("dashboard.libraryWanted", { count: (library.wanted ?? 0).toLocaleString() })}</span>
+              )}
+            </>
+          );
+          const className = "flex items-center gap-3 px-3 py-2 hover:bg-canvas focus-visible:outline-2 focus-visible:outline-accent";
+          return (
+            <li key={library.id}>
+              {target ? (
+                <Link to="/library/$categoryId/$level" params={{ categoryId: String(library.id), level: target }} className={className}>{row}</Link>
+              ) : (
+                <div className={className}>{row}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
   );
 }
 

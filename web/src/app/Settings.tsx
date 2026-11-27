@@ -16,7 +16,8 @@ import { Network } from "./Network";
 import { Streaming } from "./Streaming";
 import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
-import { useFooterItems, useShowCalendar, useShowFooter, useShowThumbnails, type FooterItem } from "@/lib/interfacePreferences";
+import { ADMINISTRATOR_WIDGETS, useDashboardWidgets, useFooterItems, useShowCalendar, useShowFooter, useShowThumbnails, type FooterItem } from "@/lib/interfacePreferences";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
 
 import { SubTabs } from "@/ui/SubTabs";
@@ -324,8 +325,47 @@ export function WebUISettings() {
           {t("settings.showThumbnailsOfVideos")}
         </label>
       </Card>
+      <DashboardWidgets />
       {showFooter && <FooterItems />}
     </SettingsPage>
+  );
+}
+
+/** The dashboard's sections: each on or off, in the order they run top to bottom. */
+function DashboardWidgets() {
+  const [entries, setEntries] = useDashboardWidgets();
+  const administrator = useIsAdministrator();
+  const items = entries.filter((entry) => administrator || !ADMINISTRATOR_WIDGETS.has(entry.widget));
+  const swap = (at: number, to: number) => {
+    const first = entries.indexOf(items[at]!);
+    const second = entries.indexOf(items[to]!);
+    const next = [...entries];
+    [next[first], next[second]] = [next[second]!, next[first]!];
+    setEntries(next);
+  };
+  return (
+    <Card title={t("dashboard.widgets")} help={t("dashboard.widgetsHelp")}>
+      <ul className="flex max-w-md flex-col">
+        {items.map((entry, at) => (
+          <li key={entry.widget} className="flex items-center gap-2 border-b border-border-subtle py-1 text-sm last:border-0">
+            <label className="flex flex-1 items-center gap-2">
+              <input
+                type="checkbox"
+                checked={entry.shown}
+                onChange={(event) => setEntries(entries.map((other) => (other.widget === entry.widget ? { ...other, shown: event.target.checked } : other)))}
+              />
+              {t(`dashboard.widget.${entry.widget}`)}
+            </label>
+            <button type="button" aria-label={`Move ${t(`dashboard.widget.${entry.widget}`)} up`} disabled={at === 0} onClick={() => swap(at, at - 1)} className="rounded p-1 text-ink-muted hover:text-ink disabled:opacity-30">
+              <ArrowUp aria-hidden className="size-3.5" />
+            </button>
+            <button type="button" aria-label={`Move ${t(`dashboard.widget.${entry.widget}`)} down`} disabled={at === items.length - 1} onClick={() => swap(at, at + 1)} className="rounded p-1 text-ink-muted hover:text-ink disabled:opacity-30">
+              <ArrowDown aria-hidden className="size-3.5" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

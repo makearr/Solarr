@@ -9034,7 +9034,8 @@ type LoadMoreRecommendationsJSONBodyType string
 
 // ListRecommendationsParams defines parameters for ListRecommendations.
 type ListRecommendationsParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
+	// CategoryId One library; absent is every library the caller may see that has recommendations on.
+	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 
 	// Kind The add kind (an album, a performer); absent is every kind.
 	Kind *string `form:"kind,omitempty" json:"kind,omitempty"`
@@ -18122,16 +18123,9 @@ func (siw *ServerInterfaceWrapper) ListRecommendations(w http.ResponseWriter, r 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListRecommendationsParams
 
-	// ------------- Required query parameter "category_id" -------------
+	// ------------- Optional query parameter "category_id" -------------
 
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	err = runtime.BindQueryParameter("form", true, false, "category_id", r.URL.Query(), &params.CategoryId)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
 		return

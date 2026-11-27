@@ -10,19 +10,19 @@ const item = {
 
 test("a person who may add gets a working Add; one who may not gets it disabled but still sees the card", () => {
   const onAdd = vi.fn();
-  const { rerender } = render(<RecommendationCard item={item} canAdd onAdd={onAdd} onDismiss={() => {}} />);
+  const { rerender } = render(<RecommendationCard item={item} libraryName="Films" canAdd onAdd={onAdd} onDismiss={() => {}} />);
   expect(screen.getByText("Example Film")).toBeTruthy();
   expect(screen.getByText("2020 · 8.3 (1200)")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Add" }));
   expect(onAdd).toHaveBeenCalledTimes(1);
 
-  rerender(<RecommendationCard item={item} canAdd={false} onAdd={onAdd} onDismiss={() => {}} />);
+  rerender(<RecommendationCard item={item} libraryName="Films" canAdd={false} onAdd={onAdd} onDismiss={() => {}} />);
   expect((screen.getByRole("button", { name: "Add" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 test("Not interested hands the card back to be removed", () => {
   const onDismiss = vi.fn();
-  render(<RecommendationCard item={item} canAdd onAdd={() => {}} onDismiss={onDismiss} />);
+  render(<RecommendationCard item={item} libraryName="Films" canAdd onAdd={() => {}} onDismiss={onDismiss} />);
   fireEvent.click(screen.getByRole("button", { name: "Not interested" }));
   expect(onDismiss).toHaveBeenCalledTimes(1);
 });
@@ -30,11 +30,11 @@ test("Not interested hands the card back to be removed", () => {
 test("a held work offers Monitor, and a request-only person sees Request instead of Add", () => {
   const onMonitor = vi.fn();
   const held = { ...item, library_id: 5 };
-  const { rerender } = render(<RecommendationCard item={held} canAdd onAdd={() => {}} onMonitor={onMonitor} onDismiss={() => {}} />);
+  const { rerender } = render(<RecommendationCard item={held} libraryName="Films" canAdd onAdd={() => {}} onMonitor={onMonitor} onDismiss={() => {}} />);
   fireEvent.click(screen.getByRole("button", { name: "Monitor" }));
   expect(onMonitor).toHaveBeenCalledTimes(1);
 
-  rerender(<RecommendationCard item={item} canAdd requestOnly onAdd={() => {}} onDismiss={() => {}} />);
+  rerender(<RecommendationCard item={item} libraryName="Films" canAdd requestOnly onAdd={() => {}} onDismiss={() => {}} />);
   expect(screen.getByRole("button", { name: "Request" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
 });
@@ -50,7 +50,12 @@ test("a library and the Hidden view are read the same from a plain link and from
   expect(searchHidden({ hidden: 0 })).toBe(false);
 });
 
+test("every card names the library it would be added to", () => {
+  render(<RecommendationCard item={item} libraryName="Films" canAdd onAdd={() => {}} onDismiss={() => {}} />);
+  expect(screen.getByText("Adds to Films")).toBeTruthy();
+});
+
 test("a recommendation without a poster shows its initial", () => {
-  render(<RecommendationCard item={item} canAdd onAdd={() => {}} onDismiss={() => {}} />);
+  render(<RecommendationCard item={item} libraryName="Films" canAdd onAdd={() => {}} onDismiss={() => {}} />);
   expect(screen.getByLabelText("Example Film").textContent).toBe("E");
 });

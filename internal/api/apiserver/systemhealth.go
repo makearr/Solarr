@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // HealthCheck is one thing wrong with this instance right now.
@@ -35,8 +34,8 @@ type SystemHealthSource interface {
 
 // GetSystemHealth reports instance problems worst first, computed fresh; GetLibraryHealth covers the library's data instead.
 func (s *Server) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	// The checks name configuration and paths only an administrator may see.
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 

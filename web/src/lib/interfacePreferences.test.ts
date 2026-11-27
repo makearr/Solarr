@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_FOOTER, normaliseFooter } from "./interfacePreferences";
+import { DEFAULT_FOOTER, normaliseDashboard, normaliseFooter } from "./interfacePreferences";
 
 describe("normaliseFooter", () => {
   it("starts with the address and the clock hidden", () => {
@@ -17,4 +17,11 @@ describe("normaliseFooter", () => {
       { item: "events", shown: true }, { item: "work", shown: true }, { item: "queue", shown: true }, { item: "time", shown: false },
     ]);
   });
+});
+
+it("keeps the dashboard's stored order and appends sections added since", () => {
+  const stored = [{ widget: "recent", shown: false }, { widget: "gone", shown: true }, { widget: "recent", shown: true }, { widget: "setup", shown: true }] as never;
+  expect(normaliseDashboard(stored).map((entry) => `${entry.widget}:${entry.shown}`)).toEqual([
+    "recent:false", "setup:true", "attention:true", "scanning:true", "downloads:true", "discover:true", "libraries:true",
+  ]);
 });

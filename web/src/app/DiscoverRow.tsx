@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -6,32 +6,35 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import { useDiscoverLibraries } from "@/lib/resources";
+import { useGridColumns } from "@/lib/useGridColumns";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 
 import { RecommendationCard } from "./Discover";
+import { useRecommendationDismissal } from "./recommendationActions";
 import { AddToLibrary } from "./work/AddToSolarr";
 
 type Recommendation = components["schemas"]["Recommendation"];
 
-/** One scrolling line of recommendations across the caller's libraries; nothing at all while there are none. */
+/** Cards are at least this wide; the dashboard shows exactly two rows of them, never a sideways scroll. */
+const CARD_MIN = 144;
+const GAP = 16;
+const ROWS = 2;
+/** Enough for two rows on the widest screens; the grid clips to what fits. */
+const FETCH = 60;
+
+/** Two rows of recommendations across the caller's libraries; nothing at all while there are none. */
 export function DiscoverRow() {
   const queryClient = useQueryClient();
   const libraries = useDiscoverLibraries();
   const [adding, setAdding] = useState<Recommendation>();
   const row = useQuery({
     queryKey: ["discover-dashboard"],
-    queryFn: () => ok(api.GET("/discover/dashboard", { params: { query: { limit: 20 } } })),
+    queryFn: () => ok(api.GET("/discover/dashboard", { params: { query: { limit: FETCH } } })),
     enabled: (libraries.data?.length ?? 0) > 0,
     meta: { handlesErrors: true },
   });
-  const dismiss = useMutation({
-    meta: { handlesErrors: true },
-    mutationFn: (id: number) => ok(api.POST("/discover/recommendations/{id}/dismiss", { params: { path: { id } } })),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["discover-dashboard"] });
-      void queryClient.invalidateQueries({ queryKey: ["discover-recommendations"] });
-    },
-  });
+  const { dismiss } = useRecommendationDismissal();
+  const { ref, columns } = useGridColumns(CARD_MIN, GAP);
   const administrator = useIsAdministrator();
   // Discover is on but nothing shows: say why instead of leaving the dashboard silent.
   if (libraries.data && libraries.data.length === 0) {
@@ -41,17 +44,23 @@ export function DiscoverRow() {
     return <p className="text-xs text-ink-muted">{t("discover.nothingYet")} {administrator && <Link to="/settings/discover" className="text-accent">{t("discover.openSettings")}</Link>}</p>;
   }
   if (!row.data) return null;
-  const canAdd = (item: Recommendation) => libraries.data?.find((library) => library.category_id === item.category_id)?.can_add ?? false;
+  const libraryOf = (item: Recommendation) => libraries.data?.find((library) => library.category_id === item.category_id);
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <h2 className="text-sm font-medium">{t("discover.page")}</h2>
         <Link to="/discover" className="text-xs text-accent">{t("discover.seeAll")}</Link>
       </div>
-      <ul className="flex gap-4 overflow-x-auto pb-6">
-        {row.data.map((item) => (
-          <li key={item.id} className="w-36 shrink-0">
-            <RecommendationCard item={item} canAdd={canAdd(item)} onAdd={() => setAdding(item)} onDismiss={() => dismiss.mutate(item.id)} />
+      <ul ref={ref} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+        {row.data.slice(0, columns * ROWS).map((item) => (
+          <li key={item.id} className="min-w-0">
+            <RecommendationCard
+              item={item}
+              libraryName={libraryOf(item)?.name ?? ""}
+              canAdd={libraryOf(item)?.can_add ?? false}
+              onAdd={() => setAdding(item)}
+              onDismiss={() => dismiss(item)}
+            />
           </li>
         ))}
       </ul>

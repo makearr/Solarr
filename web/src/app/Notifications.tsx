@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import { healthMessage } from "@/lib/healthMessage";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
@@ -26,10 +27,13 @@ function readSeen(): number {
  *  imports, newer than what this browser has seen. The warnings go away when their cause does. */
 function useNotificationCentre() {
   const tier = useTier();
+  // The instance checks are the administrator's; anyone else gets only their own failed downloads.
+  const administrator = useIsAdministrator();
   const health = useQuery({
     queryKey: ["system-health"],
     queryFn: () => ok(api.GET("/system/health")),
     refetchInterval: 60_000,
+    enabled: administrator,
   });
   const history = useQuery({
     queryKey: ["history", "notifications"],

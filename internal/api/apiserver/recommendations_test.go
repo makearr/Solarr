@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -22,7 +23,7 @@ func (f *fakeDiscoverPool) List(_ context.Context, query apiserver.DiscoverQuery
 	f.queries = append(f.queries, query)
 	var out []apiserver.DiscoverItem
 	for _, item := range f.items {
-		if item.CategoryID == query.CategoryIDs[0] && int64(len(out)) < query.Limit && (!query.HasCursor || item.Popularity < query.AfterPopularity) {
+		if slices.Contains(query.CategoryIDs, item.CategoryID) && int64(len(out)) < query.Limit && (!query.HasCursor || item.Popularity < query.AfterPopularity) {
 			out = append(out, item)
 		}
 	}
@@ -195,5 +196,34 @@ func TestRecommendations_ALibraryTheCallerHasNoGrantOnIsNotFoundAndMissingFromTh
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/discover/dashboard"))
 	if recorder.Code != http.StatusOK || recorder.Body.String() != "[]\n" {
 		t.Errorf("dashboard = %d %q, want an empty row", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestRecommendations_WithoutALibraryTheFeedSpansEveryLibraryWithDiscoverOn(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	movies, _ := fixture.cache.CreateCategory(t.Context(), "movie", "Movies", 10)
+	series, _ := fixture.cache.CreateCategory(t.Context(), "tv", "Series", 20)
+	off, _ := fixture.cache.CreateCategory(t.Context(), "tv", "Anime", 30)
+	if err := fixture.cache.SetDiscoverEnabled(t.Context(), fixture.clock, true); err != nil {
+		t.Fatal(err)
+	}
+	for id, enabled := range map[int64]bool{movies.ID: true, series.ID: true, off.ID: false} {
+		library, _ := fixture.cache.LibraryDiscover(t.Context(), id)
+		library.Enabled = enabled
+		if err := fixture.cache.SetLibraryDiscover(t.Context(), library); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fixture.discoverPool.items = append(append(discoverItems(movies.ID, 1, 1), discoverItems(series.ID, 1, 10)...), discoverItems(off.ID, 1, 20)...)
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/discover/recommendations"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET = %d, %s", recorder.Code, recorder.Body)
+	}
+	query := fixture.discoverPool.queries[len(fixture.discoverPool.queries)-1]
+	if want := []int64{movies.ID, series.ID}; !reflect.DeepEqual(query.CategoryIDs, want) {
+		t.Errorf("libraries asked = %v, want %v", query.CategoryIDs, want)
 	}
 }

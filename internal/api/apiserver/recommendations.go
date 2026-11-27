@@ -150,19 +150,29 @@ func (s *Server) ListDiscoverLibraries(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, out)
 }
 
-// ListRecommendations answers a page of one library's recommendations.
+// ListRecommendations answers a page of one library's recommendations, or of every library the caller may see when none is named.
 func (s *Server) ListRecommendations(w http.ResponseWriter, r *http.Request, params gen.ListRecommendationsParams) {
 	access, ok := s.discoverReady(w, r)
 	if !ok {
 		return
 	}
-	if _, err := access.Category(params.CategoryId, settings.PermissionRead); err != nil {
-		writeError(w, s.logger, err)
-		return
+	categories := []int64{}
+	if params.CategoryId != nil {
+		if _, err := access.Category(*params.CategoryId, settings.PermissionRead); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+		categories = append(categories, *params.CategoryId)
+	} else {
+		var err error
+		if categories, err = s.discoverCategories(r.Context(), access); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
 	}
 	limit := int64(min(max(derefOr(params.Limit, 40), 1), 100))
 	query := DiscoverQuery{
-		CategoryIDs: []int64{params.CategoryId}, Kind: derefOr(params.Kind, ""), Genre: derefOr(params.Genre, ""), Title: derefOr(params.Q, ""),
+		CategoryIDs: categories, Kind: derefOr(params.Kind, ""), Genre: derefOr(params.Genre, ""), Title: derefOr(params.Q, ""),
 		UserID: access.UserID(), Limit: limit + 1,
 	}
 	if params.Type != nil {
@@ -191,6 +201,21 @@ func (s *Server) ListRecommendations(w http.ResponseWriter, r *http.Request, par
 		page.Items = append(page.Items, recommendationView(item))
 	}
 	writeJSON(w, s.logger, http.StatusOK, page)
+}
+
+// discoverCategories is the libraries with recommendations on that the caller may read.
+func (s *Server) discoverCategories(ctx context.Context, access authz.Access) ([]int64, error) {
+	configured, err := s.auth.Settings.LibraryDiscovers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	categories := []int64{}
+	for _, one := range configured {
+		if one.Enabled && access.CanSee(one.CategoryID) {
+			categories = append(categories, one.CategoryID)
+		}
+	}
+	return categories, nil
 }
 
 // ListRecommendationGenres answers the genre facet of one library.

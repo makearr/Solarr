@@ -49,6 +49,18 @@ func TestGetSystemHealth_RequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestGetSystemHealth_RefusesANonAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "viewer", settings.RoleUser)
+	cookies := fixture.signIn(t, "viewer")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/system/health"))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", recorder.Code)
+	}
+}
+
 // An instance with no library at all cannot do anything, so that is an error
 // rather than a warning.
 func TestGetSystemHealth_ReportsNoLibrary(t *testing.T) {

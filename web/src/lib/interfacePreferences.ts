@@ -41,3 +41,31 @@ export function useFooterItems(): [FooterEntry[], (value: FooterEntry[]) => void
   const [stored, set] = usePreference<FooterEntry[]>("ui.footer_items", [...DEFAULT_FOOTER]);
   return [normaliseFooter(Array.isArray(stored) ? stored : []), set];
 }
+
+/** The dashboard's sections, in their default order; the first two are the administrator's. */
+export const DASHBOARD_WIDGETS = ["setup", "attention", "scanning", "downloads", "discover", "recent", "libraries"] as const;
+export type DashboardWidget = (typeof DASHBOARD_WIDGETS)[number];
+export const ADMINISTRATOR_WIDGETS: ReadonlySet<DashboardWidget> = new Set(["setup", "attention"]);
+export interface DashboardEntry {
+  readonly widget: DashboardWidget;
+  readonly shown: boolean;
+}
+export const DEFAULT_DASHBOARD: readonly DashboardEntry[] = DASHBOARD_WIDGETS.map((widget) => ({ widget, shown: true }));
+
+/** The stored order, unknown widgets dropped and ones added since appended shown. */
+export function normaliseDashboard(stored: readonly DashboardEntry[]): DashboardEntry[] {
+  const known = stored.filter((entry, at) => DASHBOARD_WIDGETS.includes(entry.widget) && stored.findIndex((other) => other.widget === entry.widget) === at);
+  return [...known, ...DEFAULT_DASHBOARD.filter((entry) => !known.some((other) => other.widget === entry.widget))];
+}
+
+/** The caller's dashboard sections in order with whether each shows; Settings -> Web UI. */
+export function useDashboardWidgets(): [DashboardEntry[], (value: DashboardEntry[]) => void] {
+  const [stored, set] = usePreference<DashboardEntry[]>("ui.dashboard_widgets", [...DEFAULT_DASHBOARD]);
+  return [normaliseDashboard(Array.isArray(stored) ? stored : []), set];
+}
+
+/** Whether the administrator closed the setup checklist before finishing it. */
+export function useSetupDismissed(): [boolean, (value: boolean) => void] {
+  const [dismissed, set] = usePreference("ui.setup_dismissed", false);
+  return [dismissed, set];
+}

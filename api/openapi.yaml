@@ -412,7 +412,8 @@ paths:
         configured yet, a root folder that is offline or unwritable, and
         backups that have stopped running. Each check names itself so the
         interface can link somewhere useful, and an empty list means
-        everything checked is fine.
+        everything checked is fine. Administrators only: the checks name
+        configuration and paths.
       responses:
         "200":
           description: Every check that currently has something to say, worst first.
@@ -422,6 +423,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/HealthCheck" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /auth/login:
     post:
@@ -2899,7 +2901,7 @@ paths:
       parameters:
         - name: category_id
           in: query
-          required: true
+          description: One library; absent is every library the caller may see that has recommendations on.
           schema: { type: integer, format: int64 }
         - name: kind
           in: query
