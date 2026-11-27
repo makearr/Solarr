@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Link, useParams, useRouterState, useSearch } from "@tanstack/react-router";
 import {
   Activity,
@@ -341,6 +342,16 @@ function LibraryNode({
     ),
   ];
 
+  // Discover sits above Collections, or after the levels when Collections is hidden.
+  const discoverItem = recommended ? (
+    <li key="discover">
+      <Link to="/discover" search={{ library: library.id }} className={sectionLinkClass(onDiscover && String(discoverLibrary) === categoryId, false)}>
+        <span className="truncate">{t("discover.recommended")}</span>
+      </Link>
+    </li>
+  ) : null;
+  const collectionsAt = entries.findIndex((level) => level.key === "collections");
+
   return (
     <li>
       <div className="flex items-center">
@@ -365,10 +376,12 @@ function LibraryNode({
 
       {!collapsed && isOpen && (
         <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
-          {entries.map((level) => {
+          {entries.map((level, index) => {
             const here = activeId === level.id && activeLevel === level.key;
             return (
-              <li key={`${level.id}:${level.key}`}>
+              <Fragment key={`${level.id}:${level.key}`}>
+              {index === collectionsAt && discoverItem}
+              <li>
                 <Link
                   to="/library/$categoryId/$level"
                   params={{ categoryId: level.id, level: level.key }}
@@ -382,15 +395,10 @@ function LibraryNode({
                   )}
                 </Link>
               </li>
+              </Fragment>
             );
           })}
-          {recommended && (
-            <li>
-              <Link to="/discover" search={{ library: library.id }} className={sectionLinkClass(onDiscover && String(discoverLibrary) === categoryId, false)}>
-                <span className="truncate">{t("discover.recommended")}</span>
-              </Link>
-            </li>
-          )}
+          {collectionsAt < 0 && discoverItem}
           {/* After its own levels every library has the same four entries, each with tabs (2026-10-04). */}
           {librarySections(categoryId, kinds).map((section) => {
             const tab = entryTab(section, { tier, administrator });

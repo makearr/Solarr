@@ -19,16 +19,21 @@ function HashingSwitch() {
     },
   });
   const tier = useTier();
+  const general = useQuery({ queryKey: ["general-settings"], queryFn: () => ok(api.GET("/settings/general")) });
   if (!saved.data) return null;
   const current = saved.data;
+  const previewsOn = general.data?.video_previews === true;
   return (
     <div className="flex flex-col gap-2">
-    <label className="flex items-start gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
+    <label
+      className={`flex items-start gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-xs ${previewsOn ? "opacity-60" : ""}`}
+      title={previewsOn ? t("settings.hashFree") : undefined}
+    >
       <input
         type="checkbox"
         className="mt-0.5 size-3.5"
-        checked={current.enabled}
-        disabled={save.isPending}
+        checked={current.enabled || previewsOn}
+        disabled={save.isPending || previewsOn}
         onChange={(event) => save.mutate({ enabled: event.target.checked })}
       />
       <span className="flex flex-col gap-0.5">

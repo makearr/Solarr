@@ -23,6 +23,7 @@ import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
 import { SubTabs } from "@/ui/SubTabs";
 
 import { Card } from "./SettingsCard";
+import { RunNowButton } from "./RunNowButton";
 
 /** Settings -> General, split apart on the 2026-09-19 review: Libraries, Blocklists, Network,
  *  Metadata. Quality profiles, indexers and download clients live where they are configured. */
@@ -109,6 +110,7 @@ export function GeneralSettings() {
         </fieldset>
       </Card>
       <Card title={t("discover.title")} help={t("settings.recommendationsHelp")}>
+        <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -118,8 +120,11 @@ export function GeneralSettings() {
           />
           {t("settings.recommendations")}
         </label>
+        <RunNowButton keys={["discover_refresh"]} />
+        </div>
       </Card>
       <Card title={t("settings.interface")} help={t("settings.interfaceHelp")}>
+        <div className="flex items-start justify-between gap-3">
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
@@ -133,8 +138,11 @@ export function GeneralSettings() {
             <span className="block text-xs text-ink-muted">{t("settings.showCollectionsHelp")}</span>
           </span>
         </label>
+        <RunNowButton keys={["music_collections", "movie_universes", "tv_franchises", "franchise_link"]} label={t("settings.matchCollections")} />
+        </div>
       </Card>
       <Card title={t("settings.fileChecks")} help={t("settings.fileChecksHelp")}>
+        <div className="flex items-start justify-between gap-3">
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
@@ -148,6 +156,8 @@ export function GeneralSettings() {
             <span className="block text-xs text-ink-muted">{t("settings.verifyFilesHelp")}</span>
           </span>
         </label>
+        <RunNowButton keys={["probe"]} />
+        </div>
       </Card>
       <Card title={t("settings.backgroundWork")} help="Switches for work Solarr does by itself. A search you start yourself works whatever these say.">
         <label className="flex items-start gap-2 text-sm">
@@ -164,12 +174,12 @@ export function GeneralSettings() {
           </span>
         </label>
         <div className="flex items-start justify-between gap-3">
-        <label className="flex items-start gap-2 text-sm">
+        <label className={`flex items-start gap-2 text-sm ${general.data?.video_previews === true ? "opacity-60" : ""}`} title={general.data?.video_previews === true ? t("settings.hashFree") : undefined}>
           <input
             type="checkbox"
             className="mt-1"
             disabled={!general.data || change.isPending || general.data?.video_previews === true}
-            checked={general.data?.video_hashing ?? false}
+            checked={general.data?.video_hashing === true || general.data?.video_previews === true}
             onChange={(event) => change.mutate({ video_hashing: event.target.checked })}
           />
           <span>

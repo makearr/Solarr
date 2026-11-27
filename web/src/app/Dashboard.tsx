@@ -23,7 +23,7 @@ type LibraryEntry = components["schemas"]["Library"];
 // Seerr's own landing shape, asked for 2026-09-13: find something or add
 // something, then what has just arrived. Ten is what fits one poster row on a
 // wide screen without a second query.
-const RECENT_LIMIT = 10;
+const RECENT_LIMIT = 5;
 
 // A scan moves in batches; a slower poll than the status bar is enough for a figure this coarse.
 const SCAN_REFRESH_MS = 10_000;
@@ -161,6 +161,8 @@ export function Dashboard() {
           <DashboardDownloads />
         </Section>
 
+        <DiscoverRow />
+
         <Section title={t("dashboard.recentlyAdded")}>
           {recent.isLoading && <Note>Loading…</Note>}
           {recent.error != null && <Note>{t("dashboard.recentlyAddedCouldNot")}</Note>}
@@ -185,7 +187,6 @@ export function Dashboard() {
           )}
         </Section>
 
-        <DiscoverRow />
 
         <Section title="Libraries">
           {libraries.data && libraries.data.length > 0 ? (
