@@ -1,8 +1,10 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight, CircleUser } from "lucide-react";
 
 import { api, ok } from "@/api/client";
+import { t } from "@/lib/i18n";
 import { MODES, SCHEMES, type Mode } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
 import { useSetMyTier, type Tier } from "@/lib/useTier";
@@ -18,7 +20,7 @@ const TIER_RANK: Record<Tier, number> = { normal: 0, advanced: 1, expert: 2 };
 
 const itemStyle = "flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none data-[highlighted]:bg-canvas";
 
-/** Light, dark or the OS's choice, and the colour scheme; the top bar keeps only the quick light/dark switch. */
+/** Light, dark or the OS's choice, and the colour scheme; the user menu holds both. */
 function Appearance() {
   const theme = useTheme();
   const scheme = SCHEMES.find((entry) => entry.id === theme.scheme);
@@ -105,6 +107,13 @@ export function UserMenu() {
           sideOffset={4}
           className="z-50 min-w-48 rounded-md border border-border-subtle bg-surface p-1 text-sm shadow-lg"
         >
+          <DropdownMenu.Item asChild>
+            <Link to="/settings/user" className={itemStyle}>{t("nav.profile")}</Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild>
+            <Link to="/settings/webui" className={itemStyle}>{t("nav.preferences")}</Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           <Appearance />
           <DropdownMenu.Label className="px-2 py-1 text-xs text-ink-muted">Interface level</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={tier} onValueChange={(value) => setTier.mutate(value as Tier)}>

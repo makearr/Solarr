@@ -9,8 +9,8 @@ export interface SectionTab {
   readonly tier: Tier;
   /** Only an administrator may open it. */
   readonly administrator?: boolean;
-  /** A small heading before this tab, for a long row. */
-  readonly heading?: string;
+  /** The Settings sub-group the page sits in. */
+  readonly group?: SettingsGroup;
 }
 
 /** A sidebar entry and the tabs behind it. */
@@ -33,60 +33,48 @@ export const ACTIVITY: Section = {
   ],
 };
 
-export const STORAGE: Section = {
-  key: "storage",
-  label: "Storage",
-  tabs: [
-    { label: "Folders", path: "/storage/folders", tier: "advanced", administrator: true },
-    { label: "Import", path: "/storage/import", tier: "advanced", administrator: true },
-    { label: "Duplicates", path: "/storage/duplicates", tier: "advanced", administrator: true },
-    { label: "Rename", path: "/storage/rename", tier: "advanced", administrator: true },
-    { label: "Recycle bin", path: "/storage/recycle-bin", tier: "advanced", administrator: true },
-    // Every library's waiting files at once; one library's are under its own Files.
-    { label: "Unidentified", path: "/unidentified", tier: "advanced" },
-  ],
-};
-
-export const CONNECTIONS: Section = {
-  key: "connections",
-  label: "Connections",
-  tabs: [
-    { label: "Indexers", path: "/connections/indexers", tier: "advanced", administrator: true },
-    { label: "Download clients", path: "/connections/downloaders", tier: "advanced", administrator: true },
-    { label: "Import lists", path: "/connections/import-lists", tier: "advanced", administrator: true },
-    { label: "Media servers", path: "/connections/media-servers", tier: "advanced", administrator: true },
-    { label: "Webhooks", path: "/connections/webhooks", tier: "advanced", administrator: true },
-    { label: "Arr", path: "/connections/arr", tier: "expert", administrator: true },
-  ],
-};
+/** Settings' four sub-groups in sidebar order; a tab names its group. */
+export const SETTINGS_GROUPS = ["Media", "Connections", "Storage", "System"] as const;
+export type SettingsGroup = (typeof SETTINGS_GROUPS)[number];
 
 export const SETTINGS: Section = {
   key: "settings",
   label: "Settings",
   tabs: [
-    { label: "General", path: "/settings/general", tier: "normal", administrator: true },
-    { label: "Libraries", path: "/settings/libraries", tier: "normal", administrator: true },
-    { label: "Tags", path: "/settings/tags", tier: "normal", administrator: true },
-    { label: "Blocklists", path: "/settings/blocklists", tier: "expert", administrator: true },
-    { label: "User", path: "/settings/user", tier: "normal" },
-    { label: "Web UI", path: "/settings/webui", tier: "normal" },
-    { label: "Metadata", path: "/settings/metadata", tier: "normal", administrator: true },
-    { label: "Discover", path: "/settings/discover", tier: "normal", administrator: true },
-    { label: "Providers", path: "/settings/providers", tier: "advanced", administrator: true },
-    { label: "Quality", path: "/quality-profiles", tier: "normal", administrator: true },
-    { label: "Transcode", path: "/settings/transcode", tier: "normal", administrator: true },
-    { label: "Player", path: "/settings/player", tier: "normal", administrator: true },
-    { label: "Network", path: "/settings/network", tier: "advanced", administrator: true },
-    { label: "Scheduler", path: "/settings/scheduler", tier: "normal", administrator: true },
-    { label: "Backups", path: "/settings/backups", tier: "normal", administrator: true },
-    { label: "Cache", path: "/settings/cache", tier: "expert", administrator: true },
-    { label: "Disk", path: "/settings/disk", tier: "expert", administrator: true },
-    { label: "Database", path: "/settings/database", tier: "expert", administrator: true },
-    { label: "Logs", path: "/settings/logs", tier: "advanced", administrator: true },
+    { group: "Media", label: "Libraries", path: "/settings/libraries", tier: "normal", administrator: true },
+    { group: "Media", label: "Quality", path: "/quality-profiles", tier: "normal", administrator: true },
+    { group: "Media", label: "Metadata", path: "/settings/metadata", tier: "normal", administrator: true },
+    { group: "Media", label: "Discover", path: "/settings/discover", tier: "normal", administrator: true },
+    { group: "Media", label: "Transcode", path: "/settings/transcode", tier: "normal", administrator: true },
+    { group: "Media", label: "Player", path: "/settings/player", tier: "normal", administrator: true },
+    { group: "Media", label: "Tags", path: "/settings/tags", tier: "normal", administrator: true },
+    { group: "Media", label: "Blocklists", path: "/settings/blocklists", tier: "expert", administrator: true },
+    { group: "Connections", label: "Indexers", path: "/connections/indexers", tier: "advanced", administrator: true },
+    { group: "Connections", label: "Download clients", path: "/connections/downloaders", tier: "advanced", administrator: true },
+    { group: "Connections", label: "Import lists", path: "/connections/import-lists", tier: "advanced", administrator: true },
+    { group: "Connections", label: "Media servers", path: "/connections/media-servers", tier: "advanced", administrator: true },
+    { group: "Connections", label: "Webhooks", path: "/connections/webhooks", tier: "advanced", administrator: true },
+    { group: "Connections", label: "Arr", path: "/connections/arr", tier: "expert", administrator: true },
+    { group: "Storage", label: "Folders", path: "/storage/folders", tier: "advanced", administrator: true },
+    { group: "Storage", label: "Import", path: "/storage/import", tier: "advanced", administrator: true },
+    { group: "Storage", label: "Duplicates", path: "/storage/duplicates", tier: "advanced", administrator: true },
+    { group: "Storage", label: "Rename", path: "/storage/rename", tier: "advanced", administrator: true },
+    { group: "Storage", label: "Recycle bin", path: "/storage/recycle-bin", tier: "advanced", administrator: true },
+    // Every library's waiting files at once; one library's are under its own Files.
+    { group: "Storage", label: "Unidentified", path: "/unidentified", tier: "advanced" },
+    { group: "System", label: "General", path: "/settings/general", tier: "normal", administrator: true },
+    { group: "System", label: "Network", path: "/settings/network", tier: "advanced", administrator: true },
+    { group: "System", label: "Scheduler", path: "/settings/scheduler", tier: "normal", administrator: true },
+    { group: "System", label: "Backups", path: "/settings/backups", tier: "normal", administrator: true },
+    { group: "System", label: "Cache", path: "/settings/cache", tier: "expert", administrator: true },
+    { group: "System", label: "Disk", path: "/settings/disk", tier: "expert", administrator: true },
+    { group: "System", label: "Database", path: "/settings/database", tier: "expert", administrator: true },
+    { group: "System", label: "Logs", path: "/settings/logs", tier: "advanced", administrator: true },
+    { group: "System", label: "Providers", path: "/settings/providers", tier: "advanced", administrator: true },
   ],
 };
 
-export const GLOBAL_SECTIONS: readonly Section[] = [ACTIVITY, STORAGE, CONNECTIONS, SETTINGS];
+export const GLOBAL_SECTIONS: readonly Section[] = [ACTIVITY, SETTINGS];
 
 /** A library's four entries after its own levels: what it lacks, what happened and how it stands, its files, its
  *  configuration. */

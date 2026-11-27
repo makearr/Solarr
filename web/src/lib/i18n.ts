@@ -1637,6 +1637,19 @@ const catalogue = {
   "webhooks.tokenDone": "I have copied it",
   "webhooks.copy": "Copy",
   "webhooks.copied": "Copied",
+  "libraryTabs.browse": "Browse",
+  "nav.administratorOnly": "Only an administrator can change this. Your own account is in the user menu, top right.",
+  "nav.browse": "Browse",
+  "nav.libraries": "Libraries",
+  "nav.manage": "Manage",
+  "nav.dashboard": "Dashboard",
+  "nav.calendar": "Calendar",
+  "nav.people": "People",
+  "nav.addLibrary": "Add library",
+  "nav.openMenu": "Open the menu",
+  "nav.closeMenu": "Close the menu",
+  "nav.profile": "User profile",
+  "nav.preferences": "Web UI preferences",
 } as const;
 
 export type MessageKey = keyof typeof catalogue;

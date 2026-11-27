@@ -330,7 +330,7 @@ const routes = [
     getParentRoute: () => rootRoute,
     path: "/settings",
     beforeLoad: () => {
-      throw redirect({ to: "/settings/general" });
+      throw redirect({ to: "/settings/libraries" });
     },
   }),
   // General was split on the 2026-09-19 review; old links land on the part they meant.

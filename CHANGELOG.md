@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Navigation: the sidebar is grouped into Browse, Libraries and Manage; each library lists only its levels, and its Recommended, Wanted, Insights, Files, Watched and Settings are a tab row above its pages. Connections and Storage moved into Settings, which has four collapsible groups (Media, Connections, Storage, System). User profile, Web UI preferences and the theme are in the user menu. The sidebar badges show only what needs action (downloads, unidentified files, health issues), and on a narrow screen it is a drawer opened from the header.
 - Books, audiobooks and comics: when a title exists in several language editions (one shared rule), the one the file says it is in (an epub's language, a language tag in its name, a comic's ComicInfo) is chosen, then the one in your preferred language. For comics: when a title exists in several language editions, the one the file says it is in (its ComicInfo language or a language in its names) is chosen, then the one in your preferred language, before the provider's first hit; a title that language settles is no longer held back as ambiguous.
 - Settings, Transcode: the lanes are called Video, Video HW and Audio, and comics and ebooks share one Books lane; a comic or ebook target no longer warns that it "names no bitrate".
 - Comic and epub files are written with maximum Deflate compression.
