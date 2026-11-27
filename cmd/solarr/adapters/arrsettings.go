@@ -215,7 +215,7 @@ func arrNaming(
 	add("colon_replacement", "Colon replacement", current.ColonReplacement, next.ColonReplacement)
 	was, now := module.NamingExamples(current), module.NamingExamples(next)
 	for index := range min(len(was), len(now)) {
-		add("naming_example_"+strconv.Itoa(index), now[index].Label, was[index].Path, now[index].Path)
+		add("naming_example_"+strconv.Itoa(index), "Example name: "+now[index].Label, was[index].Path, now[index].Path)
 	}
 	if len(unsupported) > 0 {
 		changes = append(changes, apiserver.ArrSettingChange{

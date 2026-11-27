@@ -41,3 +41,24 @@ func TestTranslateArrTemplate_CarriesWhatSolarrKnowsAndNamesWhatItDrops(t *testi
 		}
 	}
 }
+
+// Title and CleanTitle are different tokens in every app: a template keeps the one it names.
+func TestTranslateArrTemplate_NeverTurnsATitleIntoACleanTitleOrBack(t *testing.T) {
+	known := map[string]bool{"Release Year": true}
+	pairs := [][2]string{
+		{"Movie Title", "Movie CleanTitle"}, {"Series Title", "Series CleanTitle"}, {"Episode Title", "Episode CleanTitle"},
+		{"Book Title", "Book CleanTitle"}, {"Author Name", "Author CleanName"}, {"Scene Title", "Scene CleanTitle"},
+		{"Studio Name", "Studio CleanName"}, {"Artist Name", "Artist CleanName"}, {"Album Title", "Album CleanTitle"},
+		{"Track Title", "Track CleanTitle"}, {"Movie TitleThe", "Movie CleanTitleThe"}, {"Series TitleThe", "Series CleanTitleThe"},
+	}
+	for _, pair := range pairs {
+		known[pair[0]], known[pair[1]] = true, true
+	}
+	for _, pair := range pairs {
+		for _, name := range pair {
+			if got := naming.TranslateArrTemplate("{"+name+"} ({Release Year})", known).Template; got != "{"+name+"} ({Release Year})" {
+				t.Errorf("%s became %q", name, got)
+			}
+		}
+	}
+}

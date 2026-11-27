@@ -74,3 +74,22 @@ func TestLanguagesAreReadFromRadarrProfilesAndSonarrLanguageProfiles(t *testing.
 		t.Errorf("sonarr languages = %v, %v, want de", sonarr, err)
 	}
 }
+
+func TestNamingReadsOnlyTheFormatFieldsAndNotTheExamplesOrFlags(t *testing.T) {
+	transport := &recordingTransport{responses: map[string]string{
+		"/api/v3/config/naming": `{"id":1,"renameMovies":true,"replaceIllegalCharacters":false,"colonReplacementFormat":"smart","customColonReplacementFormat":"","standardMovieFormat":"{Movie Title} ({Release Year})","movieFolderFormat":"{Movie Title}","includeQuality":true,"replaceSpaces":false,"movieExample":"The Movie Title's! (2010)","editionExample":"The Movie Title's! (2010) {edition-Director's Cut}","standardEpisodeFormat":"","seriesFolderFormat":"","standardEpisodeExample":"S01E01","seriesFolderExample":"Series","multiEpisodeStyle":0}`,
+	}, puts: map[string]string{}}
+	lidarr := arrimport.NewLidarrClient(newTestClient(t, transport), "http://arr.local", "key")
+	got, err := lidarr.Radarr().Naming(t.Context())
+	want := arrimport.Naming{
+		RenameFiles: true, ColonReplacement: 4,
+		Formats: map[string]string{"standard_movie": "{Movie Title} ({Release Year})", "movie_folder": "{Movie Title}"},
+	}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("radarr = %+v, %v, want %+v", got, err, want)
+	}
+	sonarr, err := lidarr.Sonarr().Naming(t.Context())
+	if err != nil || len(sonarr.Formats) != 6 || sonarr.Formats["standard_episode"] != "" {
+		t.Errorf("sonarr = %+v, %v, want only its six format slots, none an example", sonarr, err)
+	}
+}
