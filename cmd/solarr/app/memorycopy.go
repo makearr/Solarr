@@ -96,6 +96,7 @@ func syncAfterRequests(ctx context.Context, wall clock.Clock, debounce time.Dura
 type diskWorkRunLog struct {
 	jobs.RunLog
 	memory *memoryCopy
+	runs   *runCounts
 }
 
 var jobsThatChangeFiles = map[string]bool{
@@ -105,6 +106,9 @@ var jobsThatChangeFiles = map[string]bool{
 
 func (l diskWorkRunLog) RecordRun(jobType string, start, end time.Time) {
 	l.RunLog.RecordRun(jobType, start, end)
+	if l.runs != nil {
+		l.runs.add(jobType)
+	}
 	if jobsThatChangeFiles[jobType] {
 		l.memory.requestSync()
 	}

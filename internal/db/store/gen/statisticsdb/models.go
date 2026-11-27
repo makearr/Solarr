@@ -74,6 +74,14 @@ type History struct {
 	EventID       int64
 }
 
+type MetricPoint struct {
+	Resolution int64
+	At         int64
+	Series     string
+	Scope      string
+	Value      float64
+}
+
 type SearchLog struct {
 	ID            int64
 	At            int64

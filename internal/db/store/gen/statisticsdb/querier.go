@@ -27,6 +27,7 @@ type Querier interface {
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	// The oldest page of rows before a time, removed.
 	DeleteDownloadSpeedBefore(ctx context.Context, arg DeleteDownloadSpeedBeforeParams) (int64, error)
+	DeleteMetricPointsBefore(ctx context.Context, arg DeleteMetricPointsBeforeParams) (int64, error)
 	// The oldest page of searches before a time, removed.
 	DeleteSearchLogBefore(ctx context.Context, arg DeleteSearchLogBeforeParams) (int64, error)
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
@@ -47,6 +48,8 @@ type Querier interface {
 	ListDecisionsToRetire(ctx context.Context, arg ListDecisionsToRetireParams) ([]ListDecisionsToRetireRow, error)
 	// One page of history, newest first, of one work or of every one with work_id 0.
 	ListHistory(ctx context.Context, arg ListHistoryParams) ([]History, error)
+	ListMetricPoints(ctx context.Context, arg ListMetricPointsParams) ([]MetricPoint, error)
+	ListMetricScopes(ctx context.Context) ([]ListMetricScopesRow, error)
 	// One library's current figures of a metric.
 	ListStatRollupForCategory(ctx context.Context, arg ListStatRollupForCategoryParams) ([]StatRollup, error)
 	ListTaskHoursSince(ctx context.Context, since int64) ([]TaskHour, error)
@@ -54,9 +57,12 @@ type Querier interface {
 	MoveHistoryToWork(ctx context.Context, arg MoveHistoryToWorkParams) error
 	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
+	// Averages the minutes of finished hours into hour rows.
+	RollUpMetricMinutes(ctx context.Context, arg RollUpMetricMinutesParams) error
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	// Candidates and decisions. Column lists follow table order.
 	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
+	UpsertMetricPoint(ctx context.Context, arg UpsertMetricPointParams) error
 }
 
 var _ Querier = (*Queries)(nil)

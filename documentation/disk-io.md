@@ -25,3 +25,7 @@ Not gated: ffmpeg's reads for a converted stream (ionice only), and metadata, se
 ## Transcoding
 
 `transcode.file` has the last disk class (after previews). The job itself takes no turn; the stream probe of the source and of the result each take one through `iogate.OnDisk`. ffmpeg reads and writes outside the gate under `ionice` idle. The watchdog treats a conversion as hung after 60 minutes without a progress report (ffmpeg itself is ended after 10 minutes of silence).
+
+## Statistics over time
+
+`cmd/solarr/app/metrics.go` writes one row per figure every minute into `statistics.db` (`metric_point`): the process's own CPU, resident memory and IO from `/proc/self` (`internal/platform/procstat`, through `fsx`), the passive disk and network timings above, scans and metadata jobs finished per minute (by the job's pool), and every ten minutes each library's items, files and bytes. Minute rows are kept 48 hours, an hourly job rolls them up into hour rows kept 90 days (`statistics.Metrics.Maintain`). Manage > Statistics (`/statistics`, administrators) draws them: `GET /statistics/system/series` and `/statistics/system/scopes`.

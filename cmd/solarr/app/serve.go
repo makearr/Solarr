@@ -193,6 +193,9 @@ type process struct {
 	watch *watch.Service
 	// taskHours keeps how long each kind of job ran in each hour, for the scheduler's heatmap.
 	taskHours *statistics.TaskHours
+	// metrics keeps the measured figures minute by minute; runs counts the jobs that finished since the last minute.
+	metrics *statistics.Metrics
+	runs    runCounts
 	// probeJob is the one sweep that reads file details and makes video pictures.
 	probeJob *probe.Job
 	// scanStarted is true once the first scheduled scan after start has been asked for.
@@ -643,13 +646,14 @@ func (p *process) startJobs(ctx context.Context) error {
 	p.disks.Timings = p.timings.rec.Snapshot
 	p.diskTurns = newDiskTurns(p.disks, p.disks.Monitor, wall)
 	p.taskHours = statistics.NewTaskHours(p.statistics)
+	p.metrics = statistics.NewMetrics(p.statistics)
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
 		Owner:    owner,
 		Logger:   p.logger,
 		Running:  p.running,
 		DiskGate: p.diskTurns,
 		Watchdog: p.diskTurns,
-		RunLog:   diskWorkRunLog{RunLog: p.taskHours, memory: p.memory},
+		RunLog:   diskWorkRunLog{RunLog: p.taskHours, memory: p.memory, runs: &p.runs},
 		Pauses:   p.pauses,
 	})
 	if err := p.registerScanJob(ctx, registry, executor); err != nil {
@@ -800,6 +804,7 @@ func (p *process) startServer(ctx context.Context) error {
 	// Startup runs are per task and switchable on the Scheduler screen (2026-09-19 review).
 	p.closeOrphanedImportSessions(ctx)
 	p.startTaskHistory(background)
+	p.startMetrics(background)
 	p.startLibraryWatch(background)
 	p.startRestoreGate(background)
 	p.startSchedulers(background)
@@ -931,6 +936,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		DiskManager:    p.disks,
 		TaskHistory:    adapters.TaskHistory{Log: p.taskHours},
+		SystemMetrics:  adapters.SystemMetrics{Metrics: p.metrics, Clock: clock.NewSystem()},
 		PlaybackTurns:  p.diskTurns.PlaybackTurns(),
 		DatabaseMemory: adapters.DatabaseMemory{Stores: []*store.Store{p.library, p.settings, p.jobs, p.statistics, p.metadata}},
 		LibrarySize:    library.NewCounters(p.library),

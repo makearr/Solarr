@@ -769,6 +769,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/statistics/system/scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which of Solarr's own figures have been measured, and of what. */
+        get: operations["getSystemMetricScopes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/statistics/system/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One measured series over a span, a point per minute for up to two days and per hour beyond. */
+        get: operations["getSystemMetricSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schedules/paused": {
         parameters: {
             query?: never;
@@ -7421,6 +7455,31 @@ export interface components {
              */
             measured_at?: number;
             error: string;
+        };
+        SystemMetricScope: {
+            /** @description What is measured, for example process.cpu_percent, disk.latency_ms, net.bytes_per_sec, jobs.scans_per_min, library.items. */
+            series: string;
+            /** @description A library id, a root folder path or a provider; empty for the whole process. */
+            scope: string;
+        };
+        SystemMetricScopes: {
+            scopes: components["schemas"]["SystemMetricScope"][];
+        };
+        SystemMetricPoint: {
+            /**
+             * Format: int64
+             * @description Unix seconds of the start of the bucket.
+             */
+            at: number;
+            /** Format: double */
+            value: number;
+        };
+        SystemMetricSeries: {
+            series: string;
+            scope: string;
+            /** @description Seconds each point covers (60 or 3600). */
+            resolution_seconds: number;
+            points: components["schemas"]["SystemMetricPoint"][];
         };
         /** @description How Solarr's own calls to one root folder answered, taken from the work itself and never from a probe. */
         DiskTiming: {
@@ -15073,6 +15132,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskHistory"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getSystemMetricScopes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row per series and scope. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemMetricScopes"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getSystemMetricSeries: {
+        parameters: {
+            query: {
+                series: string;
+                /** @description A library id, a root folder path or a provider; empty for the whole process. */
+                scope?: string;
+                range?: "hour" | "6hours" | "day" | "week" | "month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The points, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemMetricSeries"];
                 };
             };
             401: components["responses"]["Problem"];

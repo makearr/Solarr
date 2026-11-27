@@ -269,6 +269,8 @@ type Config struct {
 	DiskManager DiskManager
 	// TaskHistory answers the scheduler's heatmap of the last seven days. Optional.
 	TaskHistory TaskHistory
+	// SystemMetrics answers Manage > Statistics' charts of what Solarr measured of itself. Optional.
+	SystemMetrics SystemMetrics
 	// PlaybackTurns makes each read of a file served to a viewer a turn on its disk. Optional.
 	PlaybackTurns iogate.Turns
 	// ArrCompanion is told of each add when Solarr runs as an *Arr's companion. Optional.
@@ -464,6 +466,7 @@ type Server struct {
 	diskManager             DiskManager
 	playbackTurns           iogate.Turns
 	taskHistory             TaskHistory
+	systemMetrics           SystemMetrics
 	databaseAdmin           DatabaseAdmin
 	arrCompanion            ArrCompanion
 	afterWrite              func()
@@ -633,6 +636,7 @@ func New(config Config) (*Server, error) {
 		diskManager:             config.DiskManager,
 		playbackTurns:           config.PlaybackTurns,
 		taskHistory:             config.TaskHistory,
+		systemMetrics:           config.SystemMetrics,
 		databaseAdmin:           config.DatabaseAdmin,
 		arrCompanion:            config.ArrCompanion,
 		afterWrite:              config.AfterWrite,
@@ -1110,6 +1114,8 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/streaming", server.UpdateStreaming)
 			secured.Post("/streaming/detect", server.DetectStreamingHardware)
 			secured.Get("/schedules/history", server.GetTaskHistory)
+			secured.Get("/statistics/system/scopes", server.GetSystemMetricScopes)
+			secured.Get("/statistics/system/series", wrapped.GetSystemMetricSeries)
 			secured.Get("/settings/disk", server.GetDiskSettings)
 			secured.Put("/settings/disk", server.SetDiskOverrides)
 			secured.Post("/settings/disk/measure", server.MeasureDisks)

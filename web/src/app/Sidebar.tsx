@@ -11,6 +11,7 @@ import {
   Compass,
   Cable,
   Users,
+  ChartLine,
   type LucideIcon,
 } from "lucide-react";
 
@@ -182,6 +183,9 @@ export function Sidebar({ expanded = false }: { expanded?: boolean }) {
         )}
         {administrator && (
           <NavLink to="/users" icon={Users} label={t("nav.users")} collapsed={collapsed} active={path === "/users"} />
+        )}
+        {administrator && (
+          <NavLink to="/statistics" icon={ChartLine} label={t("nav.statistics")} collapsed={collapsed} active={path === "/statistics"} />
         )}
         {settingsEntry && collapsed && (
           <NavLink to={settingsEntry.path} icon={Settings} label={SETTINGS.label} collapsed active={inSettings} />

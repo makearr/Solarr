@@ -1559,6 +1559,15 @@ const (
 	SetQueueClientPausedParamsActionResume SetQueueClientPausedParamsAction = "resume"
 )
 
+// Defines values for GetSystemMetricSeriesParamsRange.
+const (
+	GetSystemMetricSeriesParamsRangeDay     GetSystemMetricSeriesParamsRange = "day"
+	GetSystemMetricSeriesParamsRangeHour    GetSystemMetricSeriesParamsRange = "hour"
+	GetSystemMetricSeriesParamsRangeMonth   GetSystemMetricSeriesParamsRange = "month"
+	GetSystemMetricSeriesParamsRangeN6hours GetSystemMetricSeriesParamsRange = "6hours"
+	GetSystemMetricSeriesParamsRangeWeek    GetSystemMetricSeriesParamsRange = "week"
+)
+
 // Defines values for ListLogsParamsLevel.
 const (
 	ListLogsParamsLevelDebug ListLogsParamsLevel = "debug"
@@ -7518,6 +7527,37 @@ type StreamingSettings struct {
 // StreamingSettingsHardware defines model for StreamingSettings.Hardware.
 type StreamingSettingsHardware string
 
+// SystemMetricPoint defines model for SystemMetricPoint.
+type SystemMetricPoint struct {
+	// At Unix seconds of the start of the bucket.
+	At    int64   `json:"at"`
+	Value float64 `json:"value"`
+}
+
+// SystemMetricScope defines model for SystemMetricScope.
+type SystemMetricScope struct {
+	// Scope A library id, a root folder path or a provider; empty for the whole process.
+	Scope string `json:"scope"`
+
+	// Series What is measured, for example process.cpu_percent, disk.latency_ms, net.bytes_per_sec, jobs.scans_per_min, library.items.
+	Series string `json:"series"`
+}
+
+// SystemMetricScopes defines model for SystemMetricScopes.
+type SystemMetricScopes struct {
+	Scopes []SystemMetricScope `json:"scopes"`
+}
+
+// SystemMetricSeries defines model for SystemMetricSeries.
+type SystemMetricSeries struct {
+	Points []SystemMetricPoint `json:"points"`
+
+	// ResolutionSeconds Seconds each point covers (60 or 3600).
+	ResolutionSeconds int    `json:"resolution_seconds"`
+	Scope             string `json:"scope"`
+	Series            string `json:"series"`
+}
+
 // TVProvider defines model for TVProvider.
 type TVProvider struct {
 	// Adds What this provider contributes to a series.
@@ -9863,6 +9903,18 @@ type CreateFirstAdministratorJSONBody struct {
 	Username  string  `json:"username"`
 }
 
+// GetSystemMetricSeriesParams defines parameters for GetSystemMetricSeries.
+type GetSystemMetricSeriesParams struct {
+	Series string `form:"series" json:"series"`
+
+	// Scope A library id, a root folder path or a provider; empty for the whole process.
+	Scope *string                           `form:"scope,omitempty" json:"scope,omitempty"`
+	Range *GetSystemMetricSeriesParamsRange `form:"range,omitempty" json:"range,omitempty"`
+}
+
+// GetSystemMetricSeriesParamsRange defines parameters for GetSystemMetricSeries.
+type GetSystemMetricSeriesParamsRange string
+
 // BrowsePathParams defines parameters for BrowsePath.
 type BrowsePathParams struct {
 	Path *string `form:"path,omitempty" json:"path,omitempty"`
@@ -11986,6 +12038,12 @@ type ServerInterface interface {
 	// Create the administrator account, once.
 	// (POST /setup/admin)
 	CreateFirstAdministrator(w http.ResponseWriter, r *http.Request)
+	// Which of Solarr's own figures have been measured, and of what.
+	// (GET /statistics/system/scopes)
+	GetSystemMetricScopes(w http.ResponseWriter, r *http.Request)
+	// One measured series over a span, a point per minute for up to two days and per hour beyond.
+	// (GET /statistics/system/series)
+	GetSystemMetricSeries(w http.ResponseWriter, r *http.Request, params GetSystemMetricSeriesParams)
 	// List a directory, for picking a path by hand. Administrator only.
 	// (GET /storage/browse)
 	BrowsePath(w http.ResponseWriter, r *http.Request, params BrowsePathParams)
@@ -14485,6 +14543,18 @@ func (_ Unimplemented) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 // Create the administrator account, once.
 // (POST /setup/admin)
 func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Which of Solarr's own figures have been measured, and of what.
+// (GET /statistics/system/scopes)
+func (_ Unimplemented) GetSystemMetricScopes(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One measured series over a span, a point per minute for up to two days and per hour beyond.
+// (GET /statistics/system/series)
+func (_ Unimplemented) GetSystemMetricSeries(w http.ResponseWriter, r *http.Request, params GetSystemMetricSeriesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -26965,6 +27035,86 @@ func (siw *ServerInterfaceWrapper) CreateFirstAdministrator(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// GetSystemMetricScopes operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemMetricScopes(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemMetricScopes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSystemMetricSeries operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemMetricSeries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSystemMetricSeriesParams
+
+	// ------------- Required query parameter "series" -------------
+
+	if paramValue := r.URL.Query().Get("series"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "series"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "series", r.URL.Query(), &params.Series)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "series", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "scope", r.URL.Query(), &params.Scope)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "range" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "range", r.URL.Query(), &params.Range)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "range", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemMetricSeries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // BrowsePath operation middleware
 func (siw *ServerInterfaceWrapper) BrowsePath(w http.ResponseWriter, r *http.Request) {
 
@@ -31338,6 +31488,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/setup/admin", wrapper.CreateFirstAdministrator)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/statistics/system/scopes", wrapper.GetSystemMetricScopes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/statistics/system/series", wrapper.GetSystemMetricSeries)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/storage/browse", wrapper.BrowsePath)

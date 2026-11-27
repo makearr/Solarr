@@ -1150,6 +1150,36 @@ paths:
               schema: { $ref: "#/components/schemas/TaskHistory" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /statistics/system/scopes:
+    get:
+      operationId: getSystemMetricScopes
+      tags: [statistics]
+      summary: Which of Solarr's own figures have been measured, and of what.
+      responses:
+        "200":
+          description: One row per series and scope.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemMetricScopes" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /statistics/system/series:
+    get:
+      operationId: getSystemMetricSeries
+      tags: [statistics]
+      summary: One measured series over a span, a point per minute for up to two days and per hour beyond.
+      parameters:
+        - { name: series, in: query, required: true, schema: { type: string } }
+        - { name: scope, in: query, required: false, schema: { type: string }, description: "A library id, a root folder path or a provider; empty for the whole process." }
+        - { name: range, in: query, required: false, schema: { type: string, enum: [hour, 6hours, day, week, month], default: day } }
+      responses:
+        "200":
+          description: The points, oldest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemMetricSeries" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /schedules/paused:
     put:
       operationId: setAllSchedulesPaused
@@ -11281,6 +11311,31 @@ components:
         samples: { type: integer }
         measured_at: { type: integer, format: int64, description: Unix seconds; absent when never measured. }
         error: { type: string }
+    SystemMetricScope:
+      type: object
+      required: [series, scope]
+      properties:
+        series: { type: string, description: "What is measured, for example process.cpu_percent, disk.latency_ms, net.bytes_per_sec, jobs.scans_per_min, library.items." }
+        scope: { type: string, description: "A library id, a root folder path or a provider; empty for the whole process." }
+    SystemMetricScopes:
+      type: object
+      required: [scopes]
+      properties:
+        scopes: { type: array, items: { $ref: "#/components/schemas/SystemMetricScope" } }
+    SystemMetricPoint:
+      type: object
+      required: [at, value]
+      properties:
+        at: { type: integer, format: int64, description: Unix seconds of the start of the bucket. }
+        value: { type: number, format: double }
+    SystemMetricSeries:
+      type: object
+      required: [series, scope, resolution_seconds, points]
+      properties:
+        series: { type: string }
+        scope: { type: string }
+        resolution_seconds: { type: integer, description: Seconds each point covers (60 or 3600). }
+        points: { type: array, items: { $ref: "#/components/schemas/SystemMetricPoint" } }
     DiskTiming:
       type: object
       required: [path, ops_per_min, recent_ms, baseline_ms, degradation, bytes_per_sec]

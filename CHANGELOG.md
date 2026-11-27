@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Manage > Statistics: charts, per minute for two days and per hour for 90 days, of Solarr's own CPU, memory and IO, scans and metadata jobs finished per minute, each folder's disk latency and throughput, internet bandwidth and latency per provider, and each library's items, files and storage. Schema: new `metric_point` table in statistics.db (migration 0010).
 - Solarr measures its own disk calls per folder and its requests per provider, with no probe traffic: Settings > Disk shows how each folder answers against its usual speed, and scans and file checks start fewer jobs at once while a disk runs well below its normal.
 - A work shows one age chip on a single scale (All ages, 6+, 12+, 16+, 18+) whatever rating system its source uses; adult content is 18+.
 - Music libraries have kinds (General, Classical, Soundtracks, Kids, Live and DJ mixes), audiobook libraries gain Audio drama, Lectures and courses, Non-fiction and Podcasts, book libraries gain Light novels, Non-fiction and reference, Magazines and Adult fiction (hidden from restricted users); Discover keeps an item no library rule claims out of a specialised library (documentaries, anime) when a general library of the type exists; Users is its own entry under Manage, linked from User settings.
