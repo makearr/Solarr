@@ -9,7 +9,7 @@
 DOCKER_DNS  ?=
 DNS_FLAGS   := $(foreach server,$(DOCKER_DNS),--dns $(server))
 
-GO_IMAGE    ?= golang:1.27.4@sha256:ec47ea3725fea0cc88f6de94919aef19f40f12fc1ec0e2d1b3426dbf15ecca04
+GO_IMAGE    ?= golang:1.27.4@sha256:5f1b98fa02fe396ebce2a0227a0e08309e11792915b9dd2e1f71053d7e7e6666
 NODE_IMAGE  ?= node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
 SQLC_IMAGE  ?= sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537
 LINT_IMAGE  ?= golangci/golangci-lint:v2.15.0@sha256:fbfcfd12a6f8d7f1b97b3362ca80fc2a244d46863148c73cb88e7793af96c481

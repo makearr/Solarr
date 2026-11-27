@@ -18,7 +18,7 @@ COPY web/ ./
 # outDir points at internal/api/webui/dist, where go:embed reaches it.
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.27.4@sha256:ec47ea3725fea0cc88f6de94919aef19f40f12fc1ec0e2d1b3426dbf15ecca04 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4@sha256:5f1b98fa02fe396ebce2a0227a0e08309e11792915b9dd2e1f71053d7e7e6666 AS build
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
