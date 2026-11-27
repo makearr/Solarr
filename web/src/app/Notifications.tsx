@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { EmptyState } from "@/ui/EmptyState";
+import { PageHeader } from "@/ui/PageHeader";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Bell, CheckCircle2, XCircle } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, XCircle , BellOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { t } from "@/lib/i18n";
 
@@ -100,7 +102,7 @@ export function Notifications() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-6 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Notifications</h1>
+        <PageHeader title="Notifications" />
         <p className="text-sm text-ink-muted">
           What needs your attention: warnings that stay until their cause is fixed, and what failed in the last week.
         </p>
@@ -139,7 +141,7 @@ export function Notifications() {
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium">{t("notifications.lastWeek")}</h2>
-        {!loading && events.length === 0 && <p className="text-sm text-ink-muted">{t("notifications.noEvents")}</p>}
+        {!loading && events.length === 0 && <EmptyState icon={<BellOff aria-hidden className="size-6" />} title={t("notifications.noEvents")} />}
         <ul className="flex flex-col gap-1">
           {events.map((item) => (
             <li

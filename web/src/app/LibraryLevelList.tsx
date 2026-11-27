@@ -1,3 +1,4 @@
+import { useDensityScale } from "@/lib/density";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
@@ -153,6 +154,7 @@ export function LibraryLevelList() {
   const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
   const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
   const frameRef = useRef<HTMLDivElement>(null);
+  const densityScale = useDensityScale();
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const isPoster = view === "poster";
 
@@ -160,7 +162,7 @@ export function LibraryLevelList() {
   const list = useLibraryList<LevelItem>(
     {
       name: `library-level:${categoryId ?? ""}:${level ?? ""}:${sort}:${dir}`,
-      rowHeight: isPoster ? posterRowHeight(options, metrics.cellWidth) : view === "overview" ? OVERVIEW_ROW_HEIGHT : ROW_HEIGHT,
+      rowHeight: isPoster ? posterRowHeight(options, metrics.cellWidth) : view === "overview" ? OVERVIEW_ROW_HEIGHT : Math.round(ROW_HEIGHT * densityScale),
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (item) => item.id,
       fetchPage: async ({ cursor, query, signal }) => {

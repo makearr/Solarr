@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { t } from "@/lib/i18n";
 
@@ -62,7 +63,7 @@ export function RecycleBin() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
-      <h1 className="text-lg font-semibold">Recycle bin</h1>
+      <PageHeader title={t("pageTitle.recycleBin")} />
       <p className="text-xs text-ink-muted">
         Nothing Solarr removes is deleted at once: it goes to its root folder&apos;s recycle bin and is removed after
         the library&apos;s own days (Library → File Management), or sooner, oldest first, once a limit below is passed.

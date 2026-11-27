@@ -28,8 +28,11 @@ export function dismissToast(id: number) {
 
 /** Shows a message and removes it after a while; returns its id. */
 export function showToast(input: Input): number {
-  const toast: Toast = { ...input, tone: input.tone ?? "success", id: nextId++ };
-  publish([...toasts, toast].slice(-4));
+  const tone = input.tone ?? "success";
+  // The same message again replaces the one showing, so a run of saved fields is one toast.
+  const same = toasts.find((shown) => shown.message === input.message && shown.tone === tone && shown.action === undefined);
+  const toast: Toast = { ...input, tone, id: nextId++ };
+  publish([...toasts.filter((shown) => shown !== same), toast].slice(-4));
   window.setTimeout(() => dismissToast(toast.id), SHOWN_MS[toast.tone]);
   return toast.id;
 }

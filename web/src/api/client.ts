@@ -1,3 +1,5 @@
+import { t } from "@/lib/i18n";
+import { showToast } from "@/lib/toast";
 import createClient from "openapi-fetch";
 import type { paths } from "./schema";
 import { queryClient } from "./queryClient";
@@ -57,6 +59,18 @@ api.use({
     return new Response(JSON.stringify({ status: response.status, title: response.statusText || "The request failed" }), {
       status: response.status, statusText: response.statusText, headers: { "Content-Type": "application/problem+json" },
     });
+  },
+});
+
+// A settings field that saves on change confirms itself once, wherever it lives; the server's refusal arrives as an error toast.
+const AUTO_SAVED = ["/settings/", "/categories/", "/metadata/"].map((path) => API_PREFIX + path);
+api.use({
+  onResponse({ request, response }) {
+    if (!response.ok || !["PUT", "PATCH"].includes(request.method)) return undefined;
+    if (AUTO_SAVED.some((prefix) => new URL(response.url, "http://solarr.test").pathname.startsWith(prefix))) {
+      showToast({ message: t("toast.saved") });
+    }
+    return undefined;
   },
 });
 

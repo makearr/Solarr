@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { PageHeader } from "@/ui/PageHeader";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
@@ -34,7 +35,7 @@ export function LibraryHealth() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
         <header className="flex flex-col gap-1">
-          <h1 className="text-base font-semibold">Library health</h1>
+          <PageHeader title={t("pageTitle.libraryHealth")} />
           <p className="text-xs text-ink-muted">
             A blocked hash found here was never touched -- remove it from the Unwanted files
             screen if it should go.

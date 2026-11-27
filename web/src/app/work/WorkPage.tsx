@@ -257,10 +257,22 @@ function WorkHeader({
   const genres = work.facets?.genre ?? work.genres;
   const workLevel = library?.levels.find((level) => level.entity === "work")?.key;
   const links = externalLinks(work.external_ids);
+  // Library, then the artist (or whoever leads), then this work; each earlier step links back.
+  const crumbClass = "hover:text-ink hover:underline";
+  const breadcrumbs = [
+    library && workLevel && categoryId ? (
+      <Link key="library" to="/library/$categoryId/$level" params={{ categoryId, level: workLevel }} className={crumbClass}>{library.name}</Link>
+    ) : undefined,
+    lead && categoryId ? (
+      <Link key="lead" to="/library/$categoryId/people/$personId" params={{ categoryId, personId: String(lead.person_id) }} className={crumbClass}>{lead.person_name}</Link>
+    ) : undefined,
+    <span key="work" aria-current="page">{work.title}</span>,
+  ].filter((crumb) => crumb !== undefined);
 
   return (
     <>
       <PageHeader
+        breadcrumbs={breadcrumbs}
         image={
           <div className="flex flex-col items-center gap-2">
             <Image shape={shape} title={work.title} src={poster ? remoteImage(poster, "small") : undefined} artwork={poster ? undefined : { subject: "works", id: work.id, size: "full" }} />

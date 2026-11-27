@@ -1,4 +1,5 @@
 import { tr } from "@/lib/i18nRich";
+import { PageHeader } from "@/ui/PageHeader";
 import { t } from "@/lib/i18n";
 import { useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -42,7 +43,7 @@ export function IndexerCatalog() {
     <div ref={scroller} className="mx-auto flex h-full max-w-4xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
         <Link to="/connections/indexers" className="text-xs text-accent underline underline-offset-2">← Indexers</Link>
-        <h1 className="text-lg font-semibold">Add indexers</h1>
+        <PageHeader title={t("pageTitle.addIndexers")} />
         <p className="text-sm leading-relaxed text-ink-muted">
           Tick the ones to add; the next page asks for their addresses and keys. None is added until you confirm.
         </p>

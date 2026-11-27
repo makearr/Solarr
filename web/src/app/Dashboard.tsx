@@ -1,9 +1,10 @@
 import { tr } from "@/lib/i18nRich";
+import { EmptyState } from "@/ui/EmptyState";
 import { t } from "@/lib/i18n";
 import { Fragment } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Plus, SlidersHorizontal, XCircle } from "lucide-react";
+import { AlertTriangle, Plus, SlidersHorizontal, XCircle , Inbox } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { healthMessage } from "@/lib/healthMessage";
@@ -152,7 +153,7 @@ export function Dashboard() {
           {recent.isLoading && <Note>Loading…</Note>}
           {recent.error != null && <Note>{t("dashboard.recentlyAddedCouldNot")}</Note>}
           {recent.data && recent.data.items.length === 0 && (
-            <Note>{t("dashboard.nothingYetImportedReleases")}</Note>
+            <EmptyState icon={<Inbox aria-hidden className="size-6" />} title={t("dashboard.nothingYetImportedReleases")} action={<Link to="/add" className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink">{t("addAnywhere.addToLibrary")}</Link>} />
           )}
           {recent.data && recent.data.items.length > 0 && (
             <ul className="grid grid-cols-3 gap-4 sm:grid-cols-5">

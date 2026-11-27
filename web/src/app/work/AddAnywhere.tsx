@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n";
+import { PageHeader } from "@/ui/PageHeader";
 import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
@@ -57,7 +58,7 @@ export function AddAnywhere() {
   const searchable = debounced.length >= MINIMUM_QUERY_LENGTH;
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-4">
-      <h1 className="text-base font-semibold">{t("addAnywhere.addToLibrary")}</h1>
+      <PageHeader title={t("addAnywhere.addToLibrary")} />
       <div className="flex flex-wrap gap-2">
         <label className="relative flex min-w-64 flex-1 items-center">
           <Search aria-hidden className="pointer-events-none absolute left-3 size-4 text-ink-muted" />

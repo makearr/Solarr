@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n";
+import { PageHeader } from "@/ui/PageHeader";
 import { SubTabs } from "@/ui/SubTabs";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -172,7 +173,7 @@ export function QualityProfilesPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <h1 className="text-lg font-semibold">Quality</h1>
+      <PageHeader title="Quality" />
       <p className="text-sm text-ink-muted">
         A library's goal is a <strong className="font-medium text-ink">target quality</strong>: pick one per library and that is all it needs.
         Quality profiles, further down, are an expert tool for fine rules and for people coming from the *Arrs.

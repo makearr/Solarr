@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -41,7 +42,7 @@ export function ProviderDefinitionsPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
         <header className="flex flex-col gap-1">
-          <h1 className="text-base font-semibold">{t("providerDefs.title")}</h1>
+          <PageHeader title={t("providerDefs.title")} />
           <p className="text-sm text-ink-muted">{t("providerDefs.intro")}</p>
         </header>
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">

@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n";
+import { PageHeader } from "@/ui/PageHeader";
 import { RepeatPassword, passwordReady } from "./NewPassword";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -54,7 +55,7 @@ export function UserSettings() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-        <h1 className="text-base font-semibold">User</h1>
+        <PageHeader title="User" />
 
         {me.data && <MyTierSection tier={me.data.tier} tierMax={me.data.tier_max} />}
         <APIKeysSection />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 
@@ -50,7 +51,7 @@ export function ArrImport() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Arr</h1>
+        <PageHeader title="Arr" />
         <p className="text-sm leading-relaxed text-ink-muted">{t("arrImport.intro")}</p>
       </header>
 

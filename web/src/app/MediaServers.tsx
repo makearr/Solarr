@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
@@ -46,7 +47,7 @@ export function MediaServers() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">{t("mediaServers.title")}</h1>
+        <PageHeader title={t("mediaServers.title")} />
         <p className="text-sm text-ink-muted">{t("mediaServers.intro")}</p>
       </header>
       {servers.isLoading && <p className="text-sm text-ink-muted">{t("mediaServers.loading")}</p>}

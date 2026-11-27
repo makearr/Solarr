@@ -1,4 +1,5 @@
 import { tr } from "@/lib/i18nRich";
+import { PageHeader } from "@/ui/PageHeader";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -286,7 +287,7 @@ export function Duplicates() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Duplicates</h1>
+        <PageHeader title="Duplicates" />
         <p className="text-sm text-ink-muted">
           {info?.duplicates_by_name
             ? `The same recording stored more than once: the same audio by its fingerprint (the same artist and title until a file is fingerprinted), lengths within a few seconds, in any format and on any ${words.work}.`

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { t } from "@/lib/i18n";
@@ -67,7 +68,7 @@ export function LibraryFileManagement() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-5 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">File management</h1>
+        <PageHeader title={t("pageTitle.fileManagement")} />
         <p className="text-sm leading-relaxed text-ink-muted">
           What Solarr does with this library&apos;s folders and files, as in Sonarr&apos;s Media Management.
         </p>

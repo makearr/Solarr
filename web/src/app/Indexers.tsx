@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n";
+import { PageHeader } from "@/ui/PageHeader";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -86,7 +87,7 @@ export function Indexers() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Indexers</h1>
+        <PageHeader title="Indexers" />
         <p className="text-sm leading-relaxed text-ink-muted">
           Where releases are searched for. Choose them from the list of every indexer Solarr can search, or keep them in step
           with a Prowlarr under Connections → Arr.

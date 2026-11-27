@@ -16,6 +16,8 @@ import { Network } from "./Network";
 import { Streaming } from "./Streaming";
 import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
+import { PageHeader } from "@/ui/PageHeader";
+import { useDensity } from "@/lib/density";
 import { ADMINISTRATOR_WIDGETS, useDashboardWidgets, useFooterItems, useShowCalendar, useShowFooter, useShowThumbnails, type FooterItem } from "@/lib/interfacePreferences";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
@@ -42,7 +44,7 @@ function SettingsPage({
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-        <h1 className="text-base font-semibold">{title}</h1>
+        <PageHeader title={title} />
         {hidden ? (
           <p className="text-sm text-ink-muted">
             {t("settings.tierGate", { tier: requiredTier === "expert" ? "Expert" : "Advanced" })}
@@ -309,6 +311,7 @@ export function WebUISettings() {
   const [showCalendar, setShowCalendar] = useShowCalendar();
   const [showFooter, setShowFooter] = useShowFooter();
   const [showThumbnails, setShowThumbnails] = useShowThumbnails();
+  const [density, setDensity] = useDensity();
   return (
     <SettingsPage title={t("settings.webUi")}>
       <Card title="Layout" help="Your own view only; every other account keeps its own.">
@@ -324,6 +327,17 @@ export function WebUISettings() {
           <input type="checkbox" checked={showThumbnails} onChange={(event) => setShowThumbnails(event.target.checked)} />
           {t("settings.showThumbnailsOfVideos")}
         </label>
+      </Card>
+      <Card title={t("density.title")} help={t("density.help")}>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="sr-only">{t("density.title")}</legend>
+          {(["comfortable", "compact"] as const).map((choice) => (
+            <label key={choice} className="flex items-center gap-2 text-sm">
+              <input type="radio" name="density" checked={density === choice} onChange={() => setDensity(choice)} />
+              {t(`density.${choice}`)}
+            </label>
+          ))}
+        </fieldset>
       </Card>
       <DashboardWidgets />
       {showFooter && <FooterItems />}

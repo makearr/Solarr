@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, X } from "lucide-react";
@@ -92,7 +93,7 @@ export function Import() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Import</h1>
+        <PageHeader title="Import" />
         <p className="text-sm text-ink-muted">Bring existing files into the library: a downloaded release, a watched folder, an existing library.</p>
       </header>
 

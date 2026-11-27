@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n";
+import { PageHeader } from "@/ui/PageHeader";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -140,7 +141,7 @@ export function LibraryNaming() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-5 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Naming</h1>
+        <PageHeader title="Naming" />
         <p className="text-sm leading-relaxed text-ink-muted">
           {t("libraryNaming.intro")}
           {naming.data.is_default && " This library uses the default until you save."}

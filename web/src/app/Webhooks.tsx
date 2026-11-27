@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
@@ -74,7 +75,7 @@ function Outgoing() {
   return (
     <section className="flex flex-col gap-3" aria-label={t("webhooks.outTitle")}>
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">{t("webhooks.title")}</h1>
+        <PageHeader title={t("webhooks.title")} />
         <h2 className="text-base font-medium">{t("webhooks.outTitle")}</h2>
         <p className="text-sm text-ink-muted">{t("webhooks.outIntro")}</p>
       </header>

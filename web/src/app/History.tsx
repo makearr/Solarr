@@ -1,5 +1,7 @@
+import { History as HistoryIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
+import { EmptyState } from "@/ui/EmptyState";
 import { api } from "@/api/client";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
@@ -67,7 +69,7 @@ export function History() {
         {list.isLoading && <Message>Loading history…</Message>}
         {list.error !== null && <Message>{t("history.readFailed")}</Message>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <Message>{t("history.empty")}</Message>
+          <EmptyState icon={<HistoryIcon aria-hidden className="size-6" />} title={t("history.empty")} />
         )}
         {list.items.length > 0 && <ListTable list={list} columns={COLUMNS} idOf={(entry) => entry.id} />}
       </div>

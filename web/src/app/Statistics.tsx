@@ -1,4 +1,5 @@
 import { Link, useParams } from "@tanstack/react-router";
+import { PageHeader } from "@/ui/PageHeader";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
@@ -208,7 +209,7 @@ export function Statistics() {
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Statistics</h1>
+        <PageHeader title="Statistics" />
         <p className="text-sm text-ink-muted">
           {data?.computed_at
             ? `As of ${new Date(data.computed_at).toLocaleString()}. Computed once a day in the background; nothing here is counted live.`

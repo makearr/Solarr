@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
@@ -31,7 +32,7 @@ export function QualityProfiles() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
       <div className="flex items-baseline gap-3">
-        <h1 className="text-lg font-semibold">Quality</h1>
+        <PageHeader title="Quality" />
         <Link to="/quality-profiles" className="ml-auto text-xs text-ink-muted hover:text-ink hover:underline">
           {t("qualityProfiles.createAndEditTargets")}
         </Link>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { t } from "@/lib/i18n";
 
@@ -18,7 +19,7 @@ export function DatabaseSettingsPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
         <header className="flex flex-col gap-1">
-          <h1 className="text-base font-semibold">Database</h1>
+          <PageHeader title="Database" />
         </header>
         {isTierVisible(tier, "expert") ? (
           <DatabaseSettings />

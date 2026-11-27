@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { PackageOpen } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { t } from "@/lib/i18n";
@@ -34,9 +36,7 @@ export function Packs() {
       {packs.isLoading && <Message>Loading packs…</Message>}
       {packs.error !== null && <Message>{t("packs.packsCouldNotBe")}</Message>}
       {packs.data && packs.data.length === 0 && (
-        <Message>
-          {t("packs.none")}
-        </Message>
+        <EmptyState icon={<PackageOpen aria-hidden className="size-6" />} title={t("packs.none")} />
       )}
       {packs.data && packs.data.length > 0 && (
         <ul className="flex flex-col gap-2">

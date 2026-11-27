@@ -1,4 +1,7 @@
 import { useRef, useState } from "react";
+import { Archive } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
+import { PageHeader } from "@/ui/PageHeader";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { t } from "@/lib/i18n";
 
@@ -56,7 +59,7 @@ export function Backups() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <h1 className="text-lg font-semibold">Backups</h1>
+      <PageHeader title="Backups" />
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="primary" busy={runNow.isPending} busyLabel="Backing up…" onClick={() => runNow.mutate()}>
           {t("backups.backupNow")}
@@ -90,7 +93,7 @@ export function Backups() {
       >
         {files.isLoading && <Message>Loading…</Message>}
         {files.error !== null && <Message>{t("backups.theBackupDirectoryCould")}</Message>}
-        {files.data && files.data.length === 0 && <Message>{t("backups.noBackupsYet")}</Message>}
+        {files.data && files.data.length === 0 && <EmptyState icon={<Archive aria-hidden className="size-6" />} title={t("backups.noBackupsYet")} />}
         {groups.map((group) => (
           <BackupGroup key={group.database} group={group} />
         ))}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "@/ui/Button";
+import { HelpTip } from "@/ui/HelpTip";
 
 /** One group of related settings: a heading, what it does, an optional on/off switch and the fields. */
 export function Card({
@@ -21,8 +22,10 @@ export function Card({
     <section className={`flex flex-col gap-3 rounded-lg border bg-surface p-4 ${tone === "warn" ? "border-warn" : "border-border-subtle"}`}>
       <div className="flex items-start gap-4">
         <div className="flex flex-1 flex-col gap-0.5">
-          <h2 className="text-sm font-medium">{title}</h2>
-          <p className="max-w-xl text-xs text-ink-muted">{help}</p>
+          <h2 className="flex items-center gap-1.5 text-sm font-medium">
+            {title}
+            <HelpTip>{help}</HelpTip>
+          </h2>
         </div>
         {toggle}
       </div>

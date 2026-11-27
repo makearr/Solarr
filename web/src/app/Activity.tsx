@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { Briefcase } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 import { api, ok } from "@/api/client";
 import { ListGrid } from "@/list/ListGrid";
 import { ListTable, type Column } from "@/list/ListTable";
@@ -99,7 +101,7 @@ export function Activity() {
         {list.isLoading && <Message>Loading jobs…</Message>}
         {list.error !== null && <Message>{t("activity.readFailed")}</Message>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <Message>{t("activity.empty")}</Message>
+          <EmptyState icon={<Briefcase aria-hidden className="size-6" />} title={t("activity.empty")} />
         )}
 
         {list.items.length > 0 &&

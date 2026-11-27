@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "@/ui/PageHeader";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Play, Trash2 } from "lucide-react";
@@ -68,7 +69,7 @@ export function ImportLists({ library: chosen }: { library?: string } = {}) {
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-wrap items-start gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h1 className="text-lg font-semibold">{t("importLists.title")}</h1>
+          <PageHeader title={t("importLists.title")} />
           <p className="text-sm leading-relaxed text-ink-muted">{t("importLists.help", words)}</p>
         </div>
         {takesLists && (

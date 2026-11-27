@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 
+import { useApplyDensity } from "@/lib/density";
 import { t } from "@/lib/i18n";
 import { useNarrow } from "@/list/useNarrow";
 import { useShowFooter } from "@/lib/interfacePreferences";
@@ -26,6 +27,7 @@ import { UserMenu } from "./UserMenu";
 export function Shell({ children }: { children: React.ReactNode }) {
   const [showFooter] = useShowFooter();
   const narrow = useNarrow();
+  useApplyDensity();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const path = useLocation({ select: (location) => location.pathname });
   // Following any link closes the drawer; so does leaving the narrow layout.

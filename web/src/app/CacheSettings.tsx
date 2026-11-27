@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n";
+import { PageHeader } from "@/ui/PageHeader";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
@@ -30,7 +31,7 @@ export function CacheSettingsPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
         <header className="flex flex-col gap-1">
-          <h1 className="text-base font-semibold">Cache</h1>
+          <PageHeader title="Cache" />
         </header>
         {isTierVisible(tier, "expert") ? (
           <CacheSettings />

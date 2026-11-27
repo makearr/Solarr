@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { PageHeader } from "@/ui/PageHeader";
 import { api, ok } from "@/api/client";
 import { t } from "@/lib/i18n";
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -141,7 +142,7 @@ export function VideoDuplicates() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Duplicates</h1>
+        <PageHeader title="Duplicates" />
         <p className="text-sm text-ink-muted">
           The same video stored more than once anywhere in the libraries. You choose the file to keep; each other file is merged into it
           (linked, when it is in the same library and on the same filesystem) or moved to the recycle bin.

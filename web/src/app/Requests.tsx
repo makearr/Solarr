@@ -1,4 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Inbox } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 import { useState } from "react";
 import { t } from "@/lib/i18n";
 
@@ -58,7 +61,7 @@ export function Requests() {
       {requests.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {requests.error !== null && <p className="text-sm text-ink-muted">{t("requests.readFailed")}</p>}
       {requests.data && items.length === 0 && (
-        <p className="text-sm text-ink-muted">Nothing has been requested. Use Request on a library&apos;s Add page.</p>
+        <EmptyState icon={<Inbox aria-hidden className="size-6" />} title={t("requests.empty")} hint={t("requests.emptyHint")} action={<Link to="/add" className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink">{t("addAnywhere.addToLibrary")}</Link>} />
       )}
       {administrator && waiting.length > 0 && (
         <p className="text-xs text-ink-muted">{waiting.length} waiting for a decision.</p>

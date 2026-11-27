@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { PageHeader } from "@/ui/PageHeader";
 import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useCategories } from "@/lib/resources";
 import { Button } from "@/ui/Button";
@@ -16,7 +17,7 @@ export function RenameAll() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-base font-semibold">Rename files</h1>
+          <PageHeader title={t("pageTitle.renameFiles")} />
           <Button className="ml-auto" disabled={previewing} onClick={() => setPreviewing(true)}>
             {previewing ? "Previewing every library" : "Preview every library"}
           </Button>

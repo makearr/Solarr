@@ -1,4 +1,5 @@
 import { DownloadFolderSection } from "./DownloadFolders";
+import { PageHeader } from "@/ui/PageHeader";
 import { MoveJobList } from "./Moves";
 import { RootFolderSection } from "./RootFolders";
 
@@ -7,7 +8,7 @@ import { RootFolderSection } from "./RootFolders";
 export function Folders() {
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 overflow-y-auto p-6">
-      <h1 className="text-lg font-semibold">Folders</h1>
+      <PageHeader title="Folders" />
       <RootFolderSection />
       <DownloadFolderSection />
       <MoveJobList />

@@ -1,5 +1,7 @@
 import { useEffect, useState, type RefObject } from "react";
 
+import { useDensityScale } from "@/lib/density";
+
 export interface GridMetrics {
   /** How many posters fit across. Never below 1. */
   columns: number;
@@ -17,7 +19,8 @@ export function useGridMetrics(
   gap: number,
   padding: number,
 ): GridMetrics {
-  const [metrics, setMetrics] = useState<GridMetrics>({ columns: 1, cellWidth: minWidth });
+  const wanted = minWidth * useDensityScale();
+  const [metrics, setMetrics] = useState<GridMetrics>({ columns: 1, cellWidth: wanted });
 
   useEffect(() => {
     const element = ref.current;
@@ -25,7 +28,7 @@ export function useGridMetrics(
 
     const measure = (outerWidth: number) => {
       const available = Math.max(0, outerWidth - padding * 2);
-      const columns = Math.max(1, Math.floor((available + gap) / (minWidth + gap)));
+      const columns = Math.max(1, Math.floor((available + gap) / (wanted + gap)));
       const cellWidth = Math.max(1, (available - gap * (columns - 1)) / columns);
       setMetrics((current) =>
         current.columns === columns && Math.abs(current.cellWidth - cellWidth) < 1
@@ -41,7 +44,7 @@ export function useGridMetrics(
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [ref, minWidth, gap, padding]);
+  }, [ref, wanted, gap, padding]);
 
   return metrics;
 }
