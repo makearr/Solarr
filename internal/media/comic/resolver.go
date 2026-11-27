@@ -2,6 +2,7 @@ package comic
 
 import (
 	"context"
+	"github.com/makearr/Solarr/internal/identify/edition"
 	"log/slog"
 	"strconv"
 
@@ -161,29 +162,6 @@ func yearsAgree(wanted, held int) bool {
 	return wanted == 0 || held == 0 || wanted-held <= 1 && held-wanted <= 1
 }
 
-// editionsOf narrows candidates of one title to the edition wanted: the language the file itself says, else the library's
-// preferred languages in order. Candidates of unknown language stay out of the narrowing, and nothing narrows to none.
-func editionsOf(same []Candidate, fileLanguage string, preferred []string) []Candidate {
-	if len(same) < 2 {
-		return same
-	}
-	for _, wanted := range append([]string{fileLanguage}, preferred...) {
-		if wanted == "" {
-			continue
-		}
-		var matching []Candidate
-		for _, candidate := range same {
-			if candidate.Language == wanted {
-				matching = append(matching, candidate)
-			}
-		}
-		if len(matching) > 0 {
-			return matching
-		}
-	}
-	return same
-}
-
 // pick chooses the one candidate the evidence names and says how sure that is.
 func pick(found []Candidate, ev Evidence, preferred []string) (Candidate, float64, bool) {
 	var same []Candidate
@@ -195,7 +173,7 @@ func pick(found []Candidate, ev Evidence, preferred []string) (Candidate, float6
 	if len(same) == 0 {
 		return Candidate{}, 0, false
 	}
-	same = editionsOf(same, ev.Language, preferred)
+	same = edition.Narrow(same, func(c Candidate) string { return c.Language }, ev.Language, preferred)
 	best := same[0]
 	confidence := titleOnlyConfidence
 	if ev.Year != 0 && best.Year != 0 {

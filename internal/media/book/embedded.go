@@ -2,6 +2,7 @@ package book
 
 import (
 	"context"
+	"github.com/makearr/Solarr/internal/identify/edition"
 
 	"github.com/makearr/Solarr/internal/identify/bookmeta"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
@@ -53,6 +54,9 @@ func layered(info parsebook.Info, meta bookmeta.Meta) parsebook.Info {
 	}
 	if len(meta.Authors) > 0 {
 		info.Author = meta.Authors[0]
+	}
+	if code := edition.Code(meta.Language); code != "" {
+		info.Language = code
 	}
 	return info
 }

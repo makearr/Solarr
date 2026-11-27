@@ -2,6 +2,7 @@
 package parsebook
 
 import (
+	"github.com/makearr/Solarr/internal/identify/edition"
 	"path"
 	"regexp"
 	"slices"
@@ -30,6 +31,8 @@ type Info struct {
 	ISBN, ASIN   string
 	// TitleUnbacked: Title is what the file's own metadata says and no reading of the name agrees, so a match by it alone is not trusted.
 	TitleUnbacked bool
+	// Language is the edition the name or the file's metadata says it is in (ISO 639-1); empty when neither says.
+	Language string
 }
 
 // EbookFormats are the ebook file formats, Readarr's and Calibre's common ones.
@@ -64,6 +67,7 @@ var (
 func Parse(name string) (Info, bool) {
 	info := Info{}
 	name = strings.TrimSpace(name)
+	info.Language = edition.FromName(name)
 	if extension := strings.ToLower(strings.TrimPrefix(path.Ext(name), ".")); isFormat(extension) {
 		info.Formats = append(info.Formats, extension)
 		name = strings.TrimSuffix(name, path.Ext(name))
@@ -186,6 +190,9 @@ func ParsePath(relPath string, byFolder bool) (Info, bool) {
 	}
 	if !ok {
 		return info, false
+	}
+	if info.Language == "" {
+		info.Language = edition.FromName(relPath)
 	}
 	if !byFolder && info.Author != "" && folder != "." && folderNamesTheTitleNotTheAuthor(folder, info) {
 		// Calibre's "Author/Title (12)/Title - Author.epub": the folders name the author, so the parts are exchanged.

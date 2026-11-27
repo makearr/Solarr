@@ -874,6 +874,9 @@ func (p *process) bookResolver(format book.Format) book.Resolver {
 	return book.Resolver{
 		Service: p.bookService(format), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID,
 		Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold, Locks: p.locksFor("book"),
+		Languages: func(int64) []string {
+			return settings.LanguageProfileFor(p.cache.Snapshot().DefaultLanguages(), false).AudioPreferred
+		},
 	}
 }
 

@@ -2,6 +2,7 @@ package book
 
 import (
 	"context"
+	"github.com/makearr/Solarr/internal/identify/edition"
 	"log/slog"
 	"maps"
 	"regexp"
@@ -43,6 +44,8 @@ type Resolver struct {
 	Locks            *keyedlock.Locks
 	// Threshold is import.auto_commit_confidence; nil takes its default.
 	Threshold func() float64
+	// Languages are the editions the library prefers, best first (ISO 639-1); nil prefers none.
+	Languages func(categoryID int64) []string
 }
 
 // Resolve answers the work a parsed name is: 0 when it could not be placed, in which case the candidates say what was
@@ -136,6 +139,7 @@ func (r Resolver) find(ctx context.Context, categoryID int64, info parsebook.Inf
 		// A folder above a book is often its series, not its author.
 		candidates, _ = r.Service.Search(ctx, categoryID, info.Title, "", searchLimit)
 	}
+	candidates = r.editionsOf(candidates, categoryID, info)
 	out.candidates = candidates
 	out.picked, out.confidence, out.ok = pickCandidate(candidates, info)
 	if !out.ok && info.Author != "" && info.Title != "" {
@@ -157,10 +161,33 @@ func (r Resolver) find(ctx context.Context, categoryID int64, info parsebook.Inf
 		// The name's best reading may be only its subtitle ("A Novel"): each other reading is searched on its own.
 		hits, err := r.Service.Search(ctx, categoryID, reading, info.Author, searchLimit)
 		if err == nil {
-			out.picked, out.confidence, out.ok = pickCandidate(hits, info)
+			out.picked, out.confidence, out.ok = pickCandidate(r.editionsOf(hits, categoryID, info), info)
 		}
 	}
 	return out
+}
+
+// editionsOf keeps, of the candidates that are one book (the same title and author) in several languages, the edition the
+// file's own language says, then the library's preferred one; the same rule the comic resolver applies.
+func (r Resolver) editionsOf(candidates []Candidate, categoryID int64, info parsebook.Info) []Candidate {
+	var preferred []string
+	if r.Languages != nil {
+		preferred = r.Languages(categoryID)
+	}
+	groups := map[string][]Candidate{}
+	var order []string
+	for _, candidate := range candidates {
+		key := parsebook.CleanTitle(candidate.Title) + "|" + PersonKey(candidate.Author)
+		if _, seen := groups[key]; !seen {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], candidate)
+	}
+	var kept []Candidate
+	for _, key := range order {
+		kept = append(kept, edition.Narrow(groups[key], func(c Candidate) string { return c.Traits.OriginalLanguage }, info.Language, preferred)...)
+	}
+	return kept
 }
 
 // maxOtherReadings bounds the extra searches one unplaced name costs.

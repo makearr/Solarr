@@ -4,7 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
-- Comics: when a title exists in several language editions, the one the file says it is in (its ComicInfo language or a language in its names) is chosen, then the one in your preferred language, before the provider's first hit; a title that language settles is no longer held back as ambiguous.
+- Books, audiobooks and comics: when a title exists in several language editions (one shared rule), the one the file says it is in (an epub's language, a language tag in its name, a comic's ComicInfo) is chosen, then the one in your preferred language. For comics: when a title exists in several language editions, the one the file says it is in (its ComicInfo language or a language in its names) is chosen, then the one in your preferred language, before the provider's first hit; a title that language settles is no longer held back as ambiguous.
 - Settings, Transcode: the lanes are called Video, Video HW and Audio, and comics and ebooks share one Books lane; a comic or ebook target no longer warns that it "names no bitrate".
 - Comic and epub files are written with maximum Deflate compression.
 - Import lists: book and audiobook libraries can add from one of your own Hardcover lists (read only, with the Hardcover token), music libraries from a public MusicBrainz collection by id or link (through the same MusicBrainz rate limit as the rest of Solarr); the help points to MDBList for Letterboxd lists. A list that needs a key now says "a key or token" instead of naming TMDB.
