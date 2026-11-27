@@ -307,23 +307,34 @@ function LibraryRow({ library }: { library: Library }) {
   );
 }
 
-function LaneInputs({ label, value, onChange }: { label: string; value: LaneLimits; onChange: (next: LaneLimits) => void }) {
+function LaneInputs({
+  label, value, onChange, auto, onManual, onAuto,
+}: { label: string; value: LaneLimits; onChange: (next: LaneLimits) => void; auto: boolean; onManual: () => void; onAuto: () => void }) {
   return (
     <div className="flex flex-wrap items-end gap-4">
       <span className="w-48 text-sm">{label}</span>
       {LANES.map((lane) => (
         <label key={lane} className={labelStyle} title={t(`transcode.lane.${lane}.help`)}>
           {t(`transcode.lane.${lane}`)}
-          <input
-            type="number"
-            min={0}
-            max={16}
-            className={`${inputStyle} w-20`}
-            value={value[lane]}
-            onChange={(event) => onChange({ ...value, [lane]: Math.max(0, Math.min(16, Number(event.target.value) || 0)) })}
-          />
+          {auto ? (
+            <input type="text" readOnly className={`${inputStyle} w-24`} value={t("transcode.auto", { count: value[lane] })} onFocus={onManual} />
+          ) : (
+            <input
+              type="number"
+              min={0}
+              max={16}
+              className={`${inputStyle} w-24`}
+              value={value[lane]}
+              onChange={(event) => onChange({ ...value, [lane]: Math.max(0, Math.min(16, Number(event.target.value) || 0)) })}
+            />
+          )}
         </label>
       ))}
+      {!auto && (
+        <button type="button" className="text-xs text-accent underline" onClick={onAuto}>
+          {t("transcode.followHardware")}
+        </button>
+      )}
     </div>
   );
 }
@@ -331,16 +342,30 @@ function LaneInputs({ label, value, onChange }: { label: string; value: LaneLimi
 function ParallelCard({ global, onSave, busy }: { global: Global; onSave: (next: Global) => void; busy: boolean }) {
   const [parallel, setParallel] = useState(global.parallel);
   const [playing, setPlaying] = useState(global.playback_parallel);
+  const [parallelAuto, setParallelAuto] = useState(global.parallel_auto);
+  const [playingAuto, setPlayingAuto] = useState(global.playback_parallel_auto);
   useEffect(() => {
     setParallel(global.parallel);
     setPlaying(global.playback_parallel);
-  }, [global.parallel, global.playback_parallel]);
+    setParallelAuto(global.parallel_auto);
+    setPlayingAuto(global.playback_parallel_auto);
+  }, [global.parallel, global.playback_parallel, global.parallel_auto, global.playback_parallel_auto]);
   return (
     <Card title={t("transcode.parallel")} help={t("transcode.parallelHelp")}>
-      <LaneInputs label={t("transcode.normally")} value={parallel} onChange={setParallel} />
-      <LaneInputs label={t("transcode.whileWatching")} value={playing} onChange={setPlaying} />
+      <LaneInputs
+        label={t("transcode.normally")} value={parallel} onChange={setParallel} auto={parallelAuto}
+        onManual={() => setParallelAuto(false)} onAuto={() => { setParallelAuto(true); setParallel(global.parallel); }}
+      />
+      <LaneInputs
+        label={t("transcode.whileWatching")} value={playing} onChange={setPlaying} auto={playingAuto}
+        onManual={() => setPlayingAuto(false)} onAuto={() => { setPlayingAuto(true); setPlaying(global.playback_parallel); }}
+      />
       <div>
-        <Button variant="primary" busy={busy} onClick={() => onSave({ ...global, parallel, playback_parallel: playing })}>
+        <Button
+          variant="primary"
+          busy={busy}
+          onClick={() => onSave({ ...global, parallel, playback_parallel: playing, parallel_auto: parallelAuto, playback_parallel_auto: playingAuto })}
+        >
           {t("transcode.save")}
         </Button>
       </div>
@@ -391,6 +416,7 @@ function HardwareCard() {
     <Card title={t("transcode.hardware")} help={t("transcode.hardwareHelp")}>
       {data && !data.ffmpeg_available && <p className="text-sm text-danger">{t("transcode.noFfmpeg")}</p>}
       {data?.ffmpeg_available && <p className="text-xs text-ink-muted">{t("transcode.ffmpeg", { version: data.ffmpeg_version })}</p>}
+      {data && <p className="text-xs text-ink-muted">{t("transcode.cores", { count: data.cpu_cores })}</p>}
       {data?.capabilities
         .filter((capability) => capability.accel !== "software")
         .map((capability) => (

@@ -25,7 +25,7 @@ describe("the library folders of a migrating connection", () => {
 describe("syncOptions", () => {
   it("rewrites only the folders that differ and carries the library and the extras", () => {
     expect(syncOptions(connection, 12)).toEqual({
-      mode: "add", monitored: true, unmonitored: false, albums: "all", limit: 0,
+      mode: "add", monitored: true, unmonitored: true, albums: "all", limit: 0,
       indexers: true, download_clients: true, import_lists: true,
       path_rewrites: [{ from: "/movies", to: "/mnt/movies/" }, { from: "/dup", to: "/mnt/movies" }],
       new_folders_library_id: 12,
@@ -36,9 +36,13 @@ describe("syncOptions", () => {
 describe("buildTasks", () => {
   it("makes the library before the import, and Prowlarr's indexers before the import that would find them keyless", () => {
     const ids = buildTasks(migrating).map((task) => task.id);
-    expect(ids).toEqual(["languages", "library:arr-3", "prowlarr:9", "link:3", "import:3"]);
+    expect(ids).toEqual(["languages", "companion", "library:arr-3", "prowlarr:9", "link:3", "import:3"]);
     const imported = buildTasks(migrating).find((task) => task.id === "import:3");
     expect(imported?.needs).toEqual(["link:3", "prowlarr:9"]);
+  });
+  it("leaves companion mode out when replacing the *Arr apps was chosen, and switches on only the features chosen", () => {
+    const replacing = buildTasks({ ...migrating, companion: false, features: ["discover"] }).map((task) => task.id);
+    expect(replacing).toEqual(["languages", "library:arr-3", "prowlarr:9", "link:3", "import:3", "features"]);
   });
   it("sets a starter quality only on a library it made", () => {
     const fresh: WizardState = { ...EMPTY_WIZARD, libraries: [{ ...library, key: "a", starter: "space" }, { ...library, key: "b", starter: "space", libraryId: 4 }] };
@@ -64,5 +68,6 @@ describe("the steps", () => {
     expect(stepsOf(undefined)).toEqual(["start"]);
     expect(stepsOf("migrate")).not.toContain("libraries");
     expect(stepsOf("fresh")).toContain("tools");
+    expect(stepsOf("migrate")).toContain("features");
   });
 });

@@ -90,6 +90,8 @@ func (a Works) ListWorks(
 			FreshRSSSince:   freshRSSSince,
 			WantedOnly:      filter.Wanted,
 			CutoffUnmetOnly: filter.CutoffUnmet,
+			Status:          filter.Status,
+			Now:             a.Clock.Now().Unix(),
 			TagIDs:          filter.TagIDs,
 			ExcludedTagIDs:  filter.ExcludedTagIDs,
 			AboveRating:     aboveRating(filter.AboveRating, filter.CategoryIDs, a.RatingLimit),

@@ -147,6 +147,21 @@ func (s *Service) Capabilities() []Capability {
 	return append([]Capability(nil), s.found...)
 }
 
+// CPUCores is how many cores the container may use, read when asked since a limit can change under a running container.
+func (s *Service) CPUCores() int { return CPUCores(s.fsys) }
+
+// EncodeEngines is the most hardware encode engines one working encoder reports; a working encoder that reports none
+// counts as one, and zero means no hardware encoder works.
+func (s *Service) EncodeEngines() int {
+	engines := 0
+	for _, capability := range s.Capabilities() {
+		if capability.Working && capability.Accel != Software {
+			engines = max(engines, capability.Engines.Encode, 1)
+		}
+	}
+	return engines
+}
+
 // FrameDecodeArgs is the hwaccel input options for a one-frame decode under the hardware policy; nil decodes on the processor.
 func (s *Service) FrameDecodeArgs(hardware, device string) []string {
 	resolution := s.Resolve(hardware, device)

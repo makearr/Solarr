@@ -47,7 +47,7 @@ import { formatMinutes } from "./workFormat";
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "person", "above_rating", "own_profile", "favorite", "watched", "type"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "person", "above_rating", "own_profile", "favorite", "watched", "status", "type"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -100,6 +100,10 @@ export function sortChoicesOf(info: MediaTypeInfo | undefined): [string, string]
   return choices;
 }
 
+function statusFilter(value: string | undefined): "present" | "wanted" | "downloading" | "upcoming" | undefined {
+  return value === "present" || value === "wanted" || value === "downloading" || value === "upcoming" ? value : undefined;
+}
+
 function watchedFilter(value: string | undefined): "yes" | "no" | "in_progress" | undefined {
   return value === "yes" || value === "no" || value === "in_progress" ? value : undefined;
 }
@@ -120,6 +124,7 @@ function selectionBody(request: SelectionRequest) {
     person_id: request.filters.person ? Number(request.filters.person) : undefined,
     favorite: request.filters.favorite === "only" ? true : undefined,
     watched: watchedFilter(request.filters.watched),
+    status: statusFilter(request.filters.status),
     above_rating: String(request.filters.above_rating) === "1" ? true : undefined,
     own_profile: String(request.filters.own_profile) === "1" ? true : undefined,
     whole_library: request.filters.whole_library === "1" ? true : undefined,
@@ -204,6 +209,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
             person_id: query.filters.person ? Number(query.filters.person) : undefined,
             favorite: query.filters.favorite === "only" ? true : undefined,
             watched: watchedFilter(query.filters.watched),
+            status: statusFilter(query.filters.status),
             above_rating: String(query.filters.above_rating) === "1" ? true : undefined,
             own_profile: String(query.filters.own_profile) === "1" ? true : undefined,
             whole_library: wholeLibrary || undefined,
@@ -236,15 +242,16 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         </Button>
         <ToolbarFavorites active={routeView.query.filters.favorite === "only"} onChange={(active) => setFilter("favorite", active ? "only" : "")} />
         <select
-          aria-label={t("watch.filter")}
-          value={routeView.query.filters.watched ?? ""}
-          onChange={(event) => setFilter("watched", event.target.value)}
+          aria-label={t("workIndex.statusFilter")}
+          value={routeView.query.filters.status ?? ""}
+          onChange={(event) => setFilter("status", event.target.value)}
           className="rounded-md border border-border-subtle bg-surface px-2 py-1 text-sm"
         >
-          <option value="">{t("watch.any")}</option>
-          <option value="yes">{t("watch.yes")}</option>
-          <option value="in_progress">{t("watch.inProgress")}</option>
-          <option value="no">{t("watch.no")}</option>
+          <option value="">{t("workIndex.status.any")}</option>
+          <option value="present">{t("workIndex.status.present")}</option>
+          <option value="wanted">{t("workIndex.status.wanted")}</option>
+          <option value="downloading">{t("workIndex.status.downloading")}</option>
+          <option value="upcoming">{t("workIndex.status.upcoming")}</option>
         </select>
         <ToolbarSearch value={routeView.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Title contains…" label={`Filter ${words.works} by title`} />
         {library?.rating_limit?.max_age != null && (
@@ -285,6 +292,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
           fields={filterFieldsOf(info)}
           storageKey={`${categoryId}.${level}`}
           where={routeView.query.filters.where ?? ""}
+          watched={{ value: routeView.query.filters.watched ?? "", onChange: (value) => setFilter("watched", value) }}
           quick={{ q: routeView.query.filters.q ?? "", tags: routeView.query.filters.tags ?? "", person: routeView.query.filters.person ?? "" }}
           onChange={(where, quick) => setQuery({ filters: { ...routeView.query.filters, where, q: quick?.q ?? "", tags: quick?.tags ?? "", person: quick?.person ?? "" } })}
         />
@@ -335,7 +343,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="p-6">
             <EmptyState
-              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.person || routeView.query.filters.above_rating || routeView.query.filters.own_profile || routeView.query.filters.favorite || routeView.query.filters.watched ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
+              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.person || routeView.query.filters.above_rating || routeView.query.filters.own_profile || routeView.query.filters.favorite || routeView.query.filters.watched || routeView.query.filters.status ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
               hint={`Identified files appear here once a scan finds them; Add new looks ${words.works} up.`}
             />
           </div>

@@ -30,9 +30,11 @@ const transcodeScheduleCron = "*/5 * * * *"
 func (p *process) transcodeService() *transcoder.Service {
 	p.transcodeOnce.Do(func() {
 		cl := clock.NewSystem()
-		snapshot := func() settings.TranscodeGlobal { return p.cache.Snapshot().TranscodeGlobal() }
+		snapshot := func() settings.TranscodeGlobal {
+			return transcodeSettings{cache: p.cache, hardware: p.transcoder}.Global()
+		}
 		p.pipeline = &transcoder.Service{
-			Items: library.NewTranscodeItems(p.library, cl), Settings: transcodeSettings{cache: p.cache}, Hardware: p.transcoder,
+			Items: library.NewTranscodeItems(p.library, cl), Settings: transcodeSettings{cache: p.cache, hardware: p.transcoder}, Hardware: p.transcoder,
 			Devices: p.transcoder.DeviceFor, Prober: p.transcoder, Tagger: transcodeTagger{tool: p.tool}, Comics: transcodeComics{fsys: p.fsys}, Ebooks: mediatool.ExecRunner{},
 			Bin:      transcodeBin{RecycleBin: library.NewRecycleBin(p.library, p.fsys, cl).WithOnline(p.rootOnline)},
 			Reporter: transcodeReporter{logger: p.logger, stats: statistics.NewTranscodes(p.statistics), history: statistics.NewHistory(p.statistics), bus: p.bus},
@@ -166,10 +168,18 @@ func (r transcodeReporter) Reverted(ctx context.Context, converted transcoder.Co
 }
 
 // transcodeSettings is the pipeline's view of the settings cache.
-type transcodeSettings struct{ cache *settings.Cache }
+type transcodeSettings struct {
+	cache    *settings.Cache
+	hardware *transcode.Service
+}
 
+// Global is the policy with the lane limits that follow the hardware worked out from what was detected.
 func (s transcodeSettings) Global() settings.TranscodeGlobal {
-	return s.cache.Snapshot().TranscodeGlobal()
+	global := s.cache.Snapshot().TranscodeGlobal()
+	if s.hardware == nil {
+		return global
+	}
+	return global.Resolved(settings.LaneHardware{Cores: s.hardware.CPUCores(), EncodeEngines: s.hardware.EncodeEngines()})
 }
 
 func (s transcodeSettings) Libraries(ctx context.Context) ([]settings.TranscodeLibrary, error) {

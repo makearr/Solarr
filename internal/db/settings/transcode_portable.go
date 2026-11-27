@@ -14,6 +14,8 @@ type TranscodeEntry struct {
 	Enabled             bool                    `yaml:"enabled"`
 	Parallel            LaneLimitsEntry         `yaml:"parallel"`
 	PlaybackParallel    LaneLimitsEntry         `yaml:"playback_parallel"`
+	ParallelAuto        bool                    `yaml:"parallel_auto,omitempty"`
+	PlaybackAuto        bool                    `yaml:"playback_parallel_auto,omitempty"`
 	OriginalsRetainDays int64                   `yaml:"originals_retain_days"`
 	OriginalsCapGB      int64                   `yaml:"originals_cap_gb"`
 	Libraries           []TranscodeLibraryEntry `yaml:"libraries,omitempty"`
@@ -48,6 +50,7 @@ func (c *Cache) ExportTranscode(ctx context.Context, document *Document) error {
 	global := snapshot.TranscodeGlobal()
 	entry := &TranscodeEntry{
 		Enabled: global.Enabled, Parallel: LaneLimitsEntry(global.Parallel), PlaybackParallel: LaneLimitsEntry(global.PlaybackParallel),
+		ParallelAuto: global.ParallelAuto, PlaybackAuto: global.PlaybackParallelAuto,
 		OriginalsRetainDays: global.Originals.RetainDays, OriginalsCapGB: global.Originals.CapGB,
 	}
 	rows, err := c.CategoryTranscodes(ctx)
@@ -129,6 +132,7 @@ func (c *Cache) ImportTranscode(ctx context.Context, cl clock.Clock, document Do
 	}
 	global := TranscodeGlobal{
 		Enabled: entry.Enabled, Parallel: LaneLimits(entry.Parallel), PlaybackParallel: LaneLimits(entry.PlaybackParallel),
+		ParallelAuto: entry.ParallelAuto, PlaybackParallelAuto: entry.PlaybackAuto,
 		Originals: OriginalsPolicy{RetainDays: entry.OriginalsRetainDays, CapGB: entry.OriginalsCapGB},
 	}
 	if err := c.SetTranscodeGlobal(ctx, cl, global); err != nil {

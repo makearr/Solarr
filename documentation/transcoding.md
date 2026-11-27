@@ -30,6 +30,8 @@ Three lanes (`cpu`, `gpu`, `audio`) each have a limit in Settings; a second set 
 and ffmpeg processes beyond it are paused (SIGSTOP). Pausing the `transcode` task in Settings > Scheduler stops running
 conversions (they return as interrupted, no attempt spent) and holds the queue.
 
+Until a person saves limits, each row follows the hardware (`settings.AutoLaneLimits`, resolved at read time from `transcode.CPUCores` and the best working encoder's engines). While nothing plays: Video 1, Video HW as many as encode engines (as many as Video where none work), Audio and Books half the cores. While the web player converts: Video 0, Video HW engines minus one, Audio and Books a quarter of the cores, at least 1. Each lane is raised to at least the one before it and nothing passes 16. The cores are the container's CPU quota (cgroup v2 `cpu.max`, then v1 cfs), else the cores the process may be scheduled on, else every core. Saving a row stores its four numbers and stops it following; "Follow the hardware" returns it.
+
 ## Where a conversion shows
 
 Settings > Scheduler lists a running conversion with the name of its file and the share of its duration done. A finished

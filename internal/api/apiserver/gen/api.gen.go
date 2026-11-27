@@ -1603,6 +1603,14 @@ const (
 	ListWorksParamsDirDesc ListWorksParamsDir = "desc"
 )
 
+// Defines values for ListWorksParamsStatus.
+const (
+	ListWorksParamsStatusDownloading ListWorksParamsStatus = "downloading"
+	ListWorksParamsStatusPresent     ListWorksParamsStatus = "present"
+	ListWorksParamsStatusUpcoming    ListWorksParamsStatus = "upcoming"
+	ListWorksParamsStatusWanted      ListWorksParamsStatus = "wanted"
+)
+
 // Defines values for ListWorksParamsWatched.
 const (
 	ListWorksParamsWatchedInProgress ListWorksParamsWatched = "in_progress"
@@ -3756,7 +3764,7 @@ type GateResult struct {
 
 // GeneralSettings Switches that belong to no one page. Always answered in full; a PATCH changes the ones it names.
 type GeneralSettings struct {
-	// HuntOldMissing The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on.
+	// HuntOldMissing The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default off.
 	HuntOldMissing *bool `json:"hunt_old_missing,omitempty"`
 
 	// Recommendations Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off.
@@ -3765,13 +3773,13 @@ type GeneralSettings struct {
 	// SafeMode The instance runs in safe mode (safe_mode in config.yml, SOLARR_SAFE_MODE): transcoding, the automatic search, the RSS sync, the cutoff check and sending monitoring to an *Arr are off, whatever their settings say. Not changeable here.
 	SafeMode *bool `json:"safe_mode,omitempty"`
 
-	// ShowCollections The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default on.
+	// ShowCollections The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default off.
 	ShowCollections *bool `json:"show_collections,omitempty"`
 
 	// SolarrMode How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
 	SolarrMode *GeneralSettingsSolarrMode `json:"solarr_mode,omitempty"`
 
-	// VerifyFiles The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default on.
+	// VerifyFiles The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default off.
 	VerifyFiles *bool `json:"verify_files,omitempty"`
 
 	// VideoHashing Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off.
@@ -7787,13 +7795,25 @@ type TranscodeGlobalSettings struct {
 	// Parallel Ceilings down the order cpu (video), gpu (video hardware), audio, books (comics and ebooks): a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it.
 	Parallel TranscodeLaneLimits `json:"parallel"`
 
+	// ParallelAuto The limits while nothing plays follow the detected hardware (the answer carries the resulting numbers); true until limits are saved. On a PUT, true ignores `parallel`.
+	ParallelAuto bool `json:"parallel_auto"`
+
 	// PlaybackParallel Ceilings down the order cpu (video), gpu (video hardware), audio, books (comics and ebooks): a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it.
 	PlaybackParallel TranscodeLaneLimits `json:"playback_parallel"`
+
+	// PlaybackParallelAuto The same for the limits while the web player converts.
+	PlaybackParallelAuto bool `json:"playback_parallel_auto"`
 }
 
 // TranscodeHardware defines model for TranscodeHardware.
 type TranscodeHardware struct {
-	Capabilities    []TranscodeCapability     `json:"capabilities"`
+	Capabilities []TranscodeCapability `json:"capabilities"`
+
+	// CpuCores Cores the container may use: its CPU quota when it has one, else the cores it may be scheduled on, else the machine's.
+	CpuCores int `json:"cpu_cores"`
+
+	// EncodeEngines Hardware encode engines of the best working encoder; 0 when none works.
+	EncodeEngines   int                       `json:"encode_engines"`
 	Encoders        []TranscodeEncoderSupport `json:"encoders"`
 	FfmpegAvailable bool                      `json:"ffmpeg_available"`
 	FfmpegVersion   string                    `json:"ffmpeg_version"`
@@ -9929,6 +9949,9 @@ type ListWorksParams struct {
 	// CutoffUnmet Only works whose monitored album has every track but a file below the library's cutoff (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL.
 	CutoffUnmet *bool `form:"cutoff_unmet,omitempty" json:"cutoff_unmet,omitempty"`
 
+	// Status The availability shown on each row: present (everything is here), wanted (something is missing and nothing is on its way), downloading, or upcoming (not released yet and not here). Unset lists every work.
+	Status *ListWorksParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+
 	// AboveRating Only the works the library's maximum rating does not admit (held, never searched); needs category_id.
 	AboveRating *bool `form:"above_rating,omitempty" json:"above_rating,omitempty"`
 
@@ -9959,6 +9982,9 @@ type ListWorksParams struct {
 
 // ListWorksParamsDir defines parameters for ListWorks.
 type ListWorksParamsDir string
+
+// ListWorksParamsStatus defines parameters for ListWorks.
+type ListWorksParamsStatus string
 
 // ListWorksParamsWatched defines parameters for ListWorks.
 type ListWorksParamsWatched string
@@ -28299,6 +28325,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "cutoff_unmet", r.URL.Query(), &params.CutoffUnmet)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cutoff_unmet", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "status", r.URL.Query(), &params.Status)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
 		return
 	}
 

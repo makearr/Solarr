@@ -21,9 +21,13 @@ func transcodeLimits(lanes gen.TranscodeLaneLimits) settings.LaneLimits {
 
 func (s *Server) transcodeSettings(r *http.Request) (gen.TranscodeSettings, error) {
 	global := s.auth.Settings.Snapshot().TranscodeGlobal()
+	if s.transcoder != nil {
+		global = global.Resolved(settings.LaneHardware{Cores: s.transcoder.CPUCores(), EncodeEngines: s.transcoder.EncodeEngines()})
+	}
 	out := gen.TranscodeSettings{
 		Global: gen.TranscodeGlobalSettings{
 			Enabled: global.Enabled, Parallel: transcodeLanes(global.Parallel), PlaybackParallel: transcodeLanes(global.PlaybackParallel),
+			ParallelAuto: global.ParallelAuto, PlaybackParallelAuto: global.PlaybackParallelAuto,
 			OriginalsRetainDays: int(global.Originals.RetainDays), OriginalsCapGb: int(global.Originals.CapGB),
 		},
 		Libraries: []gen.TranscodeLibrary{},
@@ -69,7 +73,7 @@ func (s *Server) SetTranscodeSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(
-		settings.KeyTranscodeEnabled, settings.KeyTranscodeParallelCPU, settings.KeyTranscodeParallelGPU, settings.KeyTranscodeParallelAudio, settings.KeyTranscodeParallelBooks,
+		settings.KeyTranscodeEnabled, settings.KeyTranscodeParallelAuto, settings.KeyTranscodePlaybackParallelAuto, settings.KeyTranscodeParallelCPU, settings.KeyTranscodeParallelGPU, settings.KeyTranscodeParallelAudio, settings.KeyTranscodeParallelBooks,
 		settings.KeyTranscodePlaybackParallelCPU, settings.KeyTranscodePlaybackParallelGPU, settings.KeyTranscodePlaybackParallelAudio, settings.KeyTranscodePlaybackParallelBooks,
 		settings.KeyTranscodeOriginalsRetainDays, settings.KeyTranscodeOriginalsCapGB,
 	); err != nil {
@@ -78,6 +82,7 @@ func (s *Server) SetTranscodeSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	global := settings.TranscodeGlobal{
 		Enabled: body.Enabled, Parallel: transcodeLimits(body.Parallel), PlaybackParallel: transcodeLimits(body.PlaybackParallel),
+		ParallelAuto: body.ParallelAuto, PlaybackParallelAuto: body.PlaybackParallelAuto,
 		Originals: settings.OriginalsPolicy{RetainDays: int64(body.OriginalsRetainDays), CapGB: int64(body.OriginalsCapGb)},
 	}
 	if s.writeTranscodeProblem(w, s.auth.Settings.SetTranscodeGlobal(r.Context(), s.auth.Clock, global)) {

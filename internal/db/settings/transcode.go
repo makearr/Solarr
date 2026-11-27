@@ -15,9 +15,11 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-// The instance-wide transcode policy keys (documentation/transcode.md).
+// The instance-wide transcode policy keys (documentation/transcoding.md).
 const (
 	KeyTranscodeEnabled                     = "transcode.enabled"
+	KeyTranscodeParallelAuto                = "transcode.parallel_auto"
+	KeyTranscodePlaybackParallelAuto        = "transcode.playback_parallel_auto"
 	KeyTranscodeParallelCPU                 = "transcode.parallel_cpu"
 	KeyTranscodeParallelGPU                 = "transcode.parallel_gpu"
 	KeyTranscodeParallelAudio               = "transcode.parallel_audio"
@@ -56,7 +58,44 @@ type TranscodeGlobal struct {
 	Enabled          bool
 	Parallel         LaneLimits
 	PlaybackParallel LaneLimits
-	Originals        OriginalsPolicy
+	// ParallelAuto and PlaybackParallelAuto say the row follows the hardware until limits are saved; see Resolved.
+	ParallelAuto, PlaybackParallelAuto bool
+	Originals                          OriginalsPolicy
+}
+
+// LaneHardware is what the automatic lane limits follow: the cores the container may use and the hardware encode engines
+// (zero: no hardware encoder works).
+type LaneHardware struct{ Cores, EncodeEngines int }
+
+// AutoLaneLimits are the limits while nothing plays and while the web player converts; the rule is in documentation/transcoding.md.
+func AutoLaneLimits(hardware LaneHardware) (normal, playing LaneLimits) {
+	cores := max(hardware.Cores, 1)
+	engines := max(hardware.EncodeEngines, 0)
+	normal.CPU = 1
+	normal.GPU = max(int64(engines), normal.CPU)
+	normal.Audio = max(int64(cores/2), 1, normal.GPU)
+	normal.Books = normal.Audio
+	if engines > 0 {
+		playing.GPU = int64(engines - 1)
+	}
+	playing.Audio = max(int64(cores/4), 1, playing.GPU)
+	playing.Books = playing.Audio
+	clamp := func(limits LaneLimits) LaneLimits {
+		return LaneLimits{CPU: min(limits.CPU, maxTranscodeParallel), GPU: min(limits.GPU, maxTranscodeParallel), Audio: min(limits.Audio, maxTranscodeParallel), Books: min(limits.Books, maxTranscodeParallel)}
+	}
+	return clamp(normal), clamp(playing)
+}
+
+// Resolved is the policy with the rows that follow the hardware replaced by what AutoLaneLimits gives for it.
+func (g TranscodeGlobal) Resolved(hardware LaneHardware) TranscodeGlobal {
+	normal, playing := AutoLaneLimits(hardware)
+	if g.ParallelAuto {
+		g.Parallel = normal
+	}
+	if g.PlaybackParallelAuto {
+		g.PlaybackParallel = playing
+	}
+	return g
 }
 
 // TranscodeOrder is the order a library's files are worked in.
@@ -92,9 +131,11 @@ func (s *Snapshot) TranscodeGlobal() TranscodeGlobal {
 		}
 	}
 	return TranscodeGlobal{
-		Enabled:          s.policyBool(KeyTranscodeEnabled, false),
-		Parallel:         lanes(KeyTranscodeParallelCPU, KeyTranscodeParallelGPU, KeyTranscodeParallelAudio, KeyTranscodeParallelBooks, LaneLimits{CPU: 1, GPU: 2, Audio: 4, Books: 4}),
-		PlaybackParallel: lanes(KeyTranscodePlaybackParallelCPU, KeyTranscodePlaybackParallelGPU, KeyTranscodePlaybackParallelAudio, KeyTranscodePlaybackParallelBooks, LaneLimits{GPU: 1, Audio: 1, Books: 1}),
+		Enabled:              s.policyBool(KeyTranscodeEnabled, false),
+		Parallel:             lanes(KeyTranscodeParallelCPU, KeyTranscodeParallelGPU, KeyTranscodeParallelAudio, KeyTranscodeParallelBooks, LaneLimits{CPU: 1, GPU: 2, Audio: 4, Books: 4}),
+		PlaybackParallel:     lanes(KeyTranscodePlaybackParallelCPU, KeyTranscodePlaybackParallelGPU, KeyTranscodePlaybackParallelAudio, KeyTranscodePlaybackParallelBooks, LaneLimits{GPU: 1, Audio: 1, Books: 1}),
+		ParallelAuto:         s.policyBool(KeyTranscodeParallelAuto, true),
+		PlaybackParallelAuto: s.policyBool(KeyTranscodePlaybackParallelAuto, true),
 		Originals: OriginalsPolicy{
 			RetainDays: s.policyInt(KeyTranscodeOriginalsRetainDays, 7), CapGB: s.policyInt(KeyTranscodeOriginalsCapGB, 100),
 		},
@@ -107,7 +148,14 @@ func (s *Snapshot) TranscodeEnabled() bool { return s.TranscodeGlobal().Enabled 
 // SetTranscodeGlobal validates and writes the whole instance-wide policy.
 func (c *Cache) SetTranscodeGlobal(ctx context.Context, cl clock.Clock, global TranscodeGlobal) error {
 	var problems config.Problems
-	for _, row := range [][]NamedLimit{global.Parallel.InOrder("parallel"), global.PlaybackParallel.InOrder("playback_parallel")} {
+	rows := [][]NamedLimit{}
+	if !global.ParallelAuto {
+		rows = append(rows, global.Parallel.InOrder("parallel"))
+	}
+	if !global.PlaybackParallelAuto {
+		rows = append(rows, global.PlaybackParallel.InOrder("playback_parallel"))
+	}
+	for _, row := range rows {
 		for index, limit := range row {
 			if limit.Value < 0 || limit.Value > maxTranscodeParallel {
 				problems = append(problems, config.Problem{Path: limit.Path, Value: strconv.FormatInt(limit.Value, 10), Expectation: "0 to 16"})
@@ -127,19 +175,22 @@ func (c *Cache) SetTranscodeGlobal(ctx context.Context, cl clock.Clock, global T
 		return problems
 	}
 	number := func(value int64) string { return strconv.FormatInt(value, 10) }
-	return c.setPolicies(ctx, cl, map[string]string{
-		KeyTranscodeEnabled:               boolPolicy(global.Enabled),
-		KeyTranscodeParallelCPU:           number(global.Parallel.CPU),
-		KeyTranscodeParallelGPU:           number(global.Parallel.GPU),
-		KeyTranscodeParallelAudio:         number(global.Parallel.Audio),
-		KeyTranscodeParallelBooks:         number(global.Parallel.Books),
-		KeyTranscodePlaybackParallelCPU:   number(global.PlaybackParallel.CPU),
-		KeyTranscodePlaybackParallelGPU:   number(global.PlaybackParallel.GPU),
-		KeyTranscodePlaybackParallelAudio: number(global.PlaybackParallel.Audio),
-		KeyTranscodePlaybackParallelBooks: number(global.PlaybackParallel.Books),
-		KeyTranscodeOriginalsRetainDays:   number(global.Originals.RetainDays),
-		KeyTranscodeOriginalsCapGB:        number(global.Originals.CapGB),
-	})
+	values := map[string]string{
+		KeyTranscodeEnabled:              boolPolicy(global.Enabled),
+		KeyTranscodeParallelAuto:         boolPolicy(global.ParallelAuto),
+		KeyTranscodePlaybackParallelAuto: boolPolicy(global.PlaybackParallelAuto),
+		KeyTranscodeOriginalsRetainDays:  number(global.Originals.RetainDays),
+		KeyTranscodeOriginalsCapGB:       number(global.Originals.CapGB),
+	}
+	if !global.ParallelAuto {
+		values[KeyTranscodeParallelCPU], values[KeyTranscodeParallelGPU] = number(global.Parallel.CPU), number(global.Parallel.GPU)
+		values[KeyTranscodeParallelAudio], values[KeyTranscodeParallelBooks] = number(global.Parallel.Audio), number(global.Parallel.Books)
+	}
+	if !global.PlaybackParallelAuto {
+		values[KeyTranscodePlaybackParallelCPU], values[KeyTranscodePlaybackParallelGPU] = number(global.PlaybackParallel.CPU), number(global.PlaybackParallel.GPU)
+		values[KeyTranscodePlaybackParallelAudio], values[KeyTranscodePlaybackParallelBooks] = number(global.PlaybackParallel.Audio), number(global.PlaybackParallel.Books)
+	}
+	return c.setPolicies(ctx, cl, values)
 }
 
 // StoredTranscodeSetup is a target's setup with the revision it was saved at.

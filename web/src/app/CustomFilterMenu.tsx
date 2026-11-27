@@ -19,6 +19,8 @@ interface Props {
   where: string;
   /** The list's quick filters in force (search text, tags, person); saved with a filter when given. */
   quick?: Record<string, string>;
+  /** A list of watchable works offers its watched filter here, not in the toolbar. */
+  watched?: { value: string; onChange: (value: string) => void };
   /** `quick` is the saved filter's quick filters (empty for Everything) when the list passed its own. */
   onChange: (where: string, quick?: Record<string, string>) => void;
 }
@@ -29,7 +31,7 @@ const blankCondition = (fields: readonly FilterField[]): Condition => {
 };
 
 /** Sonarr's Filter menu: all, the filters a person saved, and a builder for a new one. */
-export function CustomFilterMenu({ fields, storageKey, where, quick, onChange }: Props) {
+export function CustomFilterMenu({ fields, storageKey, where, quick, watched, onChange }: Props) {
   const [saved, setSaved] = usePreference<SavedFilter[]>(`filters.${storageKey}`, []);
   const [editing, setEditing] = useState<SavedFilter | "new" | null>(null);
   const active = parseWhere(where);
@@ -77,6 +79,28 @@ export function CustomFilterMenu({ fields, storageKey, where, quick, onChange }:
                 </span>
               </DropdownMenu.Item>
             ))}
+            {watched && (
+              <>
+                <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
+                <DropdownMenu.Label className="px-2 py-1 text-xs text-ink-muted">{t("watch.filter")}</DropdownMenu.Label>
+                <DropdownMenu.RadioGroup value={watched.value} onValueChange={watched.onChange}>
+                  {([["", "watch.any"], ["yes", "watch.yes"], ["in_progress", "watch.inProgress"], ["no", "watch.no"]] as const).map(([value, label]) => (
+                    <DropdownMenu.RadioItem
+                      key={value}
+                      value={value}
+                      className="flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none data-[highlighted]:bg-canvas"
+                    >
+                      <span className="size-3.5">
+                        <DropdownMenu.ItemIndicator>
+                          <Check aria-hidden className="size-3.5" />
+                        </DropdownMenu.ItemIndicator>
+                      </span>
+                      {t(label)}
+                    </DropdownMenu.RadioItem>
+                  ))}
+                </DropdownMenu.RadioGroup>
+              </>
+            )}
             <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
             <DropdownMenu.Item
               onSelect={() => setEditing("new")}

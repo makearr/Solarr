@@ -2770,6 +2770,12 @@ paths:
             Only works whose monitored album has every track but a file below the library's cutoff
             (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL.
           schema: { type: boolean, default: false }
+        - name: status
+          in: query
+          description: >-
+            The availability shown on each row: present (everything is here), wanted (something is missing and nothing is on its way),
+            downloading, or upcoming (not released yet and not here). Unset lists every work.
+          schema: { type: string, enum: [present, wanted, downloading, upcoming] }
         - name: above_rating
           in: query
           description: Only the works the library's maximum rating does not admit (held, never searched); needs category_id.
@@ -17225,10 +17231,10 @@ components:
       properties:
         video_hashing: { type: boolean, description: "Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off." }
         video_previews: { type: boolean, description: "Make a single frame and a 3x3 thumbnail sheet of each video from the frames the hashing reads (scan.video_previews). Turning it on turns video_hashing on. Default off." }
-        hunt_old_missing: { type: boolean, description: "The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on." }
+        hunt_old_missing: { type: boolean, description: "The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default off." }
         recommendations: { type: boolean, description: "Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off." }
-        verify_files: { type: boolean, description: "The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default on." }
-        show_collections: { type: boolean, description: "The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default on." }
+        verify_files: { type: boolean, description: "The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default off." }
+        show_collections: { type: boolean, description: "The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default off." }
         solarr_mode:
           type: string
           enum: [normal, read_only, pause_downloads, observe, arr_companion]
@@ -17249,11 +17255,13 @@ components:
 
     TranscodeGlobalSettings:
       type: object
-      required: [enabled, parallel, playback_parallel, originals_retain_days, originals_cap_gb]
+      required: [enabled, parallel, playback_parallel, parallel_auto, playback_parallel_auto, originals_retain_days, originals_cap_gb]
       properties:
         enabled: { type: boolean, description: "Master switch (transcode.enabled). Default off." }
         parallel: { $ref: "#/components/schemas/TranscodeLaneLimits" }
         playback_parallel: { $ref: "#/components/schemas/TranscodeLaneLimits" }
+        parallel_auto: { type: boolean, description: "The limits while nothing plays follow the detected hardware (the answer carries the resulting numbers); true until limits are saved. On a PUT, true ignores `parallel`." }
+        playback_parallel_auto: { type: boolean, description: "The same for the limits while the web player converts." }
         originals_retain_days: { type: integer, minimum: 0, maximum: 3650, description: "Days a replaced original stays in the recycle bin; 0 follows the bin's own retention." }
         originals_cap_gb: { type: integer, minimum: 0, description: "Most space replaced originals may take together; 0 is no cap." }
 
@@ -17573,10 +17581,12 @@ components:
 
     TranscodeHardware:
       type: object
-      required: [ffmpeg_available, ffmpeg_version, capabilities, encoders, filters]
+      required: [ffmpeg_available, ffmpeg_version, cpu_cores, encode_engines, capabilities, encoders, filters]
       properties:
         ffmpeg_available: { type: boolean }
         ffmpeg_version: { type: string }
+        cpu_cores: { type: integer, description: "Cores the container may use: its CPU quota when it has one, else the cores it may be scheduled on, else the machine's." }
+        encode_engines: { type: integer, description: "Hardware encode engines of the best working encoder; 0 when none works." }
         capabilities: { type: array, items: { $ref: "#/components/schemas/TranscodeCapability" } }
         encoders: { type: array, items: { $ref: "#/components/schemas/TranscodeEncoderSupport" } }
         filters: { type: object, additionalProperties: { type: boolean }, description: Which filters of the setup form this ffmpeg has. }

@@ -141,6 +141,7 @@ func TestTranscodeGlobalDefaultsRoundTripAndRefuseOutOfRangeLimits(t *testing.T)
 	cache, cl := newCache(t)
 	want := settings.TranscodeGlobal{
 		Parallel: settings.LaneLimits{CPU: 1, GPU: 2, Audio: 4, Books: 4}, PlaybackParallel: settings.LaneLimits{GPU: 1, Audio: 1, Books: 1}, Originals: settings.OriginalsPolicy{RetainDays: 7, CapGB: 100},
+		ParallelAuto: true, PlaybackParallelAuto: true,
 	}
 	if got := cache.Snapshot().TranscodeGlobal(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("default = %+v", got)
@@ -299,5 +300,48 @@ func TestTranscodeWarningsOfAComicOrEbookNeverAskForABitrate(t *testing.T) {
 	}
 	if got := settings.TranscodeWarningsOf("audio", setup, settings.QualityTarget{MediaType: "music"}); len(got) == 0 {
 		t.Error("an audio target without a bitrate lost its warning")
+	}
+}
+
+func TestAutoLaneLimitsFollowTheHardware(t *testing.T) {
+	for _, check := range []struct {
+		name            string
+		hardware        settings.LaneHardware
+		normal, playing settings.LaneLimits
+	}{
+		{"two engines, eight cores", settings.LaneHardware{Cores: 8, EncodeEngines: 2}, settings.LaneLimits{CPU: 1, GPU: 2, Audio: 4, Books: 4}, settings.LaneLimits{CPU: 0, GPU: 1, Audio: 2, Books: 2}},
+		{"no hardware encoder is Video HW as Video", settings.LaneHardware{Cores: 4}, settings.LaneLimits{CPU: 1, GPU: 1, Audio: 2, Books: 2}, settings.LaneLimits{CPU: 0, GPU: 0, Audio: 1, Books: 1}},
+		{"one core still lets audio run", settings.LaneHardware{Cores: 1}, settings.LaneLimits{CPU: 1, GPU: 1, Audio: 1, Books: 1}, settings.LaneLimits{CPU: 0, GPU: 0, Audio: 1, Books: 1}},
+		{"engines above the cores raise audio to keep the order", settings.LaneHardware{Cores: 2, EncodeEngines: 3}, settings.LaneLimits{CPU: 1, GPU: 3, Audio: 3, Books: 3}, settings.LaneLimits{CPU: 0, GPU: 2, Audio: 2, Books: 2}},
+		{"nothing passes sixteen", settings.LaneHardware{Cores: 128, EncodeEngines: 20}, settings.LaneLimits{CPU: 1, GPU: 16, Audio: 16, Books: 16}, settings.LaneLimits{CPU: 0, GPU: 16, Audio: 16, Books: 16}},
+	} {
+		normal, playing := settings.AutoLaneLimits(check.hardware)
+		if normal != check.normal || playing != check.playing {
+			t.Errorf("%s: normal = %+v, playing = %+v, want %+v and %+v", check.name, normal, playing, check.normal, check.playing)
+		}
+	}
+}
+
+func TestResolvedReplacesOnlyTheRowsThatFollowTheHardware(t *testing.T) {
+	manual := settings.LaneLimits{CPU: 2, GPU: 2, Audio: 2, Books: 2}
+	global := settings.TranscodeGlobal{Parallel: manual, PlaybackParallel: manual, ParallelAuto: true}
+	got := global.Resolved(settings.LaneHardware{Cores: 8, EncodeEngines: 2})
+	if got.Parallel != (settings.LaneLimits{CPU: 1, GPU: 2, Audio: 4, Books: 4}) || got.PlaybackParallel != manual {
+		t.Errorf("resolved = %+v", got)
+	}
+}
+
+func TestTranscodeLimitsSavedByAPersonStopFollowingTheHardware(t *testing.T) {
+	cache, cl := newCache(t)
+	saved := settings.TranscodeGlobal{Parallel: settings.LaneLimits{CPU: 1, GPU: 1, Audio: 1, Books: 1}, PlaybackParallelAuto: true, Originals: settings.OriginalsPolicy{RetainDays: 7, CapGB: 100}}
+	if err := cache.SetTranscodeGlobal(t.Context(), cl, saved); err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.Snapshot().TranscodeGlobal(); got.ParallelAuto || !got.PlaybackParallelAuto || got.Parallel != saved.Parallel {
+		t.Errorf("saved = %+v", got)
+	}
+	saved.PlaybackParallelAuto, saved.PlaybackParallel = false, settings.LaneLimits{GPU: 2, Audio: 1}
+	if err := cache.SetTranscodeGlobal(t.Context(), cl, saved); err == nil {
+		t.Error("a manual row whose audio limit is under its GPU limit was accepted")
 	}
 }

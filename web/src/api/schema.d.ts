@@ -12897,13 +12897,13 @@ export interface components {
             video_hashing?: boolean;
             /** @description Make a single frame and a 3x3 thumbnail sheet of each video from the frames the hashing reads (scan.video_previews). Turning it on turns video_hashing on. Default off. */
             video_previews?: boolean;
-            /** @description The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on. */
+            /** @description The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default off. */
             hunt_old_missing?: boolean;
             /** @description Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off. */
             recommendations?: boolean;
-            /** @description The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default on. */
+            /** @description The probe decodes the end of each video and audio file and marks one that stops short as defective (scan.verify_files). Default off. */
             verify_files?: boolean;
-            /** @description The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default on. */
+            /** @description The interface lists collections in the navigation and on item pages (ui.show_collections). Off hides them only; collections are still collected. Default off. */
             show_collections?: boolean;
             /**
              * @description How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
@@ -12925,6 +12925,10 @@ export interface components {
             enabled: boolean;
             parallel: components["schemas"]["TranscodeLaneLimits"];
             playback_parallel: components["schemas"]["TranscodeLaneLimits"];
+            /** @description The limits while nothing plays follow the detected hardware (the answer carries the resulting numbers); true until limits are saved. On a PUT, true ignores `parallel`. */
+            parallel_auto: boolean;
+            /** @description The same for the limits while the web player converts. */
+            playback_parallel_auto: boolean;
             /** @description Days a replaced original stays in the recycle bin; 0 follows the bin's own retention. */
             originals_retain_days: number;
             /** @description Most space replaced originals may take together; 0 is no cap. */
@@ -13275,6 +13279,10 @@ export interface components {
         TranscodeHardware: {
             ffmpeg_available: boolean;
             ffmpeg_version: string;
+            /** @description Cores the container may use: its CPU quota when it has one, else the cores it may be scheduled on, else the machine's. */
+            cpu_cores: number;
+            /** @description Hardware encode engines of the best working encoder; 0 when none works. */
+            encode_engines: number;
             capabilities: components["schemas"]["TranscodeCapability"][];
             encoders: components["schemas"]["TranscodeEncoderSupport"][];
             /** @description Which filters of the setup form this ffmpeg has. */
@@ -16913,6 +16921,8 @@ export interface operations {
                 wanted?: boolean;
                 /** @description Only works whose monitored album has every track but a file below the library's cutoff (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL. */
                 cutoff_unmet?: boolean;
+                /** @description The availability shown on each row: present (everything is here), wanted (something is missing and nothing is on its way), downloading, or upcoming (not released yet and not here). Unset lists every work. */
+                status?: "present" | "wanted" | "downloading" | "upcoming";
                 /** @description Only the works the library's maximum rating does not admit (held, never searched); needs category_id. */
                 above_rating?: boolean;
                 /** @description Only the works with an item that carries a quality profile of its own (an override), not the library's. */

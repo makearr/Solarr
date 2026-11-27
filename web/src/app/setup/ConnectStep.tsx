@@ -71,6 +71,7 @@ export function ConnectStep({ state, update, onBack, onNext }: { state: WizardSt
       {state.connections.map((connection) => (
         <ConnectionCard key={connection.instanceId} connection={connection} state={state} update={update} />
       ))}
+      {state.connections.some((connection) => connection.app !== "prowlarr") && <CompanionChoice state={state} update={update} />}
       {adding ? (
         <ConnectionForm
           key={`${adding.app}|${adding.baseUrl}`}
@@ -89,6 +90,31 @@ export function ConnectStep({ state, update, onBack, onNext }: { state: WizardSt
       )}
     </StepFrame>
   );
+}
+
+function CompanionChoice({ state, update }: { state: WizardState; update: (next: WizardState) => void }) {
+  const companion = state.companion !== false;
+  return (
+    <fieldset className="space-y-1 rounded-md border border-border-subtle p-3 text-sm">
+      <legend className="px-1 text-xs font-medium text-ink-muted">{t("setup.companion.title")}</legend>
+      <label className="flex items-start gap-2">
+        <input type="radio" name="companion" className="mt-1" checked={companion} onChange={() => update({ ...state, companion: true })} />
+        {t("setup.companion.companion")}
+      </label>
+      <label className="flex items-start gap-2">
+        <input type="radio" name="companion" className="mt-1" checked={!companion} onChange={() => update({ ...state, companion: false })} />
+        {t("setup.companion.replace")}
+      </label>
+    </fieldset>
+  );
+}
+
+/** The app's own name, numbered ("Radarr 2") when another connection already has it. */
+export function uniqueName(title: string, taken: readonly string[]): string {
+  const lower = taken.map((one) => one.toLowerCase());
+  let name = title;
+  for (let number = 2; lower.includes(name.toLowerCase()); number++) name = `${title} ${number}`;
+  return name;
 }
 
 function nextApp(state: WizardState): ArrApp {
@@ -146,6 +172,7 @@ export function ConnectionForm({ initial, state, onAdded, onCancel, only }: {
   const [tested, setTested] = useState<{ signature: string; result: Test } | null>(null);
   const signature = `${app}|${baseUrl.trim()}|${apiKey.trim()}`;
   const connections = useQuery({ queryKey: ["arr-instances"], queryFn: () => ok(api.GET("/arr/instances")) });
+  const defaultName = uniqueName(entry.title, (connections.data ?? []).map((existing) => existing.name));
   const duplicate = (connections.data ?? []).find((existing) => existing.base_url.replace(/\/+$/, "") === baseUrl.trim().replace(/\/+$/, ""));
 
   const test = useMutation({
@@ -158,7 +185,7 @@ export function ConnectionForm({ initial, state, onAdded, onCancel, only }: {
   const add = useMutation({
     meta: { handlesErrors: true },
     mutationFn: async (): Promise<WizardState> => {
-      const shown = name.trim() || entry.title;
+      const shown = name.trim() || defaultName;
       const instance = await ok(api.POST("/arr/instances", { body: { app, name: shown, base_url: baseUrl.trim(), api_key: apiKey.trim(), enabled: true, push_monitoring: false } }));
       const connection: WizardConnection = {
         instanceId: instance.id, app, name: shown, baseUrl: baseUrl.trim(), version: verdict?.version,
@@ -202,7 +229,7 @@ export function ConnectionForm({ initial, state, onAdded, onCancel, only }: {
           </select>
         </Field>
         <Field label={t("setup.connect.name")}>
-          <input className={inputStyle} value={name} placeholder={entry.title} autoComplete="off" onChange={(event) => setName(event.target.value)} />
+          <input className={inputStyle} value={name} placeholder={defaultName} autoComplete="off" onChange={(event) => setName(event.target.value)} />
         </Field>
       </div>
       <Field label={t("setup.connect.address")} hint={t("setup.connect.addressHint", { app: entry.title })}>

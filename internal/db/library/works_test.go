@@ -1058,3 +1058,50 @@ func TestRecordSearchUnansweredKeepsTheCountAndDuesTheItemSoon(t *testing.T) {
 		t.Fatalf("after two answered searches: %+v, %v; want count 2, searched at %d", entry, err, 200_000+900-2*3600)
 	}
 }
+
+// A list's status filter keeps the works whose row shows that availability: upcoming beats downloading, which beats present.
+func TestList_StatusFilterKeepsTheWorksWhoseRowShowsThatAvailability(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	const now = int64(1_000_000)
+
+	wanted := createWork(t, opened, "music", "Wanted Album")
+	createDesired(t, opened, wanted.ID, "SET", 10)
+
+	complete := createWork(t, opened, "music", "Complete Album")
+	completeItem := createDesired(t, opened, complete.ID, "SET", 10)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{ID: completeItem.ID, State: "COMPLETE", PresentCount: 10})
+	})
+
+	upcoming := createWork(t, opened, "music", "Upcoming Album")
+	upcomingItem := createDesired(t, opened, upcoming.ID, "SET", 10)
+
+	downloading := createWork(t, opened, "music", "Downloading Album")
+	downloadingItem := createDesired(t, opened, downloading.ID, "SET", 10)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		_, err := q.CreateAcquisition(ctx, librarydb.CreateAcquisitionParams{
+			DesiredItemID: sql.NullInt64{Int64: downloadingItem.ID, Valid: true}, CandidateID: sql.NullInt64{Int64: 1, Valid: true},
+			IndexerID: sql.NullInt64{Int64: 1, Valid: true}, CandidateGuid: sql.NullString{String: "guid-d", Valid: true},
+			CandidateTitle: sql.NullString{String: "Downloading.Album", Valid: true}, DownloaderID: 1, DownloadClientRef: "ref-1",
+			Protocol: "usenet", State: "DOWNLOADING", CreatedAt: 2, UpdatedAt: 2,
+		})
+		return err
+	})
+	if err := opened.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE desired_item SET available_from = ? WHERE id = ?", now+3600, upcomingItem.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for status, want := range map[string]int64{"wanted": wanted.ID, "present": complete.ID, "upcoming": upcoming.ID, "downloading": downloading.ID} {
+		page, err := works.List(t.Context(), library.WorkFilter{Status: status, Now: now}, library.WorkCursor{}, 100)
+		if err != nil {
+			t.Fatalf("%s: %v", status, err)
+		}
+		if len(page) != 1 || page[0].ID != want {
+			t.Errorf("%s: page = %+v, want only work %d", status, page, want)
+		}
+	}
+}

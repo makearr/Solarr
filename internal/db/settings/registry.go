@@ -514,6 +514,18 @@ func NewDefaultRegistry() *Registry {
 		Default:  "false",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyTranscodeParallelAuto, Kind: KindBool, Tier: TierNormal,
+		Name:     "Transcode: parallel conversions follow the hardware",
+		HelpText: "The lane limits are worked out from the cores and encode engines found, until you set limits of your own.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodePlaybackParallelAuto, Kind: KindBool, Tier: TierNormal,
+		Name:     "Transcode while playing: limits follow the hardware",
+		HelpText: "The lane limits while the web player converts are worked out from the cores and encode engines found, until you set limits of your own.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTranscodeParallelCPU, Kind: KindInt, Tier: TierNormal,
 		Name:     "Transcode: parallel software conversions",
 		HelpText: "How many conversions on the CPU run at once.",

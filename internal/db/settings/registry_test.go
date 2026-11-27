@@ -127,7 +127,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.EntityImportList, settings.EntityDownloadFolder,
 		// Stage 5's own entities (2026-09-12): indexer and download client connections.
 		settings.EntityIndexer, settings.EntityDownloader,
-		settings.KeyTranscodeEnabled, settings.KeyTranscodeParallelCPU, settings.KeyTranscodeParallelGPU, settings.KeyTranscodeParallelAudio, settings.KeyTranscodeParallelBooks,
+		settings.KeyTranscodeEnabled, settings.KeyTranscodeParallelAuto, settings.KeyTranscodePlaybackParallelAuto, settings.KeyTranscodeParallelCPU, settings.KeyTranscodeParallelGPU, settings.KeyTranscodeParallelAudio, settings.KeyTranscodeParallelBooks,
 		settings.KeyTranscodePlaybackParallelCPU, settings.KeyTranscodePlaybackParallelGPU, settings.KeyTranscodePlaybackParallelAudio, settings.KeyTranscodePlaybackParallelBooks,
 		settings.KeyTranscodeOriginalsRetainDays, settings.KeyTranscodeOriginalsCapGB,
 		settings.KeyDiscoverClassicYears, settings.KeyDiscoverMinRating, settings.KeyDiscoverMinVotes, settings.KeyDiscoverAutoAddPerDay, settings.KeyDiscoverAutoAddSearch,

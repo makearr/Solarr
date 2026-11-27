@@ -77,6 +77,8 @@ type WorksFilter struct {
 	Wanted bool
 	// CutoffUnmet restricts to albums whose files fall short of the library's cutoff (M1d).
 	CutoffUnmet bool
+	// Status keeps the works showing this availability (present, wanted, downloading, upcoming); "" any.
+	Status string
 	// TagIDs are tags a work must carry (or one below each), ExcludedTagIDs tags it must not: the list's chips.
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating keeps the works the library's maximum rating does not admit.
@@ -222,7 +224,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		WorksFilter{
 			Watched: watched, WatchPairs: watchPairs,
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
-			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
+			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false), Status: enumString(params.Status),
 			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: append(without, blockedTagIDs(access)...), AboveRating: derefOr(params.AboveRating, false), OwnProfile: derefOr(params.OwnProfile, false),
 			MediaType:      derefOr(params.MediaType, ""),
 			PersonID:       derefOr(params.PersonId, 0),

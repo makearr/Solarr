@@ -61,6 +61,14 @@ export function buildTasks(state: WizardState): Task[] {
       },
     });
   }
+  if (state.connections.some((connection) => connection.app !== "prowlarr") && state.companion !== false) {
+    tasks.push({
+      id: "companion", label: t("setup.task.companion"), needs: [],
+      run: async () => {
+        await ok(api.PATCH("/settings/general", { body: { solarr_mode: "arr_companion" } }));
+      },
+    });
+  }
   for (const library of state.libraries) {
     tasks.push({ id: `library:${library.key}`, label: t("setup.task.library", { name: library.name }), needs: ["languages"], run: (hooks) => makeLibrary(hooks, library.key) });
     if (["best", "balanced", "space"].includes(library.starter) && library.libraryId === undefined) {
@@ -83,6 +91,26 @@ export function buildTasks(state: WizardState): Task[] {
       id: `import:${connection.instanceId}`, label: t("setup.task.import", { name: connection.name }),
       needs: [`link:${connection.instanceId}`, ...prowlarrTasks],
       run: (hooks) => startImport(hooks, connection.instanceId),
+    });
+  }
+  const features = state.features ?? [];
+  if (features.length > 0) {
+    tasks.push({
+      id: "features", label: t("setup.task.features", { names: features.map((feature) => t(`setup.feature.${feature}`).toLowerCase()).join(", ") }), needs: [],
+      run: async () => {
+        await ok(api.PATCH("/settings/general", {
+          body: {
+            recommendations: features.includes("discover") || undefined,
+            video_hashing: features.includes("deduplication") || undefined,
+            show_collections: features.includes("collections") || undefined,
+            verify_files: features.includes("brokenFiles") || undefined,
+          },
+        }));
+        if (features.includes("transcoding")) {
+          const current = await ok(api.GET("/settings/transcode"));
+          await ok(api.PUT("/settings/transcode", { body: { ...current.global, enabled: true } }));
+        }
+      },
     });
   }
   return tasks;

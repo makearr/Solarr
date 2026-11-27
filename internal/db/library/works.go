@@ -110,6 +110,10 @@ type WorkFilter struct {
 	// CutoffUnmetOnly restricts to works whose monitored album falls short of its cutoff (M1d, Lidarr's
 	// Wanted -> Cutoff Unmet).
 	CutoffUnmetOnly bool
+	// Status keeps the works showing this availability (present, wanted, downloading, upcoming), and Now is the Unix time
+	// "not out yet" is judged at; "" any.
+	Status string
+	Now    int64
 	// TagIDs are tags a work must carry, each or one below it; ExcludedTagIDs tags it must carry neither of.
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating keeps only the works a library's maximum rating does not admit; nil does not filter.
@@ -230,6 +234,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.WantedOnly,
 		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL'))"+
 			" AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = work.id)")
+	addStatus(&predicates, filter.Status, filter.Now)
 	predicates.AddIf(filter.CutoffUnmetOnly,
 		"EXISTS (SELECT 1 FROM desired_item cu WHERE cu.work_id = work.id AND cu.monitored = 1 AND cu.state = 'UPGRADABLE')")
 
@@ -522,4 +527,29 @@ func membershipStrings(template string, names []string) (string, []any, bool) {
 		placeholders[index], arguments[index] = "?", name
 	}
 	return fmt.Sprintf(template, strings.Join(placeholders, ",")), arguments, true
+}
+
+// The pieces of a row's availability (apiserver.albumStatus) as SQL, over the same monitored item the list shows.
+const (
+	workAllHereSQL      = "(" + workStateExpression + " IN ('COMPLETE', 'UPGRADABLE'))"
+	workUpcomingSQL     = "(COALESCE(" + workAvailableFromExpression + ", 0) > ? AND NOT " + workAllHereSQL + ")"
+	workDownloadingSQL  = "EXISTS (SELECT 1 FROM acquisition a JOIN desired_item adi ON adi.id = a.desired_item_id WHERE adi.work_id = work.id AND a.state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED'))"
+	workPresentSQL      = "(" + workAllHereSQL + " OR (" + workStateExpression + " IS NULL AND EXISTS (SELECT 1 FROM work_file wf JOIN library_path lp ON lp.media_object_id = wf.media_object_id WHERE wf.work_id = work.id AND lp.missing_since IS NULL)))"
+	workStateExpression = "(SELECT di.state FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 ORDER BY di.satisfaction_kind = 'SET' DESC, di.id LIMIT 1)"
+
+	workAvailableFromExpression = "(SELECT di.available_from FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 ORDER BY di.satisfaction_kind = 'SET' DESC, di.id LIMIT 1)"
+)
+
+// addStatus narrows the list to one availability; upcoming outranks downloading, which outranks present, as on the rows.
+func addStatus(predicates *store.Predicates, status string, now int64) {
+	switch status {
+	case "upcoming":
+		predicates.Add(workUpcomingSQL, now)
+	case "downloading":
+		predicates.Add("("+"NOT "+workUpcomingSQL+" AND "+workDownloadingSQL+")", now)
+	case "present":
+		predicates.Add("("+"NOT "+workUpcomingSQL+" AND NOT "+workDownloadingSQL+" AND "+workPresentSQL+")", now)
+	case "wanted":
+		predicates.Add("("+"NOT "+workUpcomingSQL+" AND NOT "+workDownloadingSQL+" AND NOT "+workPresentSQL+")", now)
+	}
 }

@@ -5,15 +5,19 @@ import { usePreference } from "@/lib/usePreference";
 
 export type ArrApp = components["schemas"]["ArrApp"];
 
-export type StepId = "start" | "languages" | "connect" | "libraries" | "quality" | "tools" | "review" | "finish";
+export type StepId = "start" | "languages" | "connect" | "libraries" | "quality" | "tools" | "features" | "review" | "finish";
 export type WizardPath = "migrate" | "fresh";
 /** What a library's quality starts as: one of the three starters, the *Arr's own mapped onto Solarr's, or what the library has. */
 export type Starter = "arr" | "best" | "balanced" | "space" | "keep";
 
 export const STEPS: Record<WizardPath, readonly StepId[]> = {
-  migrate: ["start", "languages", "connect", "quality", "review", "finish"],
-  fresh: ["start", "languages", "libraries", "quality", "tools", "review", "finish"],
+  migrate: ["start", "languages", "connect", "quality", "features", "review", "finish"],
+  fresh: ["start", "languages", "libraries", "quality", "tools", "features", "review", "finish"],
 };
+
+/** The optional features the assistant offers; every one is off on a fresh install. */
+export const FEATURES = ["discover", "deduplication", "collections", "brokenFiles", "transcoding"] as const;
+export type Feature = (typeof FEATURES)[number];
 
 /** What an import brings in from one *Arr. */
 export interface ImportChoices {
@@ -24,7 +28,7 @@ export interface ImportChoices {
   importLists: boolean;
 }
 
-export const DEFAULT_CHOICES: ImportChoices = { monitored: true, unmonitored: false, indexers: true, downloadClients: true, importLists: true };
+export const DEFAULT_CHOICES: ImportChoices = { monitored: true, unmonitored: true, indexers: true, downloadClients: true, importLists: true };
 
 /** One folder the *Arr holds, and the folder that is the same place inside Solarr's container. */
 export interface FolderMap {
@@ -68,6 +72,10 @@ export interface WizardState {
   languages?: string[];
   connections: WizardConnection[];
   libraries: WizardLibrary[];
+  /** The optional features to switch on at Finish. */
+  features?: Feature[];
+  /** Run Solarr beside the *Arrs it was connected to (they keep downloading, monitoring follows them) instead of replacing them; chosen unless said otherwise. */
+  companion?: boolean;
   /** The work items of the Finish step already done, so a retry does only what is left. */
   done: string[];
   finished: boolean;

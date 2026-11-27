@@ -37,6 +37,7 @@ func (s *Server) transcodeHardware() gen.TranscodeHardware {
 		return out
 	}
 	out.FfmpegAvailable, out.FfmpegVersion, out.Filters = s.transcoder.Available(), s.transcoder.FFmpegVersion(), s.transcoder.Filters()
+	out.CpuCores, out.EncodeEngines = s.transcoder.CPUCores(), s.transcoder.EncodeEngines()
 	for _, capability := range s.transcoder.Capabilities() {
 		one := gen.TranscodeCapability{Accel: gen.TranscodeCapabilityAccel(capability.Accel), Working: capability.Working}
 		if capability.Device != "" {
