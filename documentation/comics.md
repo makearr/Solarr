@@ -118,3 +118,7 @@ Partial dates GCD writes with zeros ("1963-03-00") are kept as the part of the d
 A writer, artist or other credited creator on a comic page can be followed like an author. The series come from ComicVine (it needs your key): the person is
 found by their exact name, their volume credits are read, and the series come in one batched request. A follow adds the series that started from the year it
 was made, monitored; a back-catalogue follow adds every one (at most 5 a run, 25 for a back-catalogue). A name ComicVine spells differently finds nothing.
+
+## Image decoding
+
+Inner comic images are decoded by Go (`image/jpeg`, `image/png`, `image/gif`, `golang.org/x/image/webp`); formats Go lacks (AVIF, JPEG XL) go through the image's ffmpeg, which is already shipped. ImageMagick is deliberately not in the image: it would add roughly 50 MB for nothing ffmpeg and the Go decoders do not cover.

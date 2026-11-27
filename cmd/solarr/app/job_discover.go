@@ -93,7 +93,9 @@ func (j discoverJudge) FactsOf(ctx context.Context, category settings.Category, 
 	if err != nil {
 		return discover.Facts{}, 0, err
 	}
-	return discover.Facts{Monitored: monitored, Excluded: excluded, OtherLibrary: found && suggestion.CategoryID != category.ID}, workID, nil
+	// A claimed item goes to the library whose rules claim it; an unclaimed one to the library that takes the rest.
+	other := found && suggestion.CategoryID != category.ID || !found && j.process.suggester().GeneralLibraryFitsBetter(category)
+	return discover.Facts{Monitored: monitored, Excluded: excluded, OtherLibrary: other}, workID, nil
 }
 
 // registerDiscoverJob wires the refresh of the recommendation pool.

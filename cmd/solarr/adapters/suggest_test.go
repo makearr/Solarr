@@ -106,6 +106,9 @@ func TestSuggester_NamesTheLibraryAWorkBelongsIn(t *testing.T) {
 		}
 	}
 
+	if !suggester.GeneralLibraryFitsBetter(mustCategory(t, cache, created["Anime"])) || suggester.GeneralLibraryFitsBetter(mustCategory(t, cache, created["Series"])) {
+		t.Error("an item no rule claims fits the library without rules better than a specialised one, never the reverse")
+	}
 	if _, err := cache.SetCategoryRules(t.Context(), created["Series"], []settings.LibraryRule{
 		{Conditions: []settings.RuleCondition{{Field: settings.RuleGenre, Value: "Drama"}}},
 	}); err != nil {
@@ -159,4 +162,13 @@ func TestSuggester_ChecksALibrary(t *testing.T) {
 	if want := []apiserver.MissingKind{{MediaType: "tv", Kind: "documentary", Label: "Documentary", Works: 1}}; !reflect.DeepEqual(check.MissingKinds, want) {
 		t.Errorf("missing kinds = %+v, want %+v", check.MissingKinds, want)
 	}
+}
+
+func mustCategory(t *testing.T, cache *settings.Cache, id int64) settings.Category {
+	t.Helper()
+	category, found := cache.Snapshot().Category(id)
+	if !found {
+		t.Fatalf("category %d missing", id)
+	}
+	return category
 }

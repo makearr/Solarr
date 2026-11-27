@@ -251,6 +251,33 @@
       "one": "Disc"
     },
     "key": "music",
+    "kinds": [
+      {
+        "help": "Albums of any genre.",
+        "key": "general",
+        "label": "General"
+      },
+      {
+        "help": "Classical, opera and contemporary classical.",
+        "key": "classical",
+        "label": "Classical"
+      },
+      {
+        "help": "Scores and soundtracks of films, series and games.",
+        "key": "soundtracks",
+        "label": "Soundtracks"
+      },
+      {
+        "help": "Children's music.",
+        "key": "kids",
+        "label": "Kids"
+      },
+      {
+        "help": "Live recordings, DJ mixes and mixtapes.",
+        "key": "live",
+        "label": "Live and DJ mixes"
+      }
+    ],
     "label": "Music",
     "lead_people": {
       "many": "Artists",
@@ -1812,6 +1839,27 @@
         "help": "Children's and young adult books.",
         "key": "kids",
         "label": "Children's"
+      },
+      {
+        "help": "Japanese light novels.",
+        "key": "light_novels",
+        "label": "Light novels"
+      },
+      {
+        "help": "Non-fiction, textbooks and reference.",
+        "key": "nonfiction",
+        "label": "Non-fiction and reference"
+      },
+      {
+        "help": "Magazines and periodicals.",
+        "key": "magazines",
+        "label": "Magazines"
+      },
+      {
+        "adult": true,
+        "help": "Erotica and other adult fiction, hidden from restricted users and confirmed as adult.",
+        "key": "adult_fiction",
+        "label": "Adult fiction"
       }
     ],
     "label": "Books",
@@ -2034,6 +2082,26 @@
         "help": "Children's and young adult audiobooks.",
         "key": "kids",
         "label": "Children's"
+      },
+      {
+        "help": "Full-cast dramatisations and radio plays.",
+        "key": "audio_drama",
+        "label": "Audio drama"
+      },
+      {
+        "help": "Courses, lectures and talks.",
+        "key": "lectures",
+        "label": "Lectures and courses"
+      },
+      {
+        "help": "Biographies, history, science and self-help.",
+        "key": "nonfiction",
+        "label": "Non-fiction"
+      },
+      {
+        "help": "Podcast episodes kept as audiobooks.",
+        "key": "podcasts",
+        "label": "Podcasts"
       }
     ],
     "label": "Audiobooks",

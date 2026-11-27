@@ -167,6 +167,7 @@ func (Module) Descriptor() media.Descriptor {
 		SearchTerms:        termChoices,
 		WorkImage:          media.ImageCover,
 		AddKinds:           []media.Choice{{Key: "album", Label: "Albums"}, {Key: "artist", Label: "Artists"}},
+		Kinds:              libraryKinds,
 		CommitsHeldImports: true,
 		DuplicatesByName:   true,
 		// Lidarr's: off, and when on lyrics, cue sheets, rip logs and release notes.

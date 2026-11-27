@@ -96,6 +96,21 @@ func (s Suggester) rulesOf(snapshot *settings.Snapshot, category settings.Catego
 	return s.KindRules(category.MediaType, cmp.Or(head.Kind, category.Kind))
 }
 
+// GeneralLibraryFitsBetter says the category is a specialised library (its kind has rules) while another library of the
+// type takes everything its rules leave over: an item no rule claims belongs in that one, not here.
+func (s Suggester) GeneralLibraryFitsBetter(category settings.Category) bool {
+	snapshot := s.Settings.Snapshot()
+	if len(s.rulesOf(snapshot, category)) == 0 {
+		return false
+	}
+	for _, other := range snapshot.Categories() {
+		if other.ID != category.ID && other.MediaType == category.MediaType && len(s.rulesOf(snapshot, other)) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // KindRules are the rules a media type ships for a kind of library.
 func (s Suggester) KindRules(mediaType, kind string) []settings.LibraryRule {
 	descriptor, found := s.descriptor(mediaType)

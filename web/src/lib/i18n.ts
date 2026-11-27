@@ -833,6 +833,8 @@ const catalogue = {
   "rootFolders.libraryBytes": "{size} library",
   "rootFolders.libraryBytesHelp": "What the library holds on this folder, measured by the capacity sweep.",
   "rootFolders.orPercent": "or",
+  "users.manageLink": "Manage users, access and sign-in",
+  "nav.users": "Users",
   "diskSettings.libraryScans": "Library scans",
   "diskSettings.timeBetweenScans": "Time between scans",
   "diskSettings.inotifyWatches": "Inotify watches",

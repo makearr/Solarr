@@ -2,6 +2,7 @@ import { t } from "@/lib/i18n";
 import { PageHeader } from "@/ui/PageHeader";
 import { RepeatPassword, passwordReady } from "./NewPassword";
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Eye, EyeOff, ShieldAlert, ShieldCheck } from "lucide-react";
 
@@ -59,9 +60,28 @@ export function UserSettings() {
 
         {me.data && <MyTierSection tier={me.data.tier} tierMax={me.data.tier_max} />}
         <APIKeysSection />
+        {me.data?.role === "admin" && (
+          <p className="text-sm text-ink-muted">
+            <Link to="/users" className="text-accent hover:underline">{t("users.manageLink")}</Link>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Manage > Users: who may sign in and what each may see; the access policy sits with them. */
+export function UsersPage() {
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: () => ok(api.GET("/me")),
+  });
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
+        <PageHeader title={t("nav.users")} />
         {/* Only an administrator may change it; the server refuses anyone else. */}
         {me.data?.role === "admin" && <AccessSection />}
-
         {me.data && <Users currentUserId={me.data.user_id} />}
       </div>
     </div>

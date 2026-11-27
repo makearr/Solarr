@@ -18,6 +18,7 @@ export function isAdministratorPath(path: string): boolean {
   if (path.startsWith("/settings/")) return path !== "/settings/user" && path !== "/settings/webui";
   return (
     path.startsWith("/storage") ||
+    path.startsWith("/users") ||
     path.startsWith("/connections") ||
     path.startsWith("/quality-profiles") ||
     /^\/library\/[^/]+\/(config(\/|$)|import$)/.test(path)

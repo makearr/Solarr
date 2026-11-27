@@ -109,3 +109,7 @@ the missing ones.
 
 OPF or metadata.json files beside a book, and the author monitoring Readarr has. Import from Readarr is in `documentation/arr-import.md`. A monitored series does not yet add a book published
 after it was monitored (no periodic pass, as for films).
+
+## Library kinds
+
+Book libraries offer General, Children's, Light novels, Non-fiction and reference, Magazines and Adult fiction (an adult kind: confirmed when added, hidden from restricted users); audiobook libraries offer General, Children's, Audio drama, Lectures and courses, Non-fiction and Podcasts. Podcasts is a library kind only: no feed handling yet. Music libraries offer General, Classical, Soundtracks, Kids and Live and DJ mixes (`internal/media/music/kinds.go`). Each kind may carry genre rules that suggest the library for a new work; Discover drops an item no rule claims from a library whose kind has rules while a library of the type without rules exists.

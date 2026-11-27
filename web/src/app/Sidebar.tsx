@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Compass,
   Cable,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -178,6 +179,9 @@ export function Sidebar({ expanded = false }: { expanded?: boolean }) {
             collapsed={collapsed}
             active={visibleTabs(CONNECTIONS, viewer).some((entry) => isAt(entry, place)) && !routeParams.categoryId}
           />
+        )}
+        {administrator && (
+          <NavLink to="/users" icon={Users} label={t("nav.users")} collapsed={collapsed} active={path === "/users"} />
         )}
         {settingsEntry && collapsed && (
           <NavLink to={settingsEntry.path} icon={Settings} label={SETTINGS.label} collapsed active={inSettings} />
