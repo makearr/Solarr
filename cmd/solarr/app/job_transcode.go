@@ -33,7 +33,7 @@ func (p *process) transcodeService() *transcoder.Service {
 		snapshot := func() settings.TranscodeGlobal { return p.cache.Snapshot().TranscodeGlobal() }
 		p.pipeline = &transcoder.Service{
 			Items: library.NewTranscodeItems(p.library, cl), Settings: transcodeSettings{cache: p.cache}, Hardware: p.transcoder,
-			Devices: p.transcoder.DeviceFor, Prober: p.transcoder, Tagger: transcodeTagger{tool: p.tool}, Comics: transcodeComics{fsys: p.fsys},
+			Devices: p.transcoder.DeviceFor, Prober: p.transcoder, Tagger: transcodeTagger{tool: p.tool}, Comics: transcodeComics{fsys: p.fsys}, Ebooks: mediatool.ExecRunner{},
 			Bin:      transcodeBin{RecycleBin: library.NewRecycleBin(p.library, p.fsys, cl).WithOnline(p.rootOnline)},
 			Reporter: transcodeReporter{logger: p.logger, stats: statistics.NewTranscodes(p.statistics), history: statistics.NewHistory(p.statistics), bus: p.bus},
 			Starter:  transcode.ExecStarter{Nice: mediatool.Nice{Level: 19}, IONice: mediatool.IONice{Class: 3}, Clock: cl},

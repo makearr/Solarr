@@ -87,5 +87,6 @@ The statistics page, file lists, retry and restore actions, and the settings pag
 `internal/platform/ebookconv` converts ebooks without a heavy tool: plain text and html are written as epub and an epub
 is repacked (mimetype first and stored, desktop litter dropped) in pure Go. Every other format goes through pandoc when
 `pandoc` is on PATH, which only the `-full` image variant carries (`docker build --build-arg WITH_PANDOC=1`); without it
-those conversions are not offered and `ebookconv.ErrNeedsPandoc` says why. Calibre is not used. The `ebook` lane exists in
-Settings, Transcode; the transcode item kind, judgement and run for ebooks are not wired yet.
+those conversions are not offered and `ebookconv.ErrNeedsPandoc` says why. Calibre is not used. A book library whose quality target names a container (epub) converts as kind `ebook` in the `ebook` lane:
+the file name is judged against the container, a txt or html file is written as epub in Go, any other format goes to
+pandoc, and a file nothing here reads is refused as an unsupported container. The result replaces the original through the bin.

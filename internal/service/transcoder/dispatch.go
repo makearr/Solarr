@@ -97,7 +97,7 @@ func PickNext(state DispatchState) []Pick {
 
 // pickFrom takes the first usable candidate of the library, video before audio.
 func pickFrom(state DispatchState, library LibraryQueue, free map[Lane]int, taken map[int64]bool, started map[string]int) (Pick, bool) {
-	for _, kind := range []string{KindVideo, KindAudio, KindComic} {
+	for _, kind := range []string{KindVideo, KindAudio, KindComic, KindEbook} {
 		health := state.Health[kind]
 		source := library.Candidates[kind]
 		switch health.Mode {

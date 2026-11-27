@@ -139,7 +139,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/mediatool": {"internal/platform/artwork"},
 	// The player's ffmpeg conversion: encoder detection reads device nodes through fsx.
 	// The transcode analysis is pure: what a conversion of one file to its target would do.
-	"internal/service/transcoder": {"internal/platform/comicrepack", "internal/platform/fsx", "internal/platform/iogate", "internal/platform/transcode", "internal/platform/mediatool", "internal/platform/clock", "internal/db/settings", "internal/db/library", "internal/jobs", "internal/identify/quality", "internal/identify/score"},
+	"internal/service/transcoder": {"internal/platform/ebookconv", "internal/platform/comicrepack", "internal/platform/fsx", "internal/platform/iogate", "internal/platform/transcode", "internal/platform/mediatool", "internal/platform/clock", "internal/db/settings", "internal/db/library", "internal/jobs", "internal/identify/quality", "internal/identify/score"},
 	"internal/platform/transcode": {"internal/platform/fsx", "internal/platform/mediatool", "internal/platform/clock"},
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.

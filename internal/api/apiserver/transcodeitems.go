@@ -412,7 +412,7 @@ func (s *Server) ResumeTranscodeKind(w http.ResponseWriter, r *http.Request, kin
 	if !ok {
 		return
 	}
-	if kind != gen.ResumeTranscodeKindParamsKindVideo && kind != gen.ResumeTranscodeKindParamsKindAudio && kind != gen.ResumeTranscodeKindParamsKindComic {
+	if kind != gen.ResumeTranscodeKindParamsKindVideo && kind != gen.ResumeTranscodeKindParamsKindAudio && kind != gen.ResumeTranscodeKindParamsKindComic && kind != gen.ResumeTranscodeKindParamsKindEbook {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the kind is video, audio or comic")
 		return
 	}

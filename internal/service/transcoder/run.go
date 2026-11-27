@@ -188,8 +188,11 @@ func (s *Service) prepare(ctx context.Context, item library.TranscodeItem, progr
 
 // planOf reads the file and judges it against the target and the setup.
 func (s *Service) planOf(ctx context.Context, run *fileRun) (Plan, error) {
-	if run.item.Kind == KindComic {
+	switch run.item.Kind {
+	case KindComic:
 		return s.comicPlan(ctx, run)
+	case KindEbook:
+		return s.ebookPlan(run), nil
 	}
 	var err error
 	if run.source, err = s.probe(ctx, run.abs); err != nil {
@@ -249,8 +252,11 @@ func (r *fileRun) passAt() PassSettings {
 
 // convert runs the passes of the ladder until a result is accepted, refused for good, or an error stops it.
 func (s *Service) convert(ctx context.Context, run *fileRun) error {
-	if run.item.Kind == KindComic {
+	switch run.item.Kind {
+	case KindComic:
 		return s.convertComic(ctx, run)
+	case KindEbook:
+		return s.convertEbook(ctx, run)
 	}
 	engines, err := s.enginesFor(run)
 	if err != nil {

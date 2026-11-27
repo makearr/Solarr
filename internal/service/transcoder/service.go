@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/ebookconv"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 )
@@ -104,7 +105,9 @@ type Service struct {
 	Devices func(engine transcode.Accel) string
 	Prober  Prober
 	// Comics reads comic archives; without it comics libraries are not converted.
-	Comics   ComicProber
+	Comics ComicProber
+	// Ebooks runs pandoc for the formats pure Go does not read; nil or without pandoc, those files are refused.
+	Ebooks   ebookconv.Runner
 	Tagger   Tagger
 	Bin      Bin
 	Reporter Reporter

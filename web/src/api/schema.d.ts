@@ -12854,7 +12854,7 @@ export interface components {
              * @description What the library's files are converted as; 'other' (books) is not supported.
              * @enum {string}
              */
-            target_kind?: "video" | "audio" | "comic" | "other";
+            target_kind?: "video" | "audio" | "comic" | "ebook" | "other";
             /** @description True when the library has a video */
             supported: boolean;
             enabled: boolean;
@@ -13009,7 +13009,7 @@ export interface components {
         };
         TranscodeHealth: {
             /** @enum {string} */
-            kind: "video" | "audio" | "comic";
+            kind: "video" | "audio" | "comic" | "ebook";
             /** @enum {string} */
             mode: "ok" | "probing" | "backoff";
             /** Format: int64 */
@@ -23701,7 +23701,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: "video" | "audio" | "comic";
+                kind: "video" | "audio" | "comic" | "ebook";
             };
             cookie?: never;
         };

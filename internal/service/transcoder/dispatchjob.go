@@ -95,7 +95,7 @@ func (s *Service) dispatchState(ctx context.Context, libraries []settings.Transc
 	}
 	now := s.Clock.Now()
 	failedAt := map[string]int64{}
-	for _, kind := range []string{KindVideo, KindAudio, KindComic} {
+	for _, kind := range []string{KindVideo, KindAudio, KindComic, KindEbook} {
 		stored, err := s.Items.Health(ctx, kind)
 		if err != nil {
 			return state, err
@@ -145,8 +145,11 @@ func candidatesOf(kind string, picks []library.TranscodePick) []Candidate {
 	out := make([]Candidate, len(picks))
 	for i, pick := range picks {
 		lane := Lane(pick.Lane)
-		if kind == "comic" {
+		switch kind {
+		case KindComic:
 			lane = LaneComic
+		case KindEbook:
+			lane = LaneEbook
 		}
 		out[i] = Candidate{MediaObjectID: pick.MediaObjectID, Lane: lane, LastRunSeq: pick.LastRunSeq, RootFolderID: pick.RootFolderID, Interrupted: pick.Interrupted}
 	}

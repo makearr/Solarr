@@ -1177,6 +1177,7 @@ const (
 const (
 	TranscodeHealthKindAudio TranscodeHealthKind = "audio"
 	TranscodeHealthKindComic TranscodeHealthKind = "comic"
+	TranscodeHealthKindEbook TranscodeHealthKind = "ebook"
 	TranscodeHealthKindVideo TranscodeHealthKind = "video"
 )
 
@@ -1225,6 +1226,7 @@ const (
 const (
 	TranscodeLibraryTargetKindAudio TranscodeLibraryTargetKind = "audio"
 	TranscodeLibraryTargetKindComic TranscodeLibraryTargetKind = "comic"
+	TranscodeLibraryTargetKindEbook TranscodeLibraryTargetKind = "ebook"
 	TranscodeLibraryTargetKindOther TranscodeLibraryTargetKind = "other"
 	TranscodeLibraryTargetKindVideo TranscodeLibraryTargetKind = "video"
 )
@@ -1549,6 +1551,7 @@ const (
 const (
 	ResumeTranscodeKindParamsKindAudio ResumeTranscodeKindParamsKind = "audio"
 	ResumeTranscodeKindParamsKindComic ResumeTranscodeKindParamsKind = "comic"
+	ResumeTranscodeKindParamsKindEbook ResumeTranscodeKindParamsKind = "ebook"
 	ResumeTranscodeKindParamsKindVideo ResumeTranscodeKindParamsKind = "video"
 )
 

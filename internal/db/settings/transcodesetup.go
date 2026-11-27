@@ -383,6 +383,8 @@ func (t QualityTarget) TranscodeKind() string {
 	switch {
 	case t.isTranscodeVideo():
 		return "video"
+	case t.MediaType == "book" && t.Container != "":
+		return "ebook"
 	case TargetFamily(t.MediaType) == "book":
 		return "other"
 	}

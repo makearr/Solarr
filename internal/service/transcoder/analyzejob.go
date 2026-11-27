@@ -98,8 +98,18 @@ func (s *Service) Analyze(ctx context.Context, categoryID int64, progress *jobs.
 		}
 		var judged []library.JudgedTranscodeItem
 		comics := one.Kind() == KindComic
+		ebooks := one.Kind() == KindEbook
 		for _, object := range page {
-			if comics != (object.Kind == filekindBook) {
+			if (comics || ebooks) != (object.Kind == filekindBook) {
+				continue
+			}
+			if ebooks {
+				judgement, err := Judge(AnalyzeEbook(object.RelPath, *one.Target), transcode.Software)
+				if err != nil {
+					return err
+				}
+				needed = needed || judgement.State == string(library.TranscodeNeeded)
+				judged = append(judged, judgedItem(object, categoryID, one.Target.ID, stored.Revision, KindEbook, judgement))
 				continue
 			}
 			if comics {

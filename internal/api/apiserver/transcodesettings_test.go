@@ -61,7 +61,7 @@ func TestTranscodeSettings_GlobalAndLibraryRowsRoundTripAndAnUnsupportedLibraryI
 	for _, library := range before.Libraries {
 		supported[library.Name] = library.Supported
 	}
-	if want := map[string]bool{"Movies": true, "Songs": true, "Books": false, "Shows": false}; !reflect.DeepEqual(supported, want) {
+	if want := map[string]bool{"Movies": true, "Songs": true, "Books": true, "Shows": false}; !reflect.DeepEqual(supported, want) {
 		t.Errorf("supported = %v, want %v", supported, want)
 	}
 
@@ -86,7 +86,7 @@ func TestTranscodeSettings_GlobalAndLibraryRowsRoundTripAndAnUnsupportedLibraryI
 			t.Errorf("movies = %+v", library)
 		}
 	}
-	for _, id := range []int64{books.ID, bare.ID} {
+	for _, id := range []int64{bare.ID} {
 		if recorder := fixture.do(authedPut(t, cookies, "/api/v1/settings/transcode/libraries/"+itoa(id), row)); recorder.Code != http.StatusConflict {
 			t.Errorf("unsupported library %d = %d, want 409", id, recorder.Code)
 		}

@@ -20,7 +20,7 @@ const frameRateSlack = 1.01
 
 // Analyze decides what converting this file to the target would do, and whether a conversion is needed at all.
 func Analyze(file transcode.File, target settings.QualityTarget, setup settings.TranscodeSetup, wanted Languages) Plan {
-	if target.TranscodeKind() == "other" {
+	if kind := target.TranscodeKind(); kind == "other" || kind == "ebook" {
 		return Plan{Verdict: Blocked, Reasons: []Reason{{Code: ReasonUnsupportedTarget, Stream: -1}}}
 	}
 	if setup.Skip.TranscodedBefore && file.Tags[MarkerTag] != "" {

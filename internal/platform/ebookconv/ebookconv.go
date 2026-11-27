@@ -145,7 +145,7 @@ func ViaPandoc(ctx context.Context, runner Runner, input, output string) error {
 	if output == "" || bytes.ContainsAny([]byte(output), "\x00") {
 		return errors.New("ebookconv: no output file")
 	}
-	if _, err := runner.Run(ctx, pandoc, "--from", "auto", "-o", output, "--", input); err != nil {
+	if _, err := runner.Run(ctx, pandoc, "-o", output, "--", input); err != nil {
 		return fmt.Errorf("ebookconv: pandoc: %w", err)
 	}
 	return nil

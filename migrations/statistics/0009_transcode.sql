@@ -4,7 +4,7 @@ CREATE TABLE transcode_stat (
   category_id    INTEGER NOT NULL,
   -- Day bucket (UTC midnight, seconds).
   day            INTEGER NOT NULL,
-  kind           TEXT    NOT NULL CHECK (kind IN ('video', 'audio', 'comic')),
+  kind           TEXT    NOT NULL CHECK (kind IN ('video', 'audio', 'comic', 'ebook')),
   files          INTEGER NOT NULL DEFAULT 0,
   original_bytes INTEGER NOT NULL DEFAULT 0,
   result_bytes   INTEGER NOT NULL DEFAULT 0,
