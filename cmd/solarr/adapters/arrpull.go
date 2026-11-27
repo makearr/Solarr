@@ -177,18 +177,7 @@ func (a ArrSync) importLists(ctx context.Context, instance settings.ArrInstance,
 	if !found {
 		return fmt.Errorf("import lists: library %d not found", libraryID)
 	}
-	var found3 []arrimport.ImportList
-	var err error
-	switch instance.App {
-	case settings.ArrAppSonarr:
-		found3, err = client.Sonarr().ImportLists(ctx)
-	case settings.ArrAppRadarr:
-		found3, err = client.Radarr().ImportLists(ctx)
-	case settings.ArrAppWhisparr:
-		found3, err = client.Whisparr().ImportLists(ctx)
-	default:
-		found3, err = client.ImportLists(ctx)
-	}
+	found3, err := arrImportLists(ctx, instance.App, client)
 	if err != nil {
 		return fmt.Errorf("import lists: %w", err)
 	}

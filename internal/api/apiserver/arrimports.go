@@ -47,6 +47,15 @@ type ArrImportPreview struct {
 	// Follows says which release types the followed items take, one entry per *Arr follow profile in use.
 	Follows  []ArrPreviewFollow
 	Settings []ArrPreviewSettings
+	// Setup counts the indexers, download clients and import lists the options would bring; nil when none are asked for.
+	Setup *ArrPreviewSetup
+}
+
+// ArrPreviewSetup is what the *Arr's indexers, download clients and import lists would add here.
+type ArrPreviewSetup struct {
+	Indexers, IndexersWithoutKey, DownloadClients, ImportLists int64
+	// Problem says why one of the reads failed; the counts of the others stand.
+	Problem string
 }
 
 // ArrPreviewFollow is one *Arr follow profile in use: the monitored items on it, and the release types they are followed for.
@@ -159,8 +168,33 @@ type ArrSync interface {
 	PushMonitoring(ctx context.Context, instanceID int64) (ArrPushResult, error)
 	// Pull runs a sync by the options stored on the connection.
 	Pull(ctx context.Context, instanceID int64) (ArrImportRun, error)
+	// TestConnection asks an *Arr for its version with the key as typed, before anything is stored.
+	TestConnection(ctx context.Context, app settings.ArrApp, baseURL, apiKey string) ArrConnectionTest
+	// Discover answers the apps found on their usual addresses.
+	Discover(ctx context.Context) []DiscoveredService
 	// Forget drops what is kept of a connection about to be deleted, refusing while a run of it is going.
 	Forget(ctx context.Context, instanceID int64) error
+}
+
+// Why a connection test failed, in the word the interface turns into advice.
+const (
+	ArrProblemWrongKey    = "wrong_key"
+	ArrProblemWrongPort   = "wrong_port"
+	ArrProblemUnreachable = "unreachable"
+	ArrProblemOther       = "other"
+)
+
+// ArrConnectionTest is the answer of a connection test: the app's own name and version, or what is wrong.
+type ArrConnectionTest struct {
+	OK               bool
+	AppName, Version string
+	Problem, Message string
+}
+
+// DiscoveredService is an app that answered on its usual address.
+type DiscoveredService struct {
+	Kind, Host, BaseURL, Version string
+	Port                         int
 }
 
 // ArrPushResult is what one send of monitoring did; Unknown counts linked items Solarr holds no wanted item of, left alone.
@@ -303,6 +337,15 @@ func arrImportPreviewView(preview ArrImportPreview) gen.ArrImportPreview {
 			}
 		}
 		view.Follows = &follows
+	}
+	if preview.Setup != nil {
+		view.Setup = &gen.ArrPreviewSetup{
+			Indexers: preview.Setup.Indexers, IndexersWithoutKey: preview.Setup.IndexersWithoutKey,
+			DownloadClients: preview.Setup.DownloadClients, ImportLists: preview.Setup.ImportLists,
+		}
+		if preview.Setup.Problem != "" {
+			view.Setup.Problem = &preview.Setup.Problem
+		}
 	}
 	for i, library := range preview.Settings {
 		changes := make([]struct {
@@ -748,4 +791,53 @@ func (s *Server) PullArrInstance(w http.ResponseWriter, r *http.Request, id int6
 	default:
 		writeJSON(w, s.logger, http.StatusOK, arrImportRunView(run))
 	}
+}
+
+// TestArrConnection tries an *Arr's address and key before it is added. Administrator only.
+func (s *Server) TestArrConnection(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.arrSync == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "*Arr import is not available")
+		return
+	}
+	var body gen.TestArrConnectionJSONRequestBody
+	if !s.decodeBody(w, r, maxImportBody, &body, "expected app, base_url and api_key") {
+		return
+	}
+	if strings.TrimSpace(body.BaseUrl) == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "base_url is required")
+		return
+	}
+	result := s.arrSync.TestConnection(r.Context(), settings.ArrApp(body.App), body.BaseUrl, body.ApiKey)
+	view := gen.ArrConnectionTest{Ok: result.OK}
+	if result.OK {
+		view.AppName, view.Version = &result.AppName, &result.Version
+	} else {
+		problem := gen.ArrConnectionTestProblem(result.Problem)
+		view.Problem, view.Message = &problem, &result.Message
+	}
+	writeJSON(w, s.logger, http.StatusOK, view)
+}
+
+// DiscoverArrServices looks for the apps setup wants on their usual addresses. Administrator only.
+func (s *Server) DiscoverArrServices(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.arrSync == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "*Arr import is not available")
+		return
+	}
+	found := s.arrSync.Discover(r.Context())
+	views := make([]gen.DiscoveredService, len(found))
+	for index, service := range found {
+		views[index] = gen.DiscoveredService{Kind: gen.DiscoveredServiceKind(service.Kind), Host: service.Host, Port: service.Port, BaseUrl: service.BaseURL}
+		if service.Version != "" {
+			version := service.Version
+			views[index].Version = &version
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, views)
 }

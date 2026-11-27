@@ -355,3 +355,24 @@ func TestArrSyncAddsIndexersBeforeTheWalk(t *testing.T) {
 		t.Errorf("indexers present when the walk began = %d, want 1", seen)
 	}
 }
+
+func TestArrSetupPreviewCountsWhatWouldBeAddedAndWhatNeedsAKey(t *testing.T) {
+	cache := newSetupCache(t)
+	cipher, _ := secrets.New(make([]byte, 32))
+	cache.EnableSecrets(cipher)
+	if _, err := cache.CreateArrInstance(t.Context(), settings.ArrInstanceRequest{
+		App: settings.ArrAppProwlarr, Name: "P", BaseURL: "http://prowlarr.local:9696", Enabled: true,
+	}, secrets.Secret("k"), 1); err != nil {
+		t.Fatal(err)
+	}
+	found := []arrimport.Indexer{
+		{Implementation: "Newznab", BaseURL: "http://prowlarr.local:9696/1/", APIKey: "********"},
+		{Implementation: "Newznab", BaseURL: "http://other.example", APIKey: "********"},
+		{Implementation: "Torznab", BaseURL: "http://keyed.example", APIKey: "abc"},
+		{Implementation: "Rarbg", BaseURL: "http://skipped.example"},
+	}
+	added, withoutKey := ArrSetup{Cache: cache, Clock: clock.NewFakeAtEpoch()}.countNewIndexers(t.Context(), found)
+	if added != 3 || withoutKey != 1 {
+		t.Errorf("added, withoutKey = %d, %d, want 3, 1", added, withoutKey)
+	}
+}

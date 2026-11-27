@@ -36,6 +36,8 @@ type ArrSync struct {
 	Desired       library.Desired
 	Subscriptions library.Subscriptions
 	Lidarr        LidarrClientFactory
+	// Probe builds the client a discovery probe tries one address with; nil finds nothing.
+	Probe ProbeClientFactory
 	// Importers is each app's mapping onto its media type, set where the modules are registered.
 	Importers map[settings.ArrApp]arrmap.Importer
 	// Links remembers what each *Arr item is here, for sending monitoring back.

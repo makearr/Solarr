@@ -2595,6 +2595,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/arr/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try an *Arr's address and key before it is added. Administrator only.
+         * @description Asks the app for its version with the key as typed and stores nothing. A failure is a 200 with ok false and the word for what to fix: the key, the port or the address.
+         */
+        post: operations["testArrConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/arr/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Look for *Arr apps, SABnzbd and qBittorrent on their usual addresses. Administrator only.
+         * @description Tries a short fixed list of container names and ports (this machine and the Docker host included) with one unauthenticated GET each, a few at a time, and answers the ones that reply. It reads nothing from them.
+         */
+        post: operations["discoverArrServices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/instances/{id}": {
         parameters: {
             query?: never;
@@ -9547,6 +9587,53 @@ export interface components {
             /** @description Which release types the followed items take, one per *Arr follow profile in use (Lidarr's metadata profile). */
             follows?: components["schemas"]["ArrPreviewFollow"][];
             settings: components["schemas"]["ArrPreviewSettings"][];
+            setup?: components["schemas"]["ArrPreviewSetup"];
+        };
+        ArrConnectionTest: {
+            ok: boolean;
+            /** @description What the app calls itself */
+            app_name?: string;
+            version?: string;
+            /**
+             * @description What to fix when not ok.
+             * @enum {string}
+             */
+            problem?: "wrong_key" | "wrong_port" | "unreachable" | "other";
+            /** @description The plain-words detail of the failure. */
+            message?: string;
+        };
+        DiscoveredService: {
+            /** @enum {string} */
+            kind: "lidarr" | "sonarr" | "radarr" | "readarr" | "whisparr" | "prowlarr" | "sabnzbd" | "qbittorrent";
+            host: string;
+            port: number;
+            base_url: string;
+            version?: string;
+        };
+        /** @description What the *Arr's indexers, download clients and import lists would add here; absent when the options ask for none. */
+        ArrPreviewSetup: {
+            /**
+             * Format: int64
+             * @description Newznab and Torznab indexers not here yet.
+             */
+            indexers: number;
+            /**
+             * Format: int64
+             * @description Of those
+             */
+            indexers_without_key: number;
+            /**
+             * Format: int64
+             * @description Download clients Solarr can use that are not here yet.
+             */
+            download_clients: number;
+            /**
+             * Format: int64
+             * @description Lists Solarr can read (TMDb
+             */
+            import_lists: number;
+            /** @description Why one of the reads failed; the other counts stand. */
+            problem?: string;
         };
         ArrPreviewFollow: {
             name: string;
@@ -18070,6 +18157,59 @@ export interface operations {
             403: components["responses"]["Problem"];
             /** @description The given category_id does not exist. */
             404: components["responses"]["Problem"];
+        };
+    };
+    testArrConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    app: components["schemas"]["ArrApp"];
+                    base_url: string;
+                    api_key: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The app's answer, or why it gave none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrConnectionTest"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    discoverArrServices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per app found, possibly none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveredService"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     deleteArrInstance: {

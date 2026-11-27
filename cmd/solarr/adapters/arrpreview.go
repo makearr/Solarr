@@ -27,14 +27,15 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 	if err != nil {
 		return apiserver.ArrImportPreview{}, err
 	}
-	source, err := a.Importers[instance.App].Preview(ctx, a.Lidarr(instance.BaseURL, apiKey.Reveal()))
+	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
+	source, err := a.Importers[instance.App].Preview(ctx, client)
 	if err != nil {
 		return apiserver.ArrImportPreview{}, err
 	}
 
 	snapshot := a.Cache.Snapshot()
 	roots := snapshot.RootFolders()
-	preview := apiserver.ArrImportPreview{ItemKind: source.ItemKind}
+	preview := apiserver.ArrImportPreview{ItemKind: source.ItemKind, Setup: a.previewSetup(ctx, instance, client, options)}
 	byPath := map[string]int{}
 	rootFor := func(path string) *apiserver.ArrPreviewRoot {
 		if index, seen := byPath[path]; seen {

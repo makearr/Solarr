@@ -45,6 +45,14 @@ const (
 	ArrAppWhisparr ArrApp = "whisparr"
 )
 
+// Defines values for ArrConnectionTestProblem.
+const (
+	ArrConnectionTestProblemOther       ArrConnectionTestProblem = "other"
+	ArrConnectionTestProblemUnreachable ArrConnectionTestProblem = "unreachable"
+	ArrConnectionTestProblemWrongKey    ArrConnectionTestProblem = "wrong_key"
+	ArrConnectionTestProblemWrongPort   ArrConnectionTestProblem = "wrong_port"
+)
+
 // Defines values for ArrImportItemKind.
 const (
 	ArrImportItemKindAlbum  ArrImportItemKind = "album"
@@ -193,6 +201,18 @@ const (
 	DiscoverTypeSettingsTypeHighestRated DiscoverTypeSettingsType = "highest_rated"
 	DiscoverTypeSettingsTypeTrending     DiscoverTypeSettingsType = "trending"
 	DiscoverTypeSettingsTypeUpcoming     DiscoverTypeSettingsType = "upcoming"
+)
+
+// Defines values for DiscoveredServiceKind.
+const (
+	DiscoveredServiceKindLidarr      DiscoveredServiceKind = "lidarr"
+	DiscoveredServiceKindProwlarr    DiscoveredServiceKind = "prowlarr"
+	DiscoveredServiceKindQbittorrent DiscoveredServiceKind = "qbittorrent"
+	DiscoveredServiceKindRadarr      DiscoveredServiceKind = "radarr"
+	DiscoveredServiceKindReadarr     DiscoveredServiceKind = "readarr"
+	DiscoveredServiceKindSabnzbd     DiscoveredServiceKind = "sabnzbd"
+	DiscoveredServiceKindSonarr      DiscoveredServiceKind = "sonarr"
+	DiscoveredServiceKindWhisparr    DiscoveredServiceKind = "whisparr"
 )
 
 // Defines values for DownloaderProtocol.
@@ -1790,6 +1810,23 @@ type AddWorkResult struct {
 // ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
 type ArrApp string
 
+// ArrConnectionTest defines model for ArrConnectionTest.
+type ArrConnectionTest struct {
+	// AppName What the app calls itself
+	AppName *string `json:"app_name,omitempty"`
+
+	// Message The plain-words detail of the failure.
+	Message *string `json:"message,omitempty"`
+	Ok      bool    `json:"ok"`
+
+	// Problem What to fix when not ok.
+	Problem *ArrConnectionTestProblem `json:"problem,omitempty"`
+	Version *string                   `json:"version,omitempty"`
+}
+
+// ArrConnectionTestProblem What to fix when not ok.
+type ArrConnectionTestProblem string
+
 // ArrDownloadClient defines model for ArrDownloadClient.
 type ArrDownloadClient struct {
 	// AlreadyAdded A download client with this address is already here.
@@ -1848,6 +1885,9 @@ type ArrImportPreview struct {
 	Profiles []ArrPreviewProfile      `json:"profiles"`
 	Roots    []ArrPreviewRoot         `json:"roots"`
 	Settings []ArrPreviewSettings     `json:"settings"`
+
+	// Setup What the *Arr's indexers, download clients and import lists would add here; absent when the options ask for none.
+	Setup *ArrPreviewSetup `json:"setup,omitempty"`
 }
 
 // ArrImportPreviewItemKind What the counts count.
@@ -1980,6 +2020,24 @@ type ArrPreviewSettings struct {
 		Proposed string `json:"proposed"`
 	} `json:"changes"`
 	LibraryId int64 `json:"library_id"`
+}
+
+// ArrPreviewSetup What the *Arr's indexers, download clients and import lists would add here; absent when the options ask for none.
+type ArrPreviewSetup struct {
+	// DownloadClients Download clients Solarr can use that are not here yet.
+	DownloadClients int64 `json:"download_clients"`
+
+	// ImportLists Lists Solarr can read (TMDb
+	ImportLists int64 `json:"import_lists"`
+
+	// Indexers Newznab and Torznab indexers not here yet.
+	Indexers int64 `json:"indexers"`
+
+	// IndexersWithoutKey Of those
+	IndexersWithoutKey int64 `json:"indexers_without_key"`
+
+	// Problem Why one of the reads failed; the other counts stand.
+	Problem *string `json:"problem,omitempty"`
 }
 
 // ArrPullOptions What a Sonarr, Radarr, Lidarr or Whisparr connection brings into Solarr, by hand or on the schedule.
@@ -2917,6 +2975,18 @@ type DiscoverTypeSettings struct {
 
 // DiscoverTypeSettingsType defines model for DiscoverTypeSettings.Type.
 type DiscoverTypeSettingsType string
+
+// DiscoveredService defines model for DiscoveredService.
+type DiscoveredService struct {
+	BaseUrl string                `json:"base_url"`
+	Host    string                `json:"host"`
+	Kind    DiscoveredServiceKind `json:"kind"`
+	Port    int                   `json:"port"`
+	Version *string               `json:"version,omitempty"`
+}
+
+// DiscoveredServiceKind defines model for DiscoveredService.Kind.
+type DiscoveredServiceKind string
 
 // DiskInotify defines model for DiskInotify.
 type DiskInotify struct {
@@ -8847,6 +8917,15 @@ type UseArrInstanceIndexersJSONBody struct {
 	ProwlarrIds []int64 `json:"prowlarr_ids"`
 }
 
+// TestArrConnectionJSONBody defines parameters for TestArrConnection.
+type TestArrConnectionJSONBody struct {
+	ApiKey string `json:"api_key"`
+
+	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
+	App     ArrApp `json:"app"`
+	BaseUrl string `json:"base_url"`
+}
+
 // LoginJSONBody defines parameters for Login.
 type LoginJSONBody struct {
 	Password string `json:"password"`
@@ -10208,6 +10287,9 @@ type SetArrInstancePullJSONRequestBody = ArrPullOptions
 // SyncArrInstanceJSONRequestBody defines body for SyncArrInstance for application/json ContentType.
 type SyncArrInstanceJSONRequestBody = ArrSyncOptions
 
+// TestArrConnectionJSONRequestBody defines body for TestArrConnection for application/json ContentType.
+type TestArrConnectionJSONRequestBody TestArrConnectionJSONBody
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
@@ -10711,6 +10793,9 @@ type ServerInterface interface {
 	// The full AGPL-3.0-or-later text (section 13).
 	// (GET /about/license)
 	GetAboutLicense(w http.ResponseWriter, r *http.Request)
+	// Look for *Arr apps, SABnzbd and qBittorrent on their usual addresses. Administrator only.
+	// (POST /arr/discover)
+	DiscoverArrServices(w http.ResponseWriter, r *http.Request)
 	// Every import run for one instance, newest first.
 	// (GET /arr/imports)
 	ListArrImports(w http.ResponseWriter, r *http.Request, params ListArrImportsParams)
@@ -10774,6 +10859,9 @@ type ServerInterface interface {
 	// Start one import (todo 4.13). Administrator only.
 	// (POST /arr/instances/{id}/sync)
 	SyncArrInstance(w http.ResponseWriter, r *http.Request, id int64)
+	// Try an *Arr's address and key before it is added. Administrator only.
+	// (POST /arr/test)
+	TestArrConnection(w http.ResponseWriter, r *http.Request)
 	// Exchange a username and password for a session cookie.
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -12097,6 +12185,12 @@ func (_ Unimplemented) GetAboutLicense(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Look for *Arr apps, SABnzbd and qBittorrent on their usual addresses. Administrator only.
+// (POST /arr/discover)
+func (_ Unimplemented) DiscoverArrServices(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Every import run for one instance, newest first.
 // (GET /arr/imports)
 func (_ Unimplemented) ListArrImports(w http.ResponseWriter, r *http.Request, params ListArrImportsParams) {
@@ -12220,6 +12314,12 @@ func (_ Unimplemented) ListArrInstanceRootFolders(w http.ResponseWriter, r *http
 // Start one import (todo 4.13). Administrator only.
 // (POST /arr/instances/{id}/sync)
 func (_ Unimplemented) SyncArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Try an *Arr's address and key before it is added. Administrator only.
+// (POST /arr/test)
+func (_ Unimplemented) TestArrConnection(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14872,6 +14972,28 @@ func (siw *ServerInterfaceWrapper) GetAboutLicense(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// DiscoverArrServices operation middleware
+func (siw *ServerInterfaceWrapper) DiscoverArrServices(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscoverArrServices(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListArrImports operation middleware
 func (siw *ServerInterfaceWrapper) ListArrImports(w http.ResponseWriter, r *http.Request) {
 
@@ -15543,6 +15665,28 @@ func (siw *ServerInterfaceWrapper) SyncArrInstance(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SyncArrInstance(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestArrConnection operation middleware
+func (siw *ServerInterfaceWrapper) TestArrConnection(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestArrConnection(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -29995,6 +30139,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/about/license", wrapper.GetAboutLicense)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/discover", wrapper.DiscoverArrServices)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/arr/imports", wrapper.ListArrImports)
 	})
 	r.Group(func(r chi.Router) {
@@ -30056,6 +30203,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/sync", wrapper.SyncArrInstance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/test", wrapper.TestArrConnection)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/login", wrapper.Login)

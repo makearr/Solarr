@@ -3775,6 +3775,54 @@ paths:
           $ref: "#/components/responses/Problem"
           description: The given category_id does not exist.
 
+  /arr/test:
+    post:
+      operationId: testArrConnection
+      tags: [settings]
+      summary: Try an *Arr's address and key before it is added. Administrator only.
+      description: >-
+        Asks the app for its version with the key as typed and stores nothing. A failure is a 200 with ok false and the
+        word for what to fix: the key, the port or the address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [app, base_url, api_key]
+              properties:
+                app: { $ref: "#/components/schemas/ArrApp" }
+                base_url: { type: string, minLength: 1 }
+                api_key: { type: string }
+      responses:
+        "200":
+          description: The app's answer, or why it gave none.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrConnectionTest" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /arr/discover:
+    post:
+      operationId: discoverArrServices
+      tags: [settings]
+      summary: Look for *Arr apps, SABnzbd and qBittorrent on their usual addresses. Administrator only.
+      description: >-
+        Tries a short fixed list of container names and ports (this machine and the Docker host included) with one
+        unauthenticated GET each, a few at a time, and answers the ones that reply. It reads nothing from them.
+      responses:
+        "200":
+          description: One entry per app found, possibly none.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DiscoveredService" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /arr/instances/{id}:
     parameters:
       - name: id
@@ -13392,6 +13440,41 @@ components:
         settings:
           type: array
           items: { $ref: "#/components/schemas/ArrPreviewSettings" }
+        setup: { $ref: "#/components/schemas/ArrPreviewSetup" }
+
+    ArrConnectionTest:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        app_name: { type: string, description: What the app calls itself, when ok. }
+        version: { type: string }
+        problem:
+          type: string
+          enum: [wrong_key, wrong_port, unreachable, other]
+          description: What to fix when not ok.
+        message: { type: string, description: The plain-words detail of the failure. }
+
+    DiscoveredService:
+      type: object
+      required: [kind, host, port, base_url]
+      properties:
+        kind: { type: string, enum: [lidarr, sonarr, radarr, readarr, whisparr, prowlarr, sabnzbd, qbittorrent] }
+        host: { type: string }
+        port: { type: integer }
+        base_url: { type: string }
+        version: { type: string }
+
+    ArrPreviewSetup:
+      type: object
+      description: What the *Arr's indexers, download clients and import lists would add here; absent when the options ask for none.
+      required: [indexers, indexers_without_key, download_clients, import_lists]
+      properties:
+        indexers: { type: integer, format: int64, description: Newznab and Torznab indexers not here yet. }
+        indexers_without_key: { type: integer, format: int64, description: Of those, the ones that arrive switched off because the *Arr hides their key and no Prowlarr connection covers them. }
+        download_clients: { type: integer, format: int64, description: Download clients Solarr can use that are not here yet. }
+        import_lists: { type: integer, format: int64, description: Lists Solarr can read (TMDb, MDBList). }
+        problem: { type: string, description: Why one of the reads failed; the other counts stand. }
 
     ArrPreviewFollow:
       type: object

@@ -892,6 +892,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/libraries/{id}/watched/recycle", wrapped.RecycleWatchedWorks)
 			secured.Get("/arr/instances", server.ListArrInstances)
 			secured.Post("/arr/instances", server.AddArrInstance)
+			secured.Post("/arr/test", wrapped.TestArrConnection)
+			secured.Post("/arr/discover", wrapped.DiscoverArrServices)
 			secured.Patch("/arr/instances/{id}", wrapped.UpdateArrInstance)
 			secured.Delete("/arr/instances/{id}", wrapped.DeleteArrInstance)
 			secured.Post("/arr/instances/{id}/apikey", wrapped.SetArrInstanceKey)

@@ -177,6 +177,14 @@ func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 	}
 }
 
+// arrProbeClientFactory builds adapters.ProbeClientFactory: a two-second client per candidate address, its host allowed by the guard
+// because the setup assistant's list of usual names and ports is fixed in code, and the probes are an administrator's.
+func (p *process) arrProbeClientFactory() adapters.ProbeClientFactory {
+	return func(baseURL string) *httpx.Client {
+		return p.providerClient(providerArrPrefix+"discover:"+arrHost(baseURL), connectionGuard(baseURL), httpx.ClientConfig{Timeout: 2 * time.Second})
+	}
+}
+
 // arrHost names an instance's bucket; an unparsable address shares one bucket rather than failing the call.
 func arrHost(baseURL string) string {
 	parsed, err := url.Parse(baseURL)

@@ -26,6 +26,7 @@ var ErrResponseTooLarge = errors.New("arrimport: response exceeded the size limi
 // LidarrStatus is GET /api/v1/system/status's own shape, trimmed to what a
 // connection test needs.
 type LidarrStatus struct {
+	AppName string `json:"appName"`
 	Version string `json:"version"`
 }
 

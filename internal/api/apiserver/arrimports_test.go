@@ -76,6 +76,14 @@ func (f *fakeArrSync) Revert(_ context.Context, id int64) (apiserver.ArrImportRe
 
 func (f *fakeArrSync) Forget(context.Context, int64) error { return f.err }
 
+func (f *fakeArrSync) TestConnection(context.Context, settings.ArrApp, string, string) apiserver.ArrConnectionTest {
+	return apiserver.ArrConnectionTest{OK: true, AppName: "Radarr", Version: "5.0"}
+}
+
+func (f *fakeArrSync) Discover(context.Context) []apiserver.DiscoveredService {
+	return []apiserver.DiscoveredService{{Kind: "radarr", Host: "radarr", Port: 7878, BaseURL: "http://radarr:7878"}}
+}
+
 func (f *fakeArrSync) PushMonitoring(context.Context, int64) (apiserver.ArrPushResult, error) {
 	return apiserver.ArrPushResult{}, f.err
 }
@@ -340,4 +348,36 @@ func TestArrImportReads_RequireAdministrator(t *testing.T) {
 			t.Errorf("GET %s = %d, want 403 for a readonly account", path, recorder.Code)
 		}
 	}
+}
+
+func TestTestArrConnectionAndDiscoverAreAdministratorOnlyAndRenderTheAnswer(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "home", settings.RoleUser)
+	admin, home := fixture.signIn(t, "admin"), fixture.signIn(t, "home")
+	body := `{"app":"radarr","base_url":"http://radarr:7878","api_key":"k"}`
+
+	if recorder := fixture.do(authedPost(t, home, "/api/v1/arr/test", body)); recorder.Code != http.StatusForbidden {
+		t.Errorf("test as user: status = %d, want 403", recorder.Code)
+	}
+	if recorder := fixture.do(authedPost(t, home, "/api/v1/arr/discover", "")); recorder.Code != http.StatusForbidden {
+		t.Errorf("discover as user: status = %d, want 403", recorder.Code)
+	}
+	recorder := fixture.do(authedPost(t, admin, "/api/v1/arr/test", body))
+	if recorder.Code != http.StatusOK || !jsonEqual(t, recorder.Body.Bytes(), `{"ok":true,"app_name":"Radarr","version":"5.0"}`) {
+		t.Errorf("test: status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	recorder = fixture.do(authedPost(t, admin, "/api/v1/arr/discover", ""))
+	if recorder.Code != http.StatusOK || !jsonEqual(t, recorder.Body.Bytes(), `[{"kind":"radarr","host":"radarr","port":7878,"base_url":"http://radarr:7878"}]`) {
+		t.Errorf("discover: status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+}
+
+func jsonEqual(t *testing.T, got []byte, want string) bool {
+	t.Helper()
+	var a, b any
+	if json.Unmarshal(got, &a) != nil || json.Unmarshal([]byte(want), &b) != nil {
+		return false
+	}
+	return reflect.DeepEqual(a, b)
 }

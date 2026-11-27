@@ -1280,7 +1280,7 @@ func (p *process) arrSync() adapters.ArrSync {
 			library.NewArrImports(p.library), library.NewIdentity(p.library),
 			library.NewPeople(p.library), library.NewSubscriptions(p.library),
 		),
-		Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
+		Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(), Probe: p.arrProbeClientFactory(),
 		Setup: adapters.ArrSetup{Cache: p.cache, Clock: clock.NewSystem(), FS: p.fsys}, Links: library.NewArrLinks(p.library), Logger: p.logger,
 		AfterFolders: func(ctx context.Context) {
 			if _, err := p.enqueueLibraryScans(ctx); err != nil {

@@ -48,18 +48,7 @@ func (a ArrSync) importSetup(
 // indexers adds the Newznab and Torznab indexers of the *Arr, enabled as it has them; Prowlarr's own are used through
 // its connection, and an indexer of another kind has no address Solarr can search.
 func (s ArrSetup) indexers(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) ([]string, error) {
-	var found []arrimport.Indexer
-	var err error
-	switch app {
-	case settings.ArrAppSonarr:
-		found, err = client.Sonarr().Indexers(ctx)
-	case settings.ArrAppRadarr:
-		found, err = client.Radarr().Indexers(ctx)
-	case settings.ArrAppWhisparr:
-		found, err = client.Whisparr().Indexers(ctx)
-	default:
-		found, err = client.Indexers(ctx)
-	}
+	found, err := arrIndexers(ctx, app, client)
 	if err != nil {
 		return nil, fmt.Errorf("indexers: %w", err)
 	}
@@ -139,18 +128,7 @@ func (s ArrSetup) prowlarrKeys(ctx context.Context) map[string]string {
 // downloadClients adds the *Arr's download clients Solarr has a client for, found by address. An *Arr hides a client's
 // password, so each arrives switched off, to be switched on once its credentials are entered.
 func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) ([]string, error) {
-	var found []arrimport.DownloadClient
-	var err error
-	switch app {
-	case settings.ArrAppSonarr:
-		found, err = client.Sonarr().DownloadClients(ctx)
-	case settings.ArrAppRadarr:
-		found, err = client.Radarr().DownloadClients(ctx)
-	case settings.ArrAppWhisparr:
-		found, err = client.Whisparr().DownloadClients(ctx)
-	default:
-		found, err = client.DownloadClients(ctx)
-	}
+	found, err := arrDownloadClients(ctx, app, client)
 	if err != nil {
 		return nil, fmt.Errorf("download clients: %w", err)
 	}
@@ -217,4 +195,43 @@ func remotePathMappingsOf(ctx context.Context, app settings.ArrApp, client arrim
 		return nil
 	}
 	return mappings
+}
+
+// arrIndexers reads an *Arr's indexers from the API version its app speaks.
+func arrIndexers(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) ([]arrimport.Indexer, error) {
+	switch app {
+	case settings.ArrAppSonarr:
+		return client.Sonarr().Indexers(ctx)
+	case settings.ArrAppRadarr:
+		return client.Radarr().Indexers(ctx)
+	case settings.ArrAppWhisparr:
+		return client.Whisparr().Indexers(ctx)
+	}
+	return client.Indexers(ctx)
+}
+
+// arrDownloadClients reads an *Arr's download clients from the API version its app speaks.
+func arrDownloadClients(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) ([]arrimport.DownloadClient, error) {
+	switch app {
+	case settings.ArrAppSonarr:
+		return client.Sonarr().DownloadClients(ctx)
+	case settings.ArrAppRadarr:
+		return client.Radarr().DownloadClients(ctx)
+	case settings.ArrAppWhisparr:
+		return client.Whisparr().DownloadClients(ctx)
+	}
+	return client.DownloadClients(ctx)
+}
+
+// arrImportLists reads an *Arr's import lists from the API version its app speaks.
+func arrImportLists(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) ([]arrimport.ImportList, error) {
+	switch app {
+	case settings.ArrAppSonarr:
+		return client.Sonarr().ImportLists(ctx)
+	case settings.ArrAppRadarr:
+		return client.Radarr().ImportLists(ctx)
+	case settings.ArrAppWhisparr:
+		return client.Whisparr().ImportLists(ctx)
+	}
+	return client.ImportLists(ctx)
 }
