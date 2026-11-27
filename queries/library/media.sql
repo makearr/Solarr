@@ -520,6 +520,17 @@ JOIN video_frame_hash f ON f.media_object_id = o.id
 WHERE wf.work_id = sqlc.arg(work_id) AND o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = sqlc.arg(version)
 ORDER BY o.id;
 
+-- The hashed primary video of each episode or part: crossover candidates are tested against each other with it.
+-- name: ListPartVideoHashes :many
+SELECT wp.id AS part_id, o.id, o.phash, o.duration_ms, f.frames
+FROM work_part wp
+JOIN desired_item d ON d.work_id = wp.work_id
+JOIN desired_item_file df ON df.desired_item_id = d.id AND df.media_ref = wp.media_ref AND df.role = 'primary'
+JOIN media_object o ON o.id = df.media_object_id
+JOIN video_frame_hash f ON f.media_object_id = o.id
+WHERE wp.id IN (sqlc.slice(part_ids)) AND o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = sqlc.arg(version)
+ORDER BY wp.id, o.id;
+
 -- The download a placed file came in with, nothing when a person imported it by hand.
 -- name: GetAcquisitionIDOfMediaObject :one
 SELECT s.acquisition_id

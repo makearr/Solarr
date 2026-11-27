@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { FileThumb } from "./FileThumb";
+import { partLink } from "@/lib/partLink";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, Trash2 } from "lucide-react";
@@ -192,9 +194,10 @@ function MemberList({ event, categoryId, onRemove }: { event: Pick<Crossover, "m
         return (
           <li key={member.part_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
             <span className="w-6 text-right tabular-nums text-ink-muted">{member.number}.</span>
+            {member.media_object_id != null && <FileThumb mediaObjectId={member.media_object_id} kind="frame" />}
             <Link {...seriesLink(member, categoryId)} className="hover:underline">{member.work_title}</Link>
-            <span className="font-mono text-xs">{refLabel(member.media_ref)}</span>
-            <span>{member.title}</span>
+            <Link {...partLink(member.work_id, member.media_ref, categoryId)} className="font-mono text-xs hover:underline">{refLabel(member.media_ref)}</Link>
+            <Link {...partLink(member.work_id, member.media_ref, categoryId)} className="hover:underline">{member.title}</Link>
             {member.guessed && <Chip title={t("crossover.guessedHelp")}>{t("crossover.guessed")}</Chip>}
             <span className="text-xs text-ink-muted">{member.date}</span>
             <span className={`ml-auto text-xs ${member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}`}>
@@ -358,7 +361,10 @@ export function CrossoverGuestRows({
           </td>
           <td className="w-12 py-1.5" />
           <td className="py-1.5">
-            <span className="text-ink-muted">{member.title || refLabel(member.media_ref)}</span>
+            <div className="flex gap-3">
+              {member.media_object_id != null && <FileThumb mediaObjectId={member.media_object_id} kind="frame" />}
+              <Link {...partLink(member.work_id, member.media_ref, categoryId)} className="text-ink-muted hover:underline">{member.title || refLabel(member.media_ref)}</Link>
+            </div>
             <span className="mt-0.5 flex flex-wrap items-center gap-1">
               <Link {...seriesLink(member, categoryId)}>
                 <Chip>{t("crossover.guest", { series: member.work_title, ref: refLabel(member.media_ref), at: member.number, of: event.total_parts })}</Chip>

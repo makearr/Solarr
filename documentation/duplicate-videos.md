@@ -113,3 +113,7 @@ The similarity level opens on **Exact** and remembers the one last chosen (a bro
 Settings > General has two buttons that start the on-demand `library.video_pictures` job whatever the switches say: "Generate
 missing hashes" hashes every video without a hash, "Generate missing previews" also makes the pictures. On a work's page, a
 video file with no picture yet shows a placeholder linking to Settings while previews and thumbnails are both on.
+
+## Crossover episodes
+
+Same-broadcast suggestions between series (`library.Crossovers.Suggestions`) also test the two episodes' videos against each other with the finder's frame comparison at the high level (`SameContentSuggestion.FilesMatch`). A pair whose pictures agree is certain and is linked by the pass that links certain pairs, whatever its title says. Nothing is tested when either episode has no frame hash (hashing off or not yet reached).

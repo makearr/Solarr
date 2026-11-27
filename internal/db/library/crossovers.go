@@ -52,6 +52,8 @@ type CrossoverMember struct {
 	MediaRef, PartTitle string
 	Date                string
 	Monitored, HasFile  bool
+	// MediaObjectID is the file whose preview picture stands for the part; zero without one.
+	MediaObjectID int64
 	// Number is the part's place in the event; Guessed says it was worked out from air dates, not from the title.
 	Number  int
 	Guessed bool
@@ -281,7 +283,7 @@ func (c Crossovers) withMembers(ctx context.Context, rows []librarydb.Collection
 		at := index[member.CollectionID]
 		events[at].Members = append(events[at].Members, CrossoverMember{
 			PartID: member.PartID, WorkID: member.WorkID, WorkTitle: member.WorkTitle, MediaRef: member.MediaRef,
-			PartTitle: member.PartTitle, Date: member.Date, Monitored: member.Monitored == 1, HasFile: member.HasFile,
+			PartTitle: member.PartTitle, Date: member.Date, Monitored: member.Monitored == 1, HasFile: member.HasFile, MediaObjectID: member.MediaObjectID,
 			Number: int(member.Ord.Int64), Guessed: guessed[[2]int64{member.CollectionID, member.PartID}],
 		})
 	}
@@ -448,12 +450,17 @@ type SameContentSuggestion struct {
 	People, OtherPeople, SharedPeople int64
 	// AvailableAt are the moments the two episodes aired, 0 when not known; SharedOrganisations counts the networks the series share.
 	AvailableAt, OtherAvailableAt, SharedOrganisations int64
+	// FilesMatch says both episodes hold a video and the two look alike by their frame hashes: the same broadcast, proven by the files.
+	FilesMatch bool
 }
 
 // Certain says the evidence is enough to link without asking: a title that names the episode, and lengths within 5% (or
 // the same minute on air), and one of: a near identical cast of three or more, the same moment on air, or a network the
 // two series share with a title of more than one word.
 func (s SameContentSuggestion) Certain() bool {
+	if s.FilesMatch {
+		return true
+	}
 	if genericTitle(s.Title) {
 		return false
 	}
@@ -523,7 +530,47 @@ func (c Crossovers) Suggestions(ctx context.Context, mediaType string, categoryI
 			break
 		}
 	}
-	return suggestions, nil
+	return suggestions, c.markFilesMatching(ctx, suggestions)
+}
+
+// markFilesMatching tests each pair's two videos against each other, as the duplicate finder does: a pair whose pictures agree is one broadcast.
+func (c Crossovers) markFilesMatching(ctx context.Context, suggestions []SameContentSuggestion) error {
+	if len(suggestions) == 0 {
+		return nil
+	}
+	seen := map[int64]bool{}
+	var partIDs []int64
+	for _, suggestion := range suggestions {
+		for _, id := range []int64{suggestion.PartID, suggestion.OtherPartID} {
+			if !seen[id] {
+				seen[id] = true
+				partIDs = append(partIDs, id)
+			}
+		}
+	}
+	rows, err := librarydb.New(c.store.Read()).ListPartVideoHashes(ctx, librarydb.ListPartVideoHashesParams{PartIds: partIDs, Version: VideoHashVersion})
+	if err != nil {
+		return fmt.Errorf("library: crossover video hashes: %w", err)
+	}
+	byPart := map[int64][]hashedVideo{}
+	for _, row := range rows {
+		frames, err := decodeFrameHashes(row.Frames)
+		if err != nil {
+			return fmt.Errorf("library: video %d: %w", row.ID, err)
+		}
+		byPart[row.PartID] = append(byPart[row.PartID], hashedVideo{video: SimilarVideo{MediaObjectID: row.ID, DurationMs: row.DurationMs.Int64}, mean: uint64(row.Phash.Int64), frames: frames})
+	}
+	frameBits := SimilarityHigh.FrameBits(DefaultFrameBits)
+	for i := range suggestions {
+		for _, held := range byPart[suggestions[i].PartID] {
+			for _, other := range byPart[suggestions[i].OtherPartID] {
+				if matchesHash(held.mean, held.frames, held.video.DurationMs, other.mean, other.frames, other.video.DurationMs, SimilarityHigh.MaxBits(), frameBits) {
+					suggestions[i].FilesMatch = true
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // LinkCertain links every pair the evidence settles (SameContentSuggestion.Certain) and answers how many, so crossover

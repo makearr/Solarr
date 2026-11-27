@@ -326,3 +326,14 @@ func TestListInCategoryShowsOnlyEventsWithAPartOfTheLibrary(t *testing.T) {
 		t.Fatalf("events = %+v, %v; want only the event %d", events, err, held)
 	}
 }
+
+func TestFilesThatLookAlikeSettleASuggestionTheTitleCannot(t *testing.T) {
+	generic := library.SameContentSuggestion{Title: "Episode 4", RuntimeMs: 1, OtherRuntimeMs: 100}
+	if generic.Certain() {
+		t.Fatal("a generic title with far apart lengths must not be certain")
+	}
+	generic.FilesMatch = true
+	if !generic.Certain() {
+		t.Fatal("pictures that agree prove one broadcast")
+	}
+}

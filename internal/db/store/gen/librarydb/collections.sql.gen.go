@@ -1974,7 +1974,10 @@ SELECT m.collection_id, m.ord, wp.id AS part_id, wp.work_id, wp.media_ref, CAST(
        CAST(COALESCE(wp.date, '') AS TEXT) AS date, wp.monitored, w.canonical_title AS work_title,
        EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
                JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.missing_since IS NULL
-               WHERE d.work_id = wp.work_id AND f.media_ref = wp.media_ref AND f.role = 'primary') AS has_file
+               WHERE d.work_id = wp.work_id AND f.media_ref = wp.media_ref AND f.role = 'primary') AS has_file,
+       CAST(COALESCE((SELECT MIN(f.media_object_id) FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
+               JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.missing_since IS NULL
+               WHERE d.work_id = wp.work_id AND f.media_ref = wp.media_ref AND f.role = 'primary'), 0) AS INTEGER) AS media_object_id
 FROM collection_member m
 JOIN work_part wp ON wp.id = m.part_id
 JOIN work w ON w.id = wp.work_id
@@ -1983,16 +1986,17 @@ ORDER BY m.collection_id, m.ord, m.part_id
 `
 
 type ListPartCollectionMembersRow struct {
-	CollectionID int64
-	Ord          sql.NullInt64
-	PartID       int64
-	WorkID       int64
-	MediaRef     string
-	PartTitle    string
-	Date         string
-	Monitored    int64
-	WorkTitle    string
-	HasFile      bool
+	CollectionID  int64
+	Ord           sql.NullInt64
+	PartID        int64
+	WorkID        int64
+	MediaRef      string
+	PartTitle     string
+	Date          string
+	Monitored     int64
+	WorkTitle     string
+	HasFile       bool
+	MediaObjectID int64
 }
 
 // A crossover (an event across works) and its members in order, each with what a list shows of it.
@@ -2026,6 +2030,7 @@ func (q *Queries) ListPartCollectionMembers(ctx context.Context, collectionIds [
 			&i.Monitored,
 			&i.WorkTitle,
 			&i.HasFile,
+			&i.MediaObjectID,
 		); err != nil {
 			return nil, err
 		}

@@ -931,6 +931,8 @@ type Querier interface {
 	ListPartIDs(ctx context.Context, arg ListPartIDsParams) ([]ListPartIDsRow, error)
 	// The files of a work's parts with where they are and one provider's id of each part, for files written beside them.
 	ListPartPaths(ctx context.Context, arg ListPartPathsParams) ([]ListPartPathsRow, error)
+	// The hashed primary video of each episode or part: crossover candidates are tested against each other with it.
+	ListPartVideoHashes(ctx context.Context, arg ListPartVideoHashesParams) ([]ListPartVideoHashesRow, error)
 	// One batch of parts whose stamped wait differs from what the settings now say for their confidence: read first, so a
 	// run with nothing to stamp scans the table on the read pool, not inside the one writer.
 	ListPartsWithStaleGrace(ctx context.Context, arg ListPartsWithStaleGraceParams) ([]int64, error)

@@ -12689,6 +12689,7 @@ components:
         date: { type: string }
         monitored: { type: boolean }
         has_file: { type: boolean }
+        media_object_id: { type: integer, format: int64, description: "The file whose preview picture stands for the part; absent without a file." }
         number: { type: integer, description: "The part's place in the event." }
         guessed: { type: boolean, description: "The place was worked out from air dates, because the title carries no part number." }
 

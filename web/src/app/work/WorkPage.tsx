@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FilePen, Filter, Layers, Library, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound, FolderInput } from "lucide-react";
 
@@ -615,6 +615,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
     onInteractive: grouped && work.can_request ? (part, group) => setInteractive({ scope: { group: group.ref, part: part.id }, title: `${work.title}, ${group.label} ${part.number ?? ""}` }) : undefined,
     onRemove: administrator ? (part, deleteFiles) => removePart.mutate({ partId: part.id, deleteFiles }) : undefined,
   };
+  const focusRef = (useSearch({ strict: false }) as { ref?: string }).ref;
   const newest = groups.find((group) => group.ref !== "" && !group.label.toLowerCase().includes("special")) ?? groups[0];
 
   return (
@@ -630,7 +631,8 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
             key={group.ref}
             workId={work.id}
             group={group}
-            initiallyOpen={group === newest}
+            initiallyOpen={focusRef !== undefined ? group.ref !== "" && focusRef.startsWith(`${group.ref}:`) : group === newest}
+            focusRef={focusRef}
             categoryId={categoryId}
             info={info}
             words={words}
@@ -642,7 +644,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
           />
         ))
       ) : info?.part.one ? (
-        <WholeParts work={work} info={info} words={words} categoryId={categoryId} actions={actions} />
+        <WholeParts work={work} info={info} words={words} categoryId={categoryId} actions={actions} focusRef={focusRef} />
       ) : null}
       {work.editions.length > 0 && (
         <details className="rounded-lg border border-border-subtle bg-surface p-3 text-sm">
@@ -660,7 +662,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
 }
 
 /** Lidarr's tracklist: every part of an ungrouped work in one table. */
-function WholeParts({ work, info, words, categoryId, actions }: { work: Work; info: MediaTypeInfo | undefined; words: Vocabulary; categoryId: string | undefined; actions: PartActions }) {
+function WholeParts({ work, info, words, categoryId, actions, focusRef }: { work: Work; info: MediaTypeInfo | undefined; words: Vocabulary; categoryId: string | undefined; actions: PartActions; focusRef?: string }) {
   const { parts, loading } = useAllParts(work.id, undefined);
   const group = work.groups?.find((entry) => entry.ref === "");
   if (loading) return <p className="text-xs text-ink-muted">{t("work.loading")}</p>;
@@ -673,7 +675,7 @@ function WholeParts({ work, info, words, categoryId, actions }: { work: Work; in
           {parts.filter((part) => part.file).length}/{parts.length}
         </span>
       </header>
-      <PartTable parts={parts} group={undefined} categoryId={categoryId} info={info} words={words} actions={{ ...actions, onGrab: undefined, onInteractive: undefined }} />
+      <PartTable parts={parts} group={undefined} categoryId={categoryId} info={info} words={words} actions={{ ...actions, onGrab: undefined, onInteractive: undefined }} focusRef={focusRef} />
     </section>
   );
 }

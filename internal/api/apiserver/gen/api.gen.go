@@ -2718,10 +2718,13 @@ type CrossoverMember struct {
 	Date *string `json:"date,omitempty"`
 
 	// Guessed The place was worked out from air dates, because the title carries no part number.
-	Guessed   bool   `json:"guessed"`
-	HasFile   bool   `json:"has_file"`
-	MediaRef  string `json:"media_ref"`
-	Monitored bool   `json:"monitored"`
+	Guessed bool `json:"guessed"`
+	HasFile bool `json:"has_file"`
+
+	// MediaObjectId The file whose preview picture stands for the part; absent without a file.
+	MediaObjectId *int64 `json:"media_object_id,omitempty"`
+	MediaRef      string `json:"media_ref"`
+	Monitored     bool   `json:"monitored"`
 
 	// Number The part's place in the event.
 	Number    int    `json:"number"`

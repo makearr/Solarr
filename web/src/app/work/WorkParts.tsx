@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, Link2, Search, Trash2, User } from "lucide-react";
@@ -83,6 +83,7 @@ export function GroupSection({
   onGroupGrab,
   onGroupInteractive,
   note,
+  focusRef,
 }: {
   workId: number;
   group: Group;
@@ -95,6 +96,8 @@ export function GroupSection({
   onGroupGrab?: () => void;
   onGroupInteractive?: () => void;
   note?: string;
+  /** The part a link asked for: its row is marked and scrolled to. */
+  focusRef?: string;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const Chevron = open ? ChevronDown : ChevronRight;
@@ -133,7 +136,7 @@ export function GroupSection({
           {loading ? (
             <p className="px-3 py-2 text-xs text-ink-muted">{t("work.loading")}</p>
           ) : (
-            <PartTable parts={parts} group={group} categoryId={categoryId} info={info} words={words} actions={actions} />
+            <PartTable parts={parts} group={group} categoryId={categoryId} info={info} words={words} actions={actions} focusRef={focusRef} />
           )}
         </div>
       )}
@@ -149,6 +152,7 @@ export function PartTable({
   info,
   words,
   actions,
+  focusRef,
 }: {
   parts: readonly Part[];
   group: Group | undefined;
@@ -156,6 +160,7 @@ export function PartTable({
   info: MediaTypeInfo | undefined;
   words: Vocabulary;
   actions: PartActions;
+  focusRef?: string;
 }) {
   if (parts.length === 0) return <p className="px-3 py-2 text-xs text-ink-muted">{t("work.noParts", words)}</p>;
   const sections = [...new Set(parts.map((part) => part.section ?? ""))];
@@ -176,7 +181,7 @@ export function PartTable({
             .map((part) => (
               <Fragment key={part.id}>
                 {actions.rowsAround?.(part, "before")}
-                <PartRow part={part} group={group} categoryId={categoryId} info={info} actions={actions} />
+                <PartRow part={part} group={group} categoryId={categoryId} info={info} actions={actions} focused={focusRef === part.media_ref} />
                 {actions.rowsAround?.(part, "after")}
               </Fragment>
             ))}
@@ -192,13 +197,19 @@ function PartRow({
   categoryId,
   info,
   actions,
+  focused,
 }: {
   part: Part;
   group: Group | undefined;
   categoryId: string | undefined;
   info: MediaTypeInfo | undefined;
   actions: PartActions;
+  focused: boolean;
 }) {
+  const rowRef = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView({ block: "center" });
+  }, [focused]);
   const [removing, setRemoving] = useState(false);
   const [deleteFiles, setDeleteFiles] = useState(false);
   const state = STATE[partState(part)];
@@ -212,7 +223,7 @@ function PartRow({
   // A video's episode row leads with its file's frame; a row without a file keeps the space, so the titles line up.
   const framed = thumbnails && isVideoType(info?.key);
   return (
-    <tr className="border-b border-border-subtle last:border-0 align-top">
+    <tr ref={rowRef} className={`border-b border-border-subtle last:border-0 align-top ${focused ? "bg-accent/10" : ""}`}>
       <td className="w-9 px-3 py-1.5">
         <MonitorToggle monitored={part.monitored} label={title} onChange={actions.onMonitor && ((monitored) => actions.onMonitor?.(part, monitored))} small />
       </td>

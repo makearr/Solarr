@@ -231,12 +231,12 @@ const routes = [
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/works/$id/$tab",
-    beforeLoad: async ({ params }) => {
+    beforeLoad: async ({ params, search }) => {
       const { id, tab } = params as { id: string; tab: string };
       const { data } = await api.GET("/works/{id}", { params: { path: { id: Number(id) } } });
       const library = data?.library_ids?.[0];
       if (library !== undefined) {
-        throw redirect({ to: "/library/$categoryId/works/$workId/$tab", params: { categoryId: String(library), workId: id, tab } });
+        throw redirect({ to: "/library/$categoryId/works/$workId/$tab", params: { categoryId: String(library), workId: id, tab }, search: search as never });
       }
     },
     component: lazyRouteComponent(() => import("./work/WorkPage"), "WorkPage"),

@@ -1004,6 +1004,71 @@ func (q *Queries) ListMissingRecounts(ctx context.Context) ([]MissingRecount, er
 	return items, nil
 }
 
+const listPartVideoHashes = `-- name: ListPartVideoHashes :many
+SELECT wp.id AS part_id, o.id, o.phash, o.duration_ms, f.frames
+FROM work_part wp
+JOIN desired_item d ON d.work_id = wp.work_id
+JOIN desired_item_file df ON df.desired_item_id = d.id AND df.media_ref = wp.media_ref AND df.role = 'primary'
+JOIN media_object o ON o.id = df.media_object_id
+JOIN video_frame_hash f ON f.media_object_id = o.id
+WHERE wp.id IN (/*SLICE:part_ids*/?) AND o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = ?2
+ORDER BY wp.id, o.id
+`
+
+type ListPartVideoHashesParams struct {
+	PartIds []int64
+	Version int64
+}
+
+type ListPartVideoHashesRow struct {
+	PartID     int64
+	ID         int64
+	Phash      sql.NullInt64
+	DurationMs sql.NullInt64
+	Frames     []byte
+}
+
+// The hashed primary video of each episode or part: crossover candidates are tested against each other with it.
+func (q *Queries) ListPartVideoHashes(ctx context.Context, arg ListPartVideoHashesParams) ([]ListPartVideoHashesRow, error) {
+	query := listPartVideoHashes
+	var queryParams []interface{}
+	if len(arg.PartIds) > 0 {
+		for _, v := range arg.PartIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:part_ids*/?", strings.Repeat(",?", len(arg.PartIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:part_ids*/?", "NULL", 1)
+	}
+	queryParams = append(queryParams, arg.Version)
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPartVideoHashesRow{}
+	for rows.Next() {
+		var i ListPartVideoHashesRow
+		if err := rows.Scan(
+			&i.PartID,
+			&i.ID,
+			&i.Phash,
+			&i.DurationMs,
+			&i.Frames,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPathsForObject = `-- name: ListPathsForObject :many
 SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
        created_at, last_seen_at, missing_since

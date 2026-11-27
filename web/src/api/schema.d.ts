@@ -8893,6 +8893,11 @@ export interface components {
             date?: string;
             monitored: boolean;
             has_file: boolean;
+            /**
+             * Format: int64
+             * @description The file whose preview picture stands for the part; absent without a file.
+             */
+            media_object_id?: number;
             /** @description The part's place in the event. */
             number: number;
             /** @description The place was worked out from air dates, because the title carries no part number. */

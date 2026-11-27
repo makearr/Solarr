@@ -53,6 +53,10 @@ func crossoverView(event library.Crossover) gen.Crossover {
 		view.Members[i].PartId, view.Members[i].WorkId, view.Members[i].WorkTitle = member.PartID, member.WorkID, member.WorkTitle
 		view.Members[i].MediaRef, view.Members[i].Title, view.Members[i].Monitored = member.MediaRef, member.PartTitle, member.Monitored
 		view.Members[i].HasFile = member.HasFile
+		if member.MediaObjectID != 0 {
+			fileID := member.MediaObjectID
+			view.Members[i].MediaObjectId = &fileID
+		}
 		view.Members[i].Number, view.Members[i].Guessed = member.Number, member.Guessed
 		if member.Date != "" {
 			date := member.Date
