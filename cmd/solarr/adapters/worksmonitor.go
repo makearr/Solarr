@@ -225,28 +225,56 @@ func (a WorksMonitor) SetTrackWanted(
 // applied to a read pass here rather than a write transaction.
 const bulkPageSize = 200
 
-// BulkSetMonitored resolves the selection to work ids and, unless preview, calls SetWorkMonitored per work to keep its Invariant 71 logic; one failure is logged and skipped, not fatal.
+// BulkSetMonitored resolves the selection to work ids and, unless preview, calls MonitorWork per work to keep its Invariant 71 logic; one failure is logged and skipped, not fatal. Changed lists the works whose monitored state differed before and after.
 func (a WorksMonitor) BulkSetMonitored(
 	ctx context.Context, selection apiserver.BulkSelection, monitored, preview bool,
-) (int64, error) {
+) (apiserver.BulkMonitorOutcome, error) {
 	matched, err := a.matchingWorkIDs(ctx, selection)
 	if err != nil {
-		return 0, err
+		return apiserver.BulkMonitorOutcome{}, err
 	}
 	if preview {
-		return int64(len(matched)), nil
+		return apiserver.BulkMonitorOutcome{Matched: int64(len(matched))}, nil
 	}
 
-	var affected int64
+	outcome := apiserver.BulkMonitorOutcome{Changed: []int64{}}
 	for _, workID := range matched {
-		if _, err := a.MonitorWork(ctx, workID, apiserver.MonitorScope{Monitored: monitored}); err != nil {
+		before, err := a.Works.Detail(ctx, workID)
+		if err != nil {
+			a.Logger.Warn("bulk monitor: one work failed, continuing", slog.Int64("work_id", workID), slog.Any("error", err))
+			continue
+		}
+		groups, err := a.MonitorWork(ctx, workID, apiserver.MonitorScope{Monitored: monitored})
+		if err != nil {
 			a.Logger.Warn("bulk monitor: one work failed, continuing",
 				slog.Int64("work_id", workID), slog.Any("error", err))
 			continue
 		}
-		affected++
+		outcome.Matched++
+		if groupsMonitored(groups) != detailMonitored(before) {
+			outcome.Changed = append(outcome.Changed, workID)
+		}
 	}
-	return affected, nil
+	return outcome, nil
+}
+
+// detailMonitored is the list's definition of a monitored work: any of its SET groups is.
+func detailMonitored(detail library.WorkDetail) bool {
+	for _, group := range detail.Groups {
+		if group.Monitored {
+			return true
+		}
+	}
+	return false
+}
+
+func groupsMonitored(groups []apiserver.GroupRow) bool {
+	for _, group := range groups {
+		if group.Wanted.Monitored {
+			return true
+		}
+	}
+	return false
 }
 
 // matchingWorkIDs turns a selection into ids: explicit ids are filtered to visible (ADR-27) and not excluded, else every visible work not excluded, paged to bound memory.

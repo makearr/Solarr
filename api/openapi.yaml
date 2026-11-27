@@ -5515,10 +5515,10 @@ paths:
                 preview: { type: boolean, default: false }
       responses:
         "200":
-          description: How many works matched (and, unless preview, were changed).
+          description: How many works matched, and, unless preview, which of them actually changed state (what an Undo sends back).
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/BulkResult" }
+              schema: { $ref: "#/components/schemas/BulkMonitorResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -15239,6 +15239,20 @@ components:
       required: [count]
       properties:
         count: { type: integer, format: int64 }
+
+    BulkMonitorResult:
+      type: object
+      description: >-
+        How many works a bulk monitor matched, and the ids whose monitored state actually changed, so an Undo restores
+        exactly those. A preview changes nothing and carries no ids. When more than 5000 changed, changed_ids is empty and
+        changed_ids_omitted is true: no faithful Undo exists.
+      required: [count, changed_ids, changed_ids_omitted]
+      properties:
+        count: { type: integer, format: int64 }
+        changed_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        changed_ids_omitted: { type: boolean }
 
     WorkEdit:
       type: object

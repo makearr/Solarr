@@ -2237,6 +2237,13 @@ type BulkLibraryMove struct {
 	Works int64 `json:"works"`
 }
 
+// BulkMonitorResult How many works a bulk monitor matched, and the ids whose monitored state actually changed, so an Undo restores exactly those. A preview changes nothing and carries no ids. When more than 5000 changed, changed_ids is empty and changed_ids_omitted is true: no faithful Undo exists.
+type BulkMonitorResult struct {
+	ChangedIds        []int64 `json:"changed_ids"`
+	ChangedIdsOmitted bool    `json:"changed_ids_omitted"`
+	Count             int64   `json:"count"`
+}
+
 // BulkResult How many rows a bulk action (section 21.7) matched, and, unless it was a preview, changed.
 type BulkResult struct {
 	Count int64 `json:"count"`

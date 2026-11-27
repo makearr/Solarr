@@ -254,9 +254,9 @@ type WorksMonitor interface {
 	MonitorWork(ctx context.Context, workID int64, scope MonitorScope) ([]GroupRow, error)
 	// SetTrackWanted ensures the track's SINGLE desired_item exists and sets monitored; unlike SetPartMonitored it does not resize required_count; missing ids wrap sql.ErrNoRows.
 	SetTrackWanted(ctx context.Context, workID, partID int64, wanted bool) (WantedRow, error)
-	// BulkSetMonitored is SetWorkMonitored over a selection (section 21.7). Always returns how many works
-	// matched; when preview is true nothing is changed.
-	BulkSetMonitored(ctx context.Context, selection BulkSelection, monitored, preview bool) (int64, error)
+	// BulkSetMonitored is SetWorkMonitored over a selection (section 21.7). It returns how many works matched and the
+	// ids whose monitored state actually changed (none for a preview, which changes nothing).
+	BulkSetMonitored(ctx context.Context, selection BulkSelection, monitored, preview bool) (BulkMonitorOutcome, error)
 	// RemoveWork drops the work's desired items and the work only when no files remain; deleteFiles recycles files (section 10.8); a missing id wraps sql.ErrNoRows.
 	RemoveWork(ctx context.Context, workID int64, deleteFiles, exclude bool) (RemoveWorkResult, error)
 	// RemovePart stops wanting one track; deleteFiles also recycles its file.
@@ -622,12 +622,25 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")
 		return
 	}
-	count, err := s.worksMonitor.BulkSetMonitored(r.Context(), selection, body.Monitored, derefOr(body.Preview, false))
+	outcome, err := s.worksMonitor.BulkSetMonitored(r.Context(), selection, body.Monitored, derefOr(body.Preview, false))
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, gen.BulkResult{Count: count})
+	changed, omitted := outcome.Changed, len(outcome.Changed) > MaxUndoIDs
+	if omitted || changed == nil {
+		changed = []int64{}
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.BulkMonitorResult{Count: outcome.Matched, ChangedIds: changed, ChangedIdsOmitted: omitted})
+}
+
+// MaxUndoIDs caps the changed ids one bulk monitor answers with; above it no Undo is offered.
+const MaxUndoIDs = 5000
+
+// BulkMonitorOutcome is what a bulk monitor matched and which works it really changed.
+type BulkMonitorOutcome struct {
+	Matched int64
+	Changed []int64
 }
 
 // bulkSelectionNamed refuses a body that selects nothing: without it an empty selection means every visible work.

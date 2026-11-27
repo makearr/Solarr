@@ -25,6 +25,7 @@ import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import { useRouteView, type ViewState } from "@/list/useRouteView";
 import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { useConfirm } from "@/ui/useConfirm";
 import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
 import { Toolbar, ToolbarAdd, ToolbarFavorites, ToolbarSearch, ToolbarSort } from "@/ui/Toolbar";
@@ -102,6 +103,9 @@ export function sortChoicesOf(info: MediaTypeInfo | undefined): [string, string]
 function watchedFilter(value: string | undefined): "yes" | "no" | "in_progress" | undefined {
   return value === "yes" || value === "no" || value === "in_progress" ? value : undefined;
 }
+
+/** The most changed works the server lists for an Undo (apiserver.MaxUndoIDs); above it no Undo is offered. */
+const MAX_UNDO_WORKS = 5000;
 
 // Selection is a query, never a fetched list of ids (section 21.7).
 function selectionBody(request: SelectionRequest) {
@@ -429,6 +433,7 @@ function BulkBar({
 }) {
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
+  const { ask, dialog: askDialog } = useConfirm();
   const [confirm, setConfirm] = useState<
     { kind: "option"; option: string; count: number } | { kind: "remove" }
   >();
@@ -442,23 +447,43 @@ function BulkBar({
     onDone();
     invalidateWorkLists(queryClient);
   };
-  // Monitoring is reversible, so it applies at once and the toast offers the way back instead of asking first.
-  const setMonitored = useMutation({
+  // Monitoring is reversible, so it applies at once and the toast offers the way back; Undo sends back only the
+  // works that really changed, never the original selection. Past what the server lists the change asks first.
+  const applyMonitored = useMutation({
     mutationFn: async (monitored: boolean) => {
       const { data, error } = await api.POST("/works/bulk/monitor", { body: { ...selectionBody(request), monitored } });
       if (error) throw error;
-      return { monitored, count: data.count };
+      return { monitored, matched: data.count, changedIds: data.changed_ids, undoable: !data.changed_ids_omitted && data.changed_ids.length > 0 };
     },
-    onSuccess: ({ monitored, count: matched }) => {
-      const body = { ...selectionBody(request), monitored: !monitored };
+    onSuccess: ({ monitored, matched, changedIds, undoable }) => {
       showToast({
         message: t(monitored ? "workIndex.monitoredCount" : "workIndex.unmonitoredCount", { count: matched }),
-        action: {
-          label: t("toast.undo"),
-          run: () => void api.POST("/works/bulk/monitor", { body }).then(() => invalidateWorkLists(queryClient)),
-        },
+        action: undoable
+          ? {
+              label: t("toast.undo"),
+              run: () =>
+                void api.POST("/works/bulk/monitor", { body: { ids: changedIds, monitored: !monitored } }).then(() => invalidateWorkLists(queryClient)),
+            }
+          : undefined,
       });
       changed();
+    },
+  });
+  const setMonitored = useMutation({
+    mutationFn: async (monitored: boolean) => {
+      const { data, error } = await api.POST("/works/bulk/monitor", { body: { ...selectionBody(request), monitored, preview: true } });
+      if (error) throw error;
+      if (data.count <= MAX_UNDO_WORKS) {
+        applyMonitored.mutate(monitored);
+        return;
+      }
+      ask({
+        title: t(monitored ? "action.monitor" : "action.unmonitor"),
+        consequence: t("workIndex.noUndo", { count: data.count }),
+        confirmLabel: t(monitored ? "action.monitor" : "action.unmonitor"),
+        danger: false,
+        run: () => applyMonitored.mutate(monitored),
+      });
     },
   });
   // A monitor option goes through the bulk edit, so "select all matching" reaches every work, counted first.
@@ -492,10 +517,10 @@ function BulkBar({
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle bg-surface px-4 py-2 text-xs">
       <span className="font-medium">{selected}</span>
-      <Button busy={setMonitored.isPending} onClick={() => setMonitored.mutate(true)}>
+      <Button busy={setMonitored.isPending || applyMonitored.isPending} onClick={() => setMonitored.mutate(true)}>
         {t("action.monitor")}
       </Button>
-      <Button busy={setMonitored.isPending} onClick={() => setMonitored.mutate(false)}>
+      <Button busy={setMonitored.isPending || applyMonitored.isPending} onClick={() => setMonitored.mutate(false)}>
         {t("action.unmonitor")}
       </Button>
       <Button onClick={() => setEditing(true)}>{t("action.edit")}</Button>
@@ -551,6 +576,7 @@ function BulkBar({
           }}
         />
       )}
+      {askDialog}
       {confirm && (
         <ConfirmDialog
           title={confirm.kind === "remove" ? `${t("action.remove")} ${explicitIds.length} ${words.works}` : "Change the selection"}

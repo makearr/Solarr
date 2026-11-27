@@ -37,6 +37,7 @@ type fakeWorksMonitor struct {
 	setTrackCalls   int
 
 	bulkCount             int64
+	bulkChanged           []int64
 	bulkErr               error
 	lastBulkRootFolderIDs []int64
 	lastBulkCategoryIDs   []int64
@@ -66,7 +67,7 @@ func (f *fakeWorksMonitor) SetTrackWanted(_ context.Context, _, partID int64, wa
 
 func (f *fakeWorksMonitor) BulkSetMonitored(
 	_ context.Context, selection apiserver.BulkSelection, monitored, preview bool,
-) (int64, error) {
+) (apiserver.BulkMonitorOutcome, error) {
 	f.bulkCalls++
 	f.lastBulkRootFolderIDs = selection.RootFolderIDs
 	f.lastBulkCategoryIDs = selection.CategoryIDs
@@ -76,9 +77,9 @@ func (f *fakeWorksMonitor) BulkSetMonitored(
 	f.lastBulkMonitored = &monitored
 	f.lastBulkPreview = &preview
 	if f.bulkErr != nil {
-		return 0, f.bulkErr
+		return apiserver.BulkMonitorOutcome{}, f.bulkErr
 	}
-	return f.bulkCount, nil
+	return apiserver.BulkMonitorOutcome{Matched: f.bulkCount, Changed: f.bulkChanged}, nil
 }
 
 func visibleWorksFixture(t *testing.T) (worksFixture, []*http.Cookie) {
@@ -302,6 +303,40 @@ func TestBulkSetWorkMonitored_ResolvesCategoryAndForwardsTheSelection(t *testing
 	}
 	if body.Count != 7 {
 		t.Errorf("count = %d, want 7", body.Count)
+	}
+}
+
+func TestBulkSetWorkMonitored_AnswersTheChangedIDsForAnExactUndo(t *testing.T) {
+	over := make([]int64, apiserver.MaxUndoIDs+1)
+	for index := range over {
+		over[index] = int64(index + 1)
+	}
+	for _, one := range []struct {
+		name    string
+		changed []int64
+		want    string
+	}{
+		{"mixed", []int64{4, 9}, `{"changed_ids":[4,9],"changed_ids_omitted":false,"count":7}`},
+		{"none changed", nil, `{"changed_ids":[],"changed_ids_omitted":false,"count":7}`},
+		{"over the cap", over, `{"changed_ids":[],"changed_ids_omitted":true,"count":7}`},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			fixture, cookies := visibleWorksFixture(t)
+			fixture.worksMonitor.bulkCount = 7
+			fixture.worksMonitor.bulkChanged = one.changed
+			recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor", `{"category_id":1,"monitored":true}`))
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+			}
+			var canonical map[string]any
+			if err := json.Unmarshal(recorder.Body.Bytes(), &canonical); err != nil {
+				t.Fatal(err)
+			}
+			got, _ := json.Marshal(canonical)
+			if string(got) != one.want {
+				t.Errorf("body = %s, want %s", got, one.want)
+			}
+		})
 	}
 }
 

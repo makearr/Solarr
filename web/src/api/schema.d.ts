@@ -11356,6 +11356,13 @@ export interface components {
             /** Format: int64 */
             count: number;
         };
+        /** @description How many works a bulk monitor matched, and the ids whose monitored state actually changed, so an Undo restores exactly those. A preview changes nothing and carries no ids. When more than 5000 changed, changed_ids is empty and changed_ids_omitted is true: no faithful Undo exists. */
+        BulkMonitorResult: {
+            /** Format: int64 */
+            count: number;
+            changed_ids: number[];
+            changed_ids_omitted: boolean;
+        };
         WorkEdit: {
             monitored: boolean;
             /**
@@ -20106,13 +20113,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description How many works matched (and, unless preview, were changed). */
+            /** @description How many works matched, and, unless preview, which of them actually changed state (what an Undo sends back). */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BulkResult"];
+                    "application/json": components["schemas"]["BulkMonitorResult"];
                 };
             };
             400: components["responses"]["Problem"];

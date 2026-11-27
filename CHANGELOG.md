@@ -8,6 +8,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 - The notification bell opens a list of what needs attention and what failed lately, with "See all".
 - Keyboard shortcuts: g d, g l and g s go to the Dashboard, the first library and Settings, j / k / Enter walk the rows of a list, and ? lists them all.
 - Every settings card keeps its help behind a "?" next to the title (hover, focus or tap), and a setting that saves when you change it confirms with a "Saved" toast.
+- Bulk Monitor / Unmonitor: Undo now restores only the works that actually changed, so works that were already monitored are not unmonitored by it. A change to more than 5000 works asks first and offers no Undo.
 - Web UI preferences: Comfortable or Compact density for lists and poster grids.
 - One page header for the settings and configuration pages, with breadcrumbs (Library, artist, album) on an item's page; empty lists show an icon, a sentence and the next step.
 - Every page now opens with the same header (lists, jobs, logs, calendar and people included), and Compact density also tightens table rows.

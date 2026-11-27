@@ -751,6 +751,7 @@ const catalogue = {
   "libraryMoveDialog.thereIsNoOther": "There is no other library of this kind to go to.",
   "libraryMoveDialog.thatCouldNotBe": "That could not be planned.",
   "workIndex.monitoredCount": "Now monitoring {count} selected",
+  "workIndex.noUndo": "This changes {count} works at once and cannot be undone from here.",
   "workIndex.unmonitoredCount": "No longer monitoring {count} selected",
   "workIndex.outWithinTheLast": "Out within the last week",
   "workIndex.theLibraryCouldNot": "The library could not be read.",
