@@ -26,8 +26,8 @@ const ComicInfoName = "ComicInfo.xml"
 // element is one child of the ComicInfo root with its text.
 type element struct{ name, text string }
 
-// Elements are the ComicInfo elements Solarr knows for an issue, in the schema's order; an empty value is left out.
-func Elements(info Info) []element {
+// knownElements are the ComicInfo elements Solarr knows for an issue, in the schema's order; an empty value is left out.
+func knownElements(info Info) []element {
 	number := func(n int) string {
 		if n <= 0 {
 			return ""
@@ -65,7 +65,7 @@ func Merge(existing []byte, info Info, mode string) ([]byte, bool, error) {
 	for i, e := range current {
 		index[e.name] = i
 	}
-	for _, want := range Elements(info) {
+	for _, want := range knownElements(info) {
 		at, found := index[want.name]
 		switch {
 		case !found:
