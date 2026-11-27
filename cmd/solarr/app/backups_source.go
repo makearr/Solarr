@@ -63,3 +63,23 @@ func (a backupSource) RunNow(ctx context.Context) ([]apiserver.BackupFileRow, er
 	}
 	return []apiserver.BackupFileRow{{Name: path.Base(bundlePath), SizeBytes: info.Size, TakenAt: info.ModTime}}, nil
 }
+
+// Latest opens the newest bundle for download.
+func (a backupSource) Latest(context.Context) (apiserver.BackupDownload, error) {
+	bundles, err := store.ListBundles(a.FS, a.Directory)
+	if err != nil {
+		return apiserver.BackupDownload{}, err
+	}
+	if len(bundles) == 0 {
+		return apiserver.BackupDownload{}, apiserver.ErrNoBackup
+	}
+	info, err := a.FS.Stat(bundles[0].Path)
+	if err != nil {
+		return apiserver.BackupDownload{}, fmt.Errorf("adapters: stat backup %q: %w", bundles[0].Path, err)
+	}
+	file, err := a.FS.Open(bundles[0].Path)
+	if err != nil {
+		return apiserver.BackupDownload{}, fmt.Errorf("adapters: open backup %q: %w", bundles[0].Path, err)
+	}
+	return apiserver.BackupDownload{Name: path.Base(bundles[0].Path), SizeBytes: info.Size, Content: file}, nil
+}

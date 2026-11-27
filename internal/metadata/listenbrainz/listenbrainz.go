@@ -143,6 +143,20 @@ func (c Client) SitewideReleaseGroups(ctx context.Context, period string, offset
 	return answer.Payload.ReleaseGroups, answer.Payload.Total, nil
 }
 
+// UserReleaseGroups reads one page of the release groups a user listened to most over a range; an empty answer (HTTP 204)
+// is a user with no stats yet, and ErrNotFound a user ListenBrainz does not know.
+func (c Client) UserReleaseGroups(ctx context.Context, user, period string, offset, count int) ([]ChartReleaseGroup, error) {
+	var answer struct {
+		Payload struct {
+			ReleaseGroups []ChartReleaseGroup `json:"release_groups"`
+		} `json:"payload"`
+	}
+	if err := c.chart(ctx, "/stats/user/"+url.PathEscape(user)+"/release-groups", period, offset, count, &answer); err != nil {
+		return nil, err
+	}
+	return answer.Payload.ReleaseGroups, nil
+}
+
 // UpcomingReleases reads the releases due within the next days, soonest first.
 func (c Client) UpcomingReleases(ctx context.Context, days int) ([]FreshRelease, error) {
 	query := url.Values{"days": {strconv.Itoa(days)}, "past": {"false"}, "future": {"true"}, "sort": {"release_date"}}
@@ -174,6 +188,9 @@ func (c Client) get(ctx context.Context, address string, into any) error {
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNoContent {
 		return nil
+	}
+	if response.StatusCode == http.StatusNotFound {
+		return ErrNotFound
 	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("listenbrainz: status %d", response.StatusCode)

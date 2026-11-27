@@ -10,7 +10,9 @@ import (
 
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/listenbrainz"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
+	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/stashbox"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -265,6 +267,7 @@ func TestStashFavouritesWithoutAKeyIsAnErrorNotAnEmptyList(t *testing.T) {
 
 type fakeMDBList struct {
 	pages [][]mdblist.ListItem
+	films []mdblist.ListItem
 	err   error
 	asked []int
 }
@@ -275,7 +278,7 @@ func (f *fakeMDBList) ListItems(_ context.Context, _ string, offset, _ int) (mdb
 		return mdblist.ListPage{}, f.err
 	}
 	index := offset / 100
-	page := mdblist.ListPage{Shows: f.pages[index]}
+	page := mdblist.ListPage{Shows: f.pages[index], Movies: f.films}
 	page.Pagination.HasMore = index+1 < len(f.pages)
 	return page, nil
 }
@@ -319,5 +322,72 @@ func TestMDBListReadsEveryPageAndNamesShowsByTheIDsATVLibraryAddsBy(t *testing.T
 	_, err = importlist.MDBList{Client: &fakeMDBList{err: mdblist.ErrNotFound}}.Entries(t.Context(), importlist.Options{"mdblist": "7"})
 	if !errors.Is(err, importlist.ErrListNotFound) {
 		t.Errorf("a missing list = %v, want ErrListNotFound", err)
+	}
+}
+
+func TestMDBListNamesFilmsByTheirTMDBID(t *testing.T) {
+	client := &fakeMDBList{pages: [][]mdblist.ListItem{nil}, films: []mdblist.ListItem{{Title: "Film", Year: 1999, IDs: mdblist.ListIDs{MDBList: "f", TMDB: 7, TVDB: 8}}}}
+	got, err := importlist.MDBList{Client: client}.Entries(t.Context(), importlist.Options{"mdblist": "someone/films"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []media.ListEntry{{Title: "Film", Year: 1999, Form: "movie", IDs: []media.ProviderID{{Provider: "mdblist", ExternalID: "f"}, {Provider: "tmdb", ExternalID: "7"}}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("entries = %+v, want %+v", got, want)
+	}
+}
+
+type fakeListenBrainz struct {
+	rows []listenbrainz.ChartReleaseGroup
+	err  error
+	user string
+	span string
+}
+
+func (f *fakeListenBrainz) UserReleaseGroups(_ context.Context, user, period string, _, _ int) ([]listenbrainz.ChartReleaseGroup, error) {
+	f.user, f.span = user, period
+	return f.rows, f.err
+}
+
+func TestListenBrainzTopNamesAlbumsByTheirReleaseGroupAndDefaultsToAllTime(t *testing.T) {
+	client := &fakeListenBrainz{rows: []listenbrainz.ChartReleaseGroup{{MBID: "rg-1", Title: "One"}, {Title: "No id"}}}
+	got, err := importlist.ListenBrainzTop{Client: client}.Entries(t.Context(), importlist.Options{"user": " zela "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []media.ListEntry{{Title: "One", Form: "release-group", IDs: []media.ProviderID{{Provider: "musicbrainz:release-group", ExternalID: "rg-1"}}}}
+	if !reflect.DeepEqual(got, want) || client.user != "zela" || client.span != "all_time" {
+		t.Errorf("entries = %+v for %q over %q, want %+v for zela over all_time", got, client.user, client.span, want)
+	}
+	_, err = importlist.ListenBrainzTop{Client: &fakeListenBrainz{err: listenbrainz.ErrNotFound}}.Entries(t.Context(), importlist.Options{"user": "nobody"})
+	if !errors.Is(err, importlist.ErrListNotFound) {
+		t.Errorf("an unknown user = %v, want ErrListNotFound", err)
+	}
+}
+
+type fakeOpenLibrary struct {
+	seeds []openlibrary.Seed
+	path  string
+}
+
+func (f *fakeOpenLibrary) ListSeeds(_ context.Context, path string, _ int) ([]openlibrary.Seed, error) {
+	f.path = path
+	return f.seeds, nil
+}
+
+func TestOpenLibraryListReadsTheWorksOfAListByItsLink(t *testing.T) {
+	client := &fakeOpenLibrary{seeds: []openlibrary.Seed{{URL: "/works/OL1W", Title: "Book"}, {URL: "/authors/OL2A", Title: "Author"}, {URL: "/books/OL3M", Title: "Edition"}}}
+	got, err := importlist.OpenLibraryList{Client: client}.Entries(t.Context(), importlist.Options{"list": "https://openlibrary.org/people/zela_m/lists/OL55L/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []media.ListEntry{{Title: "Book", Form: "work", IDs: []media.ProviderID{{Provider: "openlibrary", ExternalID: "OL1W"}}}}
+	if !reflect.DeepEqual(got, want) || client.path != "/people/zela_m/lists/OL55L" {
+		t.Errorf("entries = %+v from %q, want %+v from the list path", got, client.path, want)
+	}
+	for _, link := range []string{"", "https://example.com/people/a/lists/OL1L", "https://openlibrary.org/works/OL1W"} {
+		if _, ok := importlist.OpenLibraryListPath(link); ok {
+			t.Errorf("OpenLibraryListPath(%q) accepted", link)
+		}
 	}
 }

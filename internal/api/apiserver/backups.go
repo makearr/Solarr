@@ -3,7 +3,10 @@ package apiserver
 import (
 	"context"
 	"errors"
+	"io"
+	"mime"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -26,6 +29,45 @@ type Backups interface {
 	List(ctx context.Context) ([]BackupFileRow, error)
 	// RunNow backs up every database and answers what it wrote.
 	RunNow(ctx context.Context) ([]BackupFileRow, error)
+	// Latest opens the newest bundle; ErrNoBackup when there is none. The caller closes it.
+	Latest(ctx context.Context) (BackupDownload, error)
+}
+
+// ErrNoBackup says no backup bundle has been taken yet.
+var ErrNoBackup = errors.New("apiserver: there is no backup yet")
+
+// BackupDownload is one backup bundle opened for reading.
+type BackupDownload struct {
+	Name      string
+	SizeBytes int64
+	Content   io.ReadCloser
+}
+
+// DownloadLatestBackup streams the newest backup bundle as a file.
+func (s *Server) DownloadLatestBackup(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.backups == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "backups are not available")
+		return
+	}
+	download, err := s.backups.Latest(r.Context())
+	if errors.Is(err, ErrNoBackup) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "there is no backup yet")
+		return
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	defer func() { _ = download.Content.Close() }()
+	w.Header().Set("Content-Type", "application/x-tar")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": download.Name}))
+	w.Header().Set("Content-Length", strconv.FormatInt(download.SizeBytes, 10))
+	if _, err := io.Copy(w, download.Content); err != nil {
+		s.logger.Warn("backup download interrupted", "error", err)
+	}
 }
 
 // ListBackups answers the backup files on disk, newest first.

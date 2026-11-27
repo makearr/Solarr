@@ -17,6 +17,7 @@ import { workLink } from "@/lib/workLink";
 import { t } from "@/lib/i18n";
 import { AddToLibrary } from "./work/AddToSolarr";
 import { ChooseImage } from "./ChooseImage";
+import { externalItemLink } from "./ExternalItem";
 import { useAllParts } from "./work/WorkParts";
 import { CoverArt } from "./CoverArt";
 import { FollowPanel } from "./FollowPanel";
@@ -769,7 +770,9 @@ function KnownForTile({ title, onAdd }: { title: KnownFor; onAdd: () => void }) 
   }
   return (
     <div className="flex flex-col gap-1">
-      {caption}
+      <Link {...externalItemLink(title.add_library_id, title.provider, title.external_id, title.title, title.kind)} className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
+        {caption}
+      </Link>
       <button
         type="button"
         aria-haspopup="dialog"

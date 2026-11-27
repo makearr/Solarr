@@ -4,6 +4,8 @@ import { t } from "@/lib/i18n";
 
 import { api, API_PREFIX, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { Button } from "@/ui/Button";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 import { Card } from "./SettingsCard";
 
@@ -27,26 +29,64 @@ export function Backups() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["backups"] }),
   });
 
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const clear = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: () => ok(api.POST("/database/backups/clear", {})),
+    onSuccess: () => {
+      setConfirmingClear(false);
+      void queryClient.invalidateQueries({ queryKey: ["backups"] });
+      void queryClient.invalidateQueries({ queryKey: ["database"] });
+    },
+  });
+  const download = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: async () => {
+      const response = await fetch(`${API_PREFIX}/system/backups/latest`, { credentials: "same-origin" });
+      if (!response.ok) throw new Error(`download answered ${response.status}`);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(await response.blob());
+      link.download = /filename="?([^";]+)"?/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "solarr-backup.tar.zst";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    },
+  });
+
   const groups = groupByDatabase(files.data ?? []);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
       <h1 className="text-lg font-semibold">Backups</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="primary" busy={runNow.isPending} busyLabel="Backing up…" onClick={() => runNow.mutate()}>
+          {t("backups.backupNow")}
+        </Button>
+        <Button variant="secondary" busy={download.isPending} busyLabel="Preparing…" disabled={(files.data?.length ?? 0) === 0} onClick={() => download.mutate()}>
+          {t("backups.download")}
+        </Button>
+        <Button variant="danger" disabled={(files.data?.length ?? 0) < 2} onClick={() => setConfirmingClear(true)}>
+          {t("backups.deleteOld")}
+        </Button>
+        {download.isError && <span className="text-xs text-danger">{t("backups.downloadFailed")}</span>}
+        {clear.isError && <span className="text-xs text-danger">{t("databaseSettings.theNewestBackupDid")}</span>}
+        {clear.isSuccess && <span className="text-xs text-ink-muted">{t("backups.deleted", { removed: clear.data.removed, kept: clear.data.kept })}</span>}
+      </div>
+      {confirmingClear && (
+        <ConfirmDialog
+          title={t("backups.deleteOld")}
+          consequence={t("databaseSettings.checksThatTheNewest")}
+          confirmLabel={t("backups.deleteOld")}
+          danger
+          busy={clear.isPending}
+          onConfirm={() => clear.mutate()}
+          onCancel={() => setConfirmingClear(false)}
+        />
+      )}
       <SettingsDocument />
 
       <Card
         title={t("backups.databaseBackups")}
         help="Taken automatically, and before every migration. Restoring a database is an offline procedure: stop the server and put the file back. There is no button for it on purpose."
-        toggle={
-          <button
-            type="button"
-            disabled={runNow.isPending}
-            onClick={() => runNow.mutate()}
-            className="shrink-0 rounded-md border border-border-subtle px-3 py-1 text-xs text-ink-muted enabled:hover:text-ink disabled:opacity-50"
-          >
-            {runNow.isPending ? "Backing up…" : "Back up now"}
-          </button>
-        }
       >
         {files.isLoading && <Message>Loading…</Message>}
         {files.error !== null && <Message>{t("backups.theBackupDirectoryCould")}</Message>}

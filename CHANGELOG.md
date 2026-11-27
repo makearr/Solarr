@@ -4,6 +4,11 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- *Arr companion: a film added from a collection (or any list that names it as a TMDB film) now reaches Radarr like one added from Discover, a series is found by the TheTVDB id the work holds, and a Whisparr scene is sent whichever stash-box it came from (taken by its exact title when Whisparr has no id for it).
+- Import lists now exist for movies (TMDB lists, MDBList lists with their IMDb imports), music (a ListenBrainz user's top albums) and books and audiobooks (a public Open Library list).
+- Backups: Backup now, Download backup (the newest bundle) and Delete old backups (after checking the newest) are buttons at the top of the page.
+- Discover: the list loads more by itself as you scroll, reading one page ahead; Settings, Discover is shorter: short labels with the explanation on hover, the auto-add settings appear only when a list adds automatically, and the "last read" lines are gone (failures still show).
+- Person pages: the titles under "Also known for" open the item's page, as collection cards do.
 - People: an adult performer is never joined to a same-named music artist or actor any more, and persons already joined wrongly (an artist carrying a performer's id, picture and credits) are split apart by the "Match people" background task.
 - Collections: collections two providers made of one franchise (nearly the same members) are folded into one by the collection linking task, keeping every provider id on it.
 - Comics and manga: the keyless providers (Grand Comics Database, MangaUpdates, MangaDex) are on from the start, so a new comic library identifies its files without any setup; ComicVine and Metron stay off until you give a key.

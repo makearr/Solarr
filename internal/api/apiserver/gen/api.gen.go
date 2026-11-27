@@ -11816,6 +11816,9 @@ type ServerInterface interface {
 	// Back up every database now. Administrator only.
 	// (POST /system/backups)
 	RunBackupNow(w http.ResponseWriter, r *http.Request)
+	// Download the newest backup bundle. Administrator only.
+	// (GET /system/backups/latest)
+	DownloadLatestBackup(w http.ResponseWriter, r *http.Request)
 	// The address this host appears to come from. Administrator only.
 	// (GET /system/egress)
 	GetEgress(w http.ResponseWriter, r *http.Request)
@@ -14321,6 +14324,12 @@ func (_ Unimplemented) ListBackups(w http.ResponseWriter, r *http.Request) {
 // Back up every database now. Administrator only.
 // (POST /system/backups)
 func (_ Unimplemented) RunBackupNow(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Download the newest backup bundle. Administrator only.
+// (GET /system/backups/latest)
+func (_ Unimplemented) DownloadLatestBackup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -26891,6 +26900,28 @@ func (siw *ServerInterfaceWrapper) RunBackupNow(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// DownloadLatestBackup operation middleware
+func (siw *ServerInterfaceWrapper) DownloadLatestBackup(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadLatestBackup(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetEgress operation middleware
 func (siw *ServerInterfaceWrapper) GetEgress(w http.ResponseWriter, r *http.Request) {
 
@@ -31074,6 +31105,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/system/backups", wrapper.RunBackupNow)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/system/backups/latest", wrapper.DownloadLatestBackup)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/system/egress", wrapper.GetEgress)

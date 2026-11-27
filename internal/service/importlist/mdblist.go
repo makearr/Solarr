@@ -47,7 +47,7 @@ func MDBListRef(value string) (string, bool) {
 	return value, mdblistNamed.MatchString(value)
 }
 
-// MDBList is a public MDBList list; its shows are read, its films are left to a movie library.
+// MDBList is a public MDBList list; each library takes the shows or the films of it, the other is foreign to it.
 type MDBList struct{ Client MDBListLists }
 
 // Entries implements Source.
@@ -68,7 +68,10 @@ func (l MDBList) Entries(ctx context.Context, options Options) ([]media.ListEntr
 			return nil, fmt.Errorf("%w: %w", ErrSourceUnavailable, err)
 		}
 		for _, item := range found.Shows {
-			entries = append(entries, mdblistEntry(item))
+			entries = append(entries, mdblistEntry(item, "tv"))
+		}
+		for _, item := range found.Movies {
+			entries = append(entries, mdblistEntry(item, "movie"))
 		}
 		if !found.Pagination.HasMore {
 			break
@@ -77,11 +80,11 @@ func (l MDBList) Entries(ctx context.Context, options Options) ([]media.ListEntr
 	return entries, nil
 }
 
-// mdblistEntry names the show by MDBList first, then the ids a TV library adds by: TheTVDB's, else TMDB's.
-func mdblistEntry(item mdblist.ListItem) media.ListEntry {
-	entry := media.ListEntry{Title: item.Title, Year: item.Year, Form: "tv",
+// mdblistEntry names the show or film by MDBList first, then the ids a library adds by: TheTVDB's, else TMDB's.
+func mdblistEntry(item mdblist.ListItem, form string) media.ListEntry {
+	entry := media.ListEntry{Title: item.Title, Year: item.Year, Form: form,
 		IDs: []media.ProviderID{{Provider: "mdblist", ExternalID: item.IDs.MDBList}}}
-	if item.IDs.TVDB > 0 {
+	if item.IDs.TVDB > 0 && form == "tv" {
 		entry.IDs = append(entry.IDs, media.ProviderID{Provider: "tvdb", ExternalID: strconv.FormatInt(item.IDs.TVDB, 10)})
 	}
 	if item.IDs.TMDB > 0 {
@@ -95,7 +98,7 @@ func (c Catalogue) WithMDBList(client MDBListLists) Catalogue {
 	kinds := append([]Kind(nil), c.kinds...)
 	kinds = append(kinds, Kind{
 		Type: media.ListMDBList, Label: "MDBList list", Fields: mdblistFields, Source: MDBList{Client: client},
-		Help: "A public MDBList list, such as one you imported from IMDb there; its films are left out of a TV library.",
+		Help: "A public MDBList list, such as one you imported from IMDb there; a TV library takes its shows, a movie library its films.",
 	})
 	return Catalogue{kinds: kinds}
 }

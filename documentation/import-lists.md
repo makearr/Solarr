@@ -30,6 +30,8 @@ TMDB's trending and popular charts are no import lists any more: Discover reads 
 | `anilist_user` | A user's AniList list | user name, statuses (default watching and planning) | the whole list |
 | `tmdb_list` | A public TMDB list (v3 `/list/{id}`) | the list's number or its themoviedb.org link | 25 pages |
 | `mdblist_list` | A public MDBList list (`/lists/{id}/items` or `/lists/{user}/{name}/items`); its shows only | the number, `user/name` or the mdblist.com link | 10 pages of 100 |
+| `listenbrainz_top` | Music libraries: the albums a ListenBrainz user listened to most (`/stats/user/{user}/release-groups`, no key; the user's statistics must be public) | user, range (week to all time) | 100 albums |
+| `openlibrary_list` | Book and audiobook libraries: the works of a public Open Library list (`<list>/seeds.json`; authors and editions are left out) | the list's link | 500 entries |
 | `stashbox_favourites` | Adult libraries: the newest scenes of the performers and studios the key's account favourited at StashDB or FansDB | server, favourite (performers, studios, either), how many of the newest | 50, 100, 200 or 500 scenes |
 
 AniList needs no key. TMDB's lists use the owner's TMDB key (Settings, Metadata); without one a TMDB list fails with
@@ -39,6 +41,9 @@ metadata reads.
 A TMDB list may be given as a link. Its number is read from the link by pattern
 (`https://www.themoviedb.org/list/<number>...`); the link itself is never fetched, so a list setting cannot make Solarr
 call another host. A link to any other host is refused when the list is saved.
+
+Movie libraries take `tmdb_list` and `mdblist_list` (a film is added by its TMDB id; a show on the list is foreign), TV libraries the same lists'
+shows. Letterboxd lists, Hardcover lists and MusicBrainz collections are not read yet.
 
 ## TV's resolution
 

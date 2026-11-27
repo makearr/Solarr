@@ -7,7 +7,10 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/metadata/listenbrainz"
+	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/service/importlist"
 )
 
@@ -18,8 +21,10 @@ func (p *process) importListService() importlist.Service {
 	return importlist.Service{
 		Lists: p.cache, Records: library.NewImportLists(p.library), Exclusions: library.NewExclusions(p.library),
 		Works: library.NewSeries(p.library), Libraries: adapters.Categories{Cache: p.cache}, Media: p.media,
-		Catalogue: importlist.NewCatalogue(p.anilistShared, p.tmdbShared, func() importlist.Season { return importlist.SeasonOf(wall.Now()) }).WithStash(p.stashServers()).WithMDBList(p.mdblistLists()),
-		Clock:     wall, Logger: p.logger,
+		Catalogue: importlist.NewCatalogue(p.anilistShared, p.tmdbShared, func() importlist.Season { return importlist.SeasonOf(wall.Now()) }).WithStash(p.stashServers()).WithMDBList(p.mdblistLists()).
+			WithListenBrainz(listenbrainz.New(p.providerClient(providerListenBrainz, nil, httpx.ClientConfig{}))).
+			WithOpenLibrary(openlibrary.New(p.providerClient(providerOpenLibrary, nil, httpx.ClientConfig{}))),
+		Clock: wall, Logger: p.logger,
 		AfterAdd: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 	}
 }

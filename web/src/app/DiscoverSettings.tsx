@@ -116,8 +116,8 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
   const feedKinds = useDiscoverLibraries().data?.find((one) => one.category_id === library.category_id)?.feeds.map((feed) => feed.kind) ?? [];
   const kinds = [...new Set([...feedKinds, ...draft.disabled_kinds].filter((kind) => kind !== ""))].sort();
   const [previewing, setPreviewing] = useState<number | null>(null);
-  const number = (key: "total_amount" | "classic_age_years" | "min_votes" | "auto_add_per_day" | "min_rating", label: MessageKey) => (
-    <label className={labelStyle}>
+  const number = (key: "classic_age_years" | "min_votes" | "auto_add_per_day" | "min_rating", label: MessageKey, help: MessageKey) => (
+    <label className={labelStyle} title={t(help)}>
       <span>{t(label)}</span>
       <input
         type="number"
@@ -139,16 +139,22 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
       }
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {number("total_amount", "discover.totalAmount")}
-        {number("classic_age_years", "discover.classicYears")}
-        {number("min_rating", "discover.minRating")}
-        {number("min_votes", "discover.minVotes")}
-        {number("auto_add_per_day", "discover.autoAddPerDay")}
+        {number("classic_age_years", "discover.classicYears", "discover.classicYearsHelp")}
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={draft.auto_add_search} onChange={(event) => setDraft({ ...draft, auto_add_search: event.target.checked })} />
-        {t("discover.autoAddSearch")}
-      </label>
+      {draft.types.some((row) => row.auto_add) && (
+        <fieldset className="flex flex-col gap-2 rounded-md border border-border-subtle p-3">
+          <legend className="px-1 text-xs text-ink-muted">{t("discover.autoAddGroup")}</legend>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {number("min_rating", "discover.minRating", "discover.minRatingHelp")}
+            {number("min_votes", "discover.minVotes", "discover.minVotesHelp")}
+            {number("auto_add_per_day", "discover.autoAddPerDay", "discover.autoAddPerDayHelp")}
+          </div>
+          <label className="flex items-center gap-2 text-sm" title={t("discover.autoAddSearchHelp")}>
+            <input type="checkbox" checked={draft.auto_add_search} onChange={(event) => setDraft({ ...draft, auto_add_search: event.target.checked })} />
+            {t("discover.autoAddSearch")}
+          </label>
+        </fieldset>
+      )}
       <LanguagePicker
         label={t("discover.languages")}
         help={draft.languages_set ? undefined : t("discover.languagesFromProfile")}
@@ -174,7 +180,7 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
           ))}
         </fieldset>
       )}
-      <FeedStates category={library.category_id} />
+      <FeedProblems category={library.category_id} />
       <table className="text-sm">
         <thead>
           <tr className="text-left text-xs text-ink-muted">
@@ -281,22 +287,20 @@ function AutoAddPreview({ library, onConfirm, onCancel }: { library: Library; on
   );
 }
 
-/** When each list of an enabled library was last read and, if it failed, why, so a silent source is not a silent library. */
-function FeedStates({ category }: { category: number }) {
+/** Only the lists that failed on their last read; when each was read lives in the scheduler's log. */
+function FeedProblems({ category }: { category: number }) {
   const libraries = useDiscoverLibraries();
-  const feeds = libraries.data?.find((one) => one.category_id === category)?.feeds ?? [];
-  if (feeds.length === 0) return null;
+  const failing = (libraries.data?.find((one) => one.category_id === category)?.feeds ?? []).filter((feed) => feed.last_error);
+  if (failing.length === 0) return null;
   return (
-    <ul className="flex flex-col gap-0.5 text-xs text-ink-muted">
-      {feeds.map((feed) => (
-        <li key={`${feed.type}:${feed.kind}:${feed.source}`} className={feed.last_error ? "text-danger" : undefined}>
+    <ul className="flex flex-col gap-0.5 text-xs text-danger">
+      {failing.map((feed) => (
+        <li key={`${feed.type}:${feed.kind}:${feed.source}`}>
           {t(LIST_LABELS[feed.type] ?? "discover.list.highest_rated")}
           {feed.kind ? ` (${feed.kind})` : ""}
           {feed.source ? ` · ${feed.source}` : ""}
           {": "}
-          {feed.last_error
-            ? t(`discover.feedError.${feed.last_error}` as MessageKey)
-            : t("discover.feedRead", { when: feed.refreshed_at > 0 ? new Date(feed.refreshed_at * 1000).toLocaleString() : "-" })}
+          {t(`discover.feedError.${feed.last_error}` as MessageKey)}
         </li>
       ))}
     </ul>

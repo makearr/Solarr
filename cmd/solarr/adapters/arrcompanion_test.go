@@ -17,17 +17,21 @@ import (
 func TestCompanionTarget_SendsMoviesByTMDBToRadarrAndSeriesByTVDBToSonarrOnly(t *testing.T) {
 	for _, test := range []struct {
 		added   apiserver.AddedWork
+		ids     map[string]string
 		app     settings.ArrApp
 		id      int64
 		handled bool
 	}{
-		{apiserver.AddedWork{Kind: "movie", Provider: "tmdb", ExternalID: "603"}, settings.ArrAppRadarr, 603, true},
-		{apiserver.AddedWork{Kind: "series", Provider: "tvdb", ExternalID: "81189"}, settings.ArrAppSonarr, 81189, true},
-		{apiserver.AddedWork{Kind: "series", Provider: "tvmaze", ExternalID: "5"}, "", 0, false},
-		{apiserver.AddedWork{Kind: "movie", Provider: "tmdb", ExternalID: "tt0133093"}, "", 0, false},
-		{apiserver.AddedWork{Kind: "album", Provider: "musicbrainz", ExternalID: "1"}, "", 0, false},
+		{apiserver.AddedWork{Kind: "movie", Provider: "tmdb", ExternalID: "603"}, nil, settings.ArrAppRadarr, 603, true},
+		{apiserver.AddedWork{Kind: "movie", Provider: "tmdb:movie", ExternalID: "3685"}, nil, settings.ArrAppRadarr, 3685, true},
+		{apiserver.AddedWork{Kind: "movie", Provider: "imdb", ExternalID: "tt1"}, map[string]string{"tmdb:movie": "77"}, settings.ArrAppRadarr, 77, true},
+		{apiserver.AddedWork{Kind: "series", Provider: "tmdb", ExternalID: "9"}, map[string]string{"tvdb": "123"}, settings.ArrAppSonarr, 123, true},
+		{apiserver.AddedWork{Kind: "series", Provider: "tvdb", ExternalID: "81189"}, nil, settings.ArrAppSonarr, 81189, true},
+		{apiserver.AddedWork{Kind: "series", Provider: "tvmaze", ExternalID: "5"}, nil, "", 0, false},
+		{apiserver.AddedWork{Kind: "movie", Provider: "tmdb", ExternalID: "tt0133093"}, nil, "", 0, false},
+		{apiserver.AddedWork{Kind: "album", Provider: "musicbrainz", ExternalID: "1"}, nil, "", 0, false},
 	} {
-		app, id, handled := companionTarget(test.added)
+		app, id, handled := companionTarget(test.added, test.ids)
 		if app != test.app || id != test.id || handled != test.handled {
 			t.Errorf("%+v: got %q %d %v, want %q %d %v", test.added, app, id, handled, test.app, test.id, test.handled)
 		}
@@ -166,5 +170,19 @@ func TestSendsAdds_FollowsTheSendBackRuleAndNeverInSafeMode(t *testing.T) {
 		if got := sendsAdds(c.safe, c.mode, c.instance); got != c.want {
 			t.Errorf("%s: sendsAdds = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestOnlyTitled_TakesTheOneExactTitleAndNothingAmbiguous(t *testing.T) {
+	one := map[string]any{"title": "Zela Moru Test"}
+	other := map[string]any{"title": "Zela Moru Test Part 2"}
+	if got, ok := onlyTitled([]map[string]any{other, one}, " zela moru test "); !ok || got["title"] != "Zela Moru Test" {
+		t.Errorf("onlyTitled = %v, %v; want the exact title", got, ok)
+	}
+	if _, ok := onlyTitled([]map[string]any{one, one}, "Zela Moru Test"); ok {
+		t.Error("two scenes with the title were taken for one")
+	}
+	if _, ok := onlyTitled([]map[string]any{one}, ""); ok {
+		t.Error("an empty title matched")
 	}
 }

@@ -46,6 +46,8 @@ const CARD_MIN = 160;
 const GAP = 16;
 /** Title, one line of facts and the list chips under a 2:3 poster. */
 const CARD_TEXT = 92;
+/** The next page is asked for when the last row on screen is this close to the end. */
+const PREFETCH_ROWS = 3;
 
 /** What the libraries do not hold yet, from their sources' charts, one library at a time. */
 export function Discover() {
@@ -241,6 +243,15 @@ function Wall({ library, search }: { library: DiscoverLibrary; search: DiscoverS
   });
   const listed = library.types.filter((type) => !search.list || type === search.list);
   const canReadFurther = library.feeds.some((feed) => listed.includes(feed.type) && !feed.exhausted && feed.last_error === "");
+  // Reading further is automatic: one page ahead of the last row on screen, from the pool first, then from the provider.
+  const lastVisible = virtualizer.getVirtualItems().at(-1)?.index ?? -1;
+  const nearEnd = rowCount > 0 && lastVisible >= rowCount - PREFETCH_ROWS;
+  const providerDry = more.isSuccess && more.data.added === 0;
+  useEffect(() => {
+    if (!nearEnd) return;
+    if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+    else if (!pages.hasNextPage && canReadFurther && !more.isPending && !more.isError && !providerDry) more.mutate();
+  }, [nearEnd, pages, canReadFurther, more, providerDry, items.length]);
   if (!pages.isLoading && items.length === 0 && !canReadFurther) {
     return <EmptyState title={t("discover.empty")} hint={t("discover.emptyHint")} />;
   }

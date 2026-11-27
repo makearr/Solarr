@@ -11,6 +11,9 @@ const (
 	ListAniListUser   ListType = "anilist_user"
 	ListTMDBList      ListType = "tmdb_list"
 	ListMDBList       ListType = "mdblist_list"
+	// ListListenBrainzTop is the albums a ListenBrainz user listened to most (music libraries); ListOpenLibrary a reader's list of works (book libraries).
+	ListListenBrainzTop ListType = "listenbrainz_top"
+	ListOpenLibrary     ListType = "openlibrary_list"
 	// ListStashFavourites is the newest scenes of an account's favourites at a stash-box server (adult libraries).
 	ListStashFavourites ListType = "stashbox_favourites"
 )

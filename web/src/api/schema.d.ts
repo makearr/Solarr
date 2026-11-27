@@ -304,6 +304,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/backups/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the newest backup bundle. Administrator only.
+         * @description The bundle holds every database and config.yml as one tar file, exactly as it lies in the backup directory. 404 when no bundle has been taken yet.
+         */
+        get: operations["downloadLatestBackup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/health": {
         parameters: {
             query?: never;
@@ -14008,6 +14028,30 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
+        };
+    };
+    downloadLatestBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bundle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-tar": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getSystemHealth: {

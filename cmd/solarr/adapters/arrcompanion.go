@@ -26,10 +26,19 @@ func (a ArrSync) Added(ctx context.Context, added apiserver.AddedWork) error {
 	if a.SafeMode || a.Cache.Snapshot().SolarrMode() == settings.ModeObserve {
 		return nil
 	}
+	if added.Title == "" {
+		if identity, err := a.Identity.WorkIdentityOf(ctx, added.WorkID); err == nil {
+			added.Title = identity.CanonicalTitle
+		}
+	}
 	if target, ok := mediaTarget(added); ok {
 		return a.companionMedia(ctx, added, target)
 	}
-	app, sourceID, ok := companionTarget(added)
+	ids, err := a.Identity.ExternalIDsOf(ctx, added.WorkID)
+	if err != nil {
+		return err
+	}
+	app, sourceID, ok := companionTarget(added, ids)
 	if !ok {
 		return nil
 	}
@@ -60,17 +69,32 @@ func (a ArrSync) Added(ctx context.Context, added apiserver.AddedWork) error {
 	})
 }
 
-// companionTarget is the *Arr app an added item belongs to and its id there.
-func companionTarget(added apiserver.AddedWork) (settings.ArrApp, int64, bool) {
-	id, err := strconv.ParseInt(added.ExternalID, 10, 64)
-	if err != nil || id <= 0 {
-		return "", 0, false
+// companionTarget is the *Arr app an added item belongs to and its id there. The item is found by the ids the work holds
+// as well as the one it was added by: a collection's film is added as "tmdb:movie", a series from a list as "tmdb".
+func companionTarget(added apiserver.AddedWork, ids map[string]string) (settings.ArrApp, int64, bool) {
+	known := map[string]string{added.Provider: added.ExternalID}
+	for provider, id := range ids {
+		if _, have := known[provider]; !have {
+			known[provider] = id
+		}
 	}
-	switch {
-	case added.Kind == "movie" && added.Provider == "tmdb":
-		return settings.ArrAppRadarr, id, true
-	case added.Kind == "series" && added.Provider == "tvdb":
-		return settings.ArrAppSonarr, id, true
+	numeric := func(providers ...string) int64 {
+		for _, provider := range providers {
+			if id, err := strconv.ParseInt(known[provider], 10, 64); err == nil && id > 0 {
+				return id
+			}
+		}
+		return 0
+	}
+	switch added.Kind {
+	case "movie":
+		if id := numeric("tmdb", "tmdb:movie"); id > 0 {
+			return settings.ArrAppRadarr, id, true
+		}
+	case "series":
+		if id := numeric("tvdb"); id > 0 {
+			return settings.ArrAppSonarr, id, true
+		}
 	}
 	return "", 0, false
 }
@@ -266,7 +290,7 @@ func mediaTarget(added apiserver.AddedWork) (mediaRef, bool) {
 		return mediaRef{settings.ArrAppLidarr, added.ExternalID, arrmap.LinkArtist}, true
 	case (added.Kind == "book" || added.Kind == "audiobook") && added.Provider == "goodreads":
 		return mediaRef{settings.ArrAppReadarr, added.ExternalID, arrmap.LinkBook}, true
-	case (added.Kind == "adult" || added.Kind == "scene") && (added.Provider == "stashdb" || added.Provider == "theporndb"):
+	case added.Kind == "adult" || added.Kind == "scene":
 		return mediaRef{settings.ArrAppWhisparr, added.ExternalID, arrmap.LinkScene}, true
 	}
 	return mediaRef{}, false
@@ -472,31 +496,27 @@ func (a ArrSync) companionScene(ctx context.Context, whisparr arrimport.Whisparr
 		if !sceneHasID(scene, ref) {
 			continue
 		}
-		if id, _ := scene["id"].(float64); id > 0 {
-			if !added.Monitored {
-				return int64(id), nil
-			}
-			if err := whisparr.SetMonitored(ctx, arrimport.WhisparrScenePath, int64(id), true); err != nil {
-				return 0, err
-			}
-			if !added.Search {
-				return int64(id), nil
-			}
-			return int64(id), whisparr.SearchScene(ctx, int64(id))
-		}
-		profiles, err := whisparr.QualityProfiles(ctx)
-		if err != nil || len(profiles) == 0 {
-			return 0, errors.Join(err, errors.New("the Whisparr has no quality profile to add with"))
-		}
-		folders, err := whisparr.RootFolders(ctx)
-		if err != nil || len(folders) == 0 {
-			return 0, errors.Join(err, errors.New("the Whisparr has no root folder to add into"))
-		}
-		return whisparr.AddScene(ctx, scene, arrimport.AddDefaults{
-			QualityProfileID: profiles[0].ID, RootFolderPath: folders[0].Path, Monitored: added.Monitored, Search: added.Monitored && added.Search,
-		})
+		return a.companionKnownScene(ctx, whisparr, scene, added)
+	}
+	// A scene from a stash-box Whisparr does not know (FansDB, say) is taken by its exact title when the title names one scene.
+	if only, ok := onlyTitled(found, added.Title); ok {
+		return a.companionKnownScene(ctx, whisparr, only, added)
 	}
 	return 0, errors.New("the Whisparr found no scene with that id under that title")
+}
+
+// onlyTitled is the one lookup result called exactly title, ignoring case.
+func onlyTitled(found []map[string]any, title string) (map[string]any, bool) {
+	var match map[string]any
+	for _, scene := range found {
+		if name, _ := scene["title"].(string); strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(title)) && title != "" {
+			if match != nil {
+				return nil, false
+			}
+			match = scene
+		}
+	}
+	return match, match != nil
 }
 
 // sceneHasID says a Whisparr lookup result is the scene with the provider's id, whichever of its id fields carries it.
@@ -507,4 +527,31 @@ func sceneHasID(scene map[string]any, ref string) bool {
 		}
 	}
 	return false
+}
+
+// companionKnownScene monitors a lookup result Whisparr already holds, or adds it first.
+func (a ArrSync) companionKnownScene(ctx context.Context, whisparr arrimport.WhisparrClient, scene map[string]any, added apiserver.AddedWork) (int64, error) {
+	if id, _ := scene["id"].(float64); id > 0 {
+		if !added.Monitored {
+			return int64(id), nil
+		}
+		if err := whisparr.SetMonitored(ctx, arrimport.WhisparrScenePath, int64(id), true); err != nil {
+			return 0, err
+		}
+		if !added.Search {
+			return int64(id), nil
+		}
+		return int64(id), whisparr.SearchScene(ctx, int64(id))
+	}
+	profiles, err := whisparr.QualityProfiles(ctx)
+	if err != nil || len(profiles) == 0 {
+		return 0, errors.Join(err, errors.New("the Whisparr has no quality profile to add with"))
+	}
+	folders, err := whisparr.RootFolders(ctx)
+	if err != nil || len(folders) == 0 {
+		return 0, errors.Join(err, errors.New("the Whisparr has no root folder to add into"))
+	}
+	return whisparr.AddScene(ctx, scene, arrimport.AddDefaults{
+		QualityProfileID: profiles[0].ID, RootFolderPath: folders[0].Path, Monitored: added.Monitored, Search: added.Monitored && added.Search,
+	})
 }

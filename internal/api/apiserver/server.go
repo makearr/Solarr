@@ -738,6 +738,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/system/logs", server.routeListLogs)
 			secured.Get("/system/backups", server.ListBackups)
 			secured.Post("/system/backups", server.RunBackupNow)
+			secured.Get("/system/backups/latest", server.DownloadLatestBackup)
 			secured.Get("/blocklist", server.routeListBlocklist)
 			secured.Get("/history", server.routeListHistory)
 			secured.Delete("/blocklist/{id}", wrapped.RemoveBlocklistEntry)

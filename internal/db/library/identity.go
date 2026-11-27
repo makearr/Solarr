@@ -492,6 +492,21 @@ func (i Identity) WorkIdentityOf(ctx context.Context, workID int64) (WorkIdentit
 	return WorkIdentity{MediaType: work.MediaType, CanonicalTitle: work.CanonicalTitle, SortTitle: work.SortTitle}, nil
 }
 
+// ExternalIDsOf answers the provider ids a work holds, the first of each provider.
+func (i Identity) ExternalIDsOf(ctx context.Context, workID int64) (map[string]string, error) {
+	rows, err := librarydb.New(i.store.Read()).ListWorkExternalIDs(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: work %d ids: %w", workID, err)
+	}
+	ids := make(map[string]string, len(rows))
+	for _, row := range rows {
+		if _, have := ids[row.Provider]; !have {
+			ids[row.Provider] = row.ExternalID
+		}
+	}
+	return ids, nil
+}
+
 // FileRoot is one file of a work and the root folder it lives on.
 type FileRoot struct{ MediaObjectID, RootFolderID int64 }
 

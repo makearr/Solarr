@@ -343,6 +343,32 @@ func AuthorPhotoURL(authorID string) string {
 	return coversURL + "/a/olid/" + authorID + "-M.jpg?default=false"
 }
 
+// Seed is one entry of a reader's list: a work ("/works/OL1W"), an edition, an author or a subject.
+type Seed struct {
+	URL   string `json:"url"`
+	Title string `json:"title"`
+}
+
+// WorkID is the Open Library work id the seed names, empty for anything but a work.
+func (s Seed) WorkID() string {
+	id, found := strings.CutPrefix(s.URL, "/works/")
+	if !found {
+		return ""
+	}
+	return id
+}
+
+// ListSeeds reads a public list by its path ("/people/<user>/lists/OL1L"), up to limit entries; ErrNotFound for one that is not there or private.
+func (c Client) ListSeeds(ctx context.Context, listPath string, limit int) ([]Seed, error) {
+	var answer struct {
+		Entries []Seed `json:"entries"`
+	}
+	if err := c.get(ctx, listPath+"/seeds.json?limit="+strconv.Itoa(limit), &answer); err != nil {
+		return nil, err
+	}
+	return answer.Entries, nil
+}
+
 func (c Client) get(ctx context.Context, path string, into any) error {
 	err := c.http.GetJSON(ctx, c.base+path, maxResponseBytes, into)
 	switch {
