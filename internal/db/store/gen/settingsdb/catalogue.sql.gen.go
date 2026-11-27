@@ -119,7 +119,7 @@ INSERT INTO root_folder (path, label, online, min_free_bytes)
 VALUES (?, ?, ?, ?)
 RETURNING id, path, label, online, writable, writable_reason, read_only, allow_rename,
           total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
+       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries, min_free_percent, library_bytes
 `
 
 type CreateRootFolderParams struct {
@@ -157,6 +157,8 @@ func (q *Queries) CreateRootFolder(ctx context.Context, arg CreateRootFolderPara
 		&i.OfflineAuto,
 		&i.OfflineReason,
 		&i.SeenEntries,
+		&i.MinFreePercent,
+		&i.LibraryBytes,
 	)
 	return i, err
 }
@@ -341,7 +343,7 @@ func (q *Queries) ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFo
 const listRootFolders = `-- name: ListRootFolders :many
 SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
        total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
+       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries, min_free_percent, library_bytes
 FROM root_folder ORDER BY path
 `
 
@@ -374,6 +376,8 @@ func (q *Queries) ListRootFolders(ctx context.Context) ([]RootFolder, error) {
 			&i.OfflineAuto,
 			&i.OfflineReason,
 			&i.SeenEntries,
+			&i.MinFreePercent,
+			&i.LibraryBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -542,7 +546,7 @@ func (q *Queries) SetPlacementAffinity(ctx context.Context, arg SetPlacementAffi
 const setRootFolderCapacity = `-- name: SetRootFolderCapacity :exec
 UPDATE root_folder
 SET writable = ?, writable_reason = ?, total_bytes = ?, free_bytes = ?,
-    capacity_checked_at = ?, fs_id = ?, capabilities_json = ?
+    capacity_checked_at = ?, fs_id = ?, capabilities_json = ?, library_bytes = ?
 WHERE id = ?
 `
 
@@ -554,6 +558,7 @@ type SetRootFolderCapacityParams struct {
 	CapacityCheckedAt sql.NullInt64
 	FsID              sql.NullString
 	CapabilitiesJson  sql.NullString
+	LibraryBytes      int64
 	ID                int64
 }
 
@@ -568,6 +573,7 @@ func (q *Queries) SetRootFolderCapacity(ctx context.Context, arg SetRootFolderCa
 		arg.CapacityCheckedAt,
 		arg.FsID,
 		arg.CapabilitiesJson,
+		arg.LibraryBytes,
 		arg.ID,
 	)
 	return err
@@ -606,14 +612,15 @@ func (q *Queries) SetRootFolderOnline(ctx context.Context, arg SetRootFolderOnli
 }
 
 const setRootFolderPolicy = `-- name: SetRootFolderPolicy :exec
-UPDATE root_folder SET read_only = ?, allow_rename = ?, min_free_bytes = ? WHERE id = ?
+UPDATE root_folder SET read_only = ?, allow_rename = ?, min_free_bytes = ?, min_free_percent = ? WHERE id = ?
 `
 
 type SetRootFolderPolicyParams struct {
-	ReadOnly     int64
-	AllowRename  int64
-	MinFreeBytes int64
-	ID           int64
+	ReadOnly       int64
+	AllowRename    int64
+	MinFreeBytes   int64
+	MinFreePercent int64
+	ID             int64
 }
 
 // read_only and allow_rename are the user's own policy (section 11.7,
@@ -624,6 +631,7 @@ func (q *Queries) SetRootFolderPolicy(ctx context.Context, arg SetRootFolderPoli
 		arg.ReadOnly,
 		arg.AllowRename,
 		arg.MinFreeBytes,
+		arg.MinFreePercent,
 		arg.ID,
 	)
 	return err

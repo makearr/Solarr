@@ -498,7 +498,7 @@ func convertRootFolder(row settingsdb.RootFolder) RootFolder {
 		Writable: row.Writable != 0, WritableReason: row.WritableReason.String,
 		ReadOnly: row.ReadOnly != 0, AllowRename: row.AllowRename != 0,
 		TotalBytes: nullInt64Ptr(row.TotalBytes), FreeBytes: nullInt64Ptr(row.FreeBytes),
-		MinFreeBytes: row.MinFreeBytes, CapacityCheckedAt: nullInt64Ptr(row.CapacityCheckedAt),
+		MinFreeBytes: row.MinFreeBytes, MinFreePercent: row.MinFreePercent, LibraryBytes: row.LibraryBytes, CapacityCheckedAt: nullInt64Ptr(row.CapacityCheckedAt),
 		FSID: row.FsID.String, CapabilitiesJSON: row.CapabilitiesJson.String,
 		DrainState: row.DrainState, DrainJobID: nullInt64Ptr(row.DrainJobID),
 		OfflineAuto: row.OfflineAuto != 0, OfflineReason: row.OfflineReason.String, SeenEntries: row.SeenEntries,

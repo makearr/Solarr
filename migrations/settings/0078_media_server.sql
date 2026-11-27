@@ -1,3 +1,8 @@
+-- A root folder also keeps a share of its size free, whichever of that and min_free_bytes is larger.
+ALTER TABLE root_folder ADD COLUMN min_free_percent INTEGER NOT NULL DEFAULT 5 CHECK (min_free_percent BETWEEN 0 AND 90);
+-- What the library holds on the root, measured by the capacity sweep.
+ALTER TABLE root_folder ADD COLUMN library_bytes INTEGER NOT NULL DEFAULT 0;
+
 -- Media server connections (Jellyfin, Navidrome, ...): scan push, local metadata, watch state.
 CREATE TABLE media_server (
   id            INTEGER PRIMARY KEY,

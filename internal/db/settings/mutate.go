@@ -1152,17 +1152,17 @@ func (c *Cache) CreateRootFolder(ctx context.Context, path, label string) (RootF
 }
 
 // SetRootFolderPolicy writes the user's placement policy (read_only, allow_rename, reserve); the capacity job never touches it (section 11.7, Invariant 69).
-func (c *Cache) SetRootFolderPolicy(ctx context.Context, id int64, readOnly, allowRename bool, minFreeBytes int64) error {
+func (c *Cache) SetRootFolderPolicy(ctx context.Context, id int64, readOnly, allowRename bool, minFreeBytes, minFreePercent int64) error {
 	if _, found := c.Snapshot().RootFolder(id); !found {
 		return fmt.Errorf("%w: root folder %d", ErrNotFound, id)
 	}
-	if problems := validateRootFolderPolicy(minFreeBytes); len(problems) > 0 {
+	if problems := validateRootFolderPolicy(minFreeBytes, minFreePercent); len(problems) > 0 {
 		return problems
 	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.SetRootFolderPolicy(ctx, settingsdb.SetRootFolderPolicyParams{
 			ReadOnly: boolToInt(readOnly), AllowRename: boolToInt(allowRename),
-			MinFreeBytes: minFreeBytes, ID: id,
+			MinFreeBytes: minFreeBytes, MinFreePercent: minFreePercent, ID: id,
 		})
 	})
 }
@@ -1176,6 +1176,7 @@ type RootFolderCapacity struct {
 	CheckedAt        int64
 	FSID             string
 	CapabilitiesJSON string
+	LibraryBytes     int64
 }
 
 // SetRootFolderCapacity is the capacity job's only write (writable, total, free, fs_id), kept apart from SetRootFolderPolicy so the two never race on columns (section 11.7).
@@ -1189,6 +1190,7 @@ func (c *Cache) SetRootFolderCapacity(ctx context.Context, id int64, capacity Ro
 			CapacityCheckedAt: sql.NullInt64{Int64: capacity.CheckedAt, Valid: true},
 			FsID:              sql.NullString{String: capacity.FSID, Valid: capacity.FSID != ""},
 			CapabilitiesJson:  sql.NullString{String: capacity.CapabilitiesJSON, Valid: capacity.CapabilitiesJSON != ""},
+			LibraryBytes:      capacity.LibraryBytes,
 			ID:                id,
 		})
 	})

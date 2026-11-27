@@ -179,7 +179,7 @@ func (s *Service) prepare(ctx context.Context, item library.TranscodeItem, progr
 			return nil, false, err
 		}
 	}
-	if _, free, err := s.FS.DiskUsage(root.Path); err == nil && free-run.info.Size < root.MinFreeBytes {
+	if _, free, err := s.FS.DiskUsage(root.Path); err == nil && free-run.info.Size < root.ReserveBytes() {
 		s.blockRoot(root.ID, s.Clock.Now().Add(diskFullHold))
 		return nil, false, s.release(ctx, id)
 	}

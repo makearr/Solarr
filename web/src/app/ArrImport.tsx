@@ -15,10 +15,17 @@ import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 import { ArrConnectionTools } from "./ArrConnectionTools";
 import { ArrSyncOptions } from "./ArrSyncOptions";
 import { SafeModeBanner } from "./SafeModeBanner";
+import { CONNECT_APPS } from "./setup/ConnectStep";
 
 type ArrInstance = components["schemas"]["ArrInstance"];
 type ArrApp = components["schemas"]["ArrApp"];
 type ArrImportRun = components["schemas"]["ArrImportRun"];
+
+/** A connection feeds libraries of its own media type only: Readarr also fills audiobook libraries, Prowlarr none. */
+function librariesOfApp(app: ArrApp, mediaType: string): boolean {
+  const own = CONNECT_APPS.find((entry) => entry.app === app)?.mediaType;
+  return own === undefined || own === mediaType || (app === "readarr" && mediaType === "audiobook");
+}
 
 const APPS: readonly ArrApp[] = ["lidarr", "prowlarr", "sonarr", "radarr", "readarr", "whisparr", "kapowarr", "mylar3"];
 
@@ -260,7 +267,7 @@ function EditInstance({ instance, onDone }: { instance: ArrInstance; onDone: () 
         Library
         <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
           <option value="">{t("arrImport.matchByRootFolder")}</option>
-          {(categories.data ?? []).map((category) => (
+          {(categories.data ?? []).filter((category) => librariesOfApp(instance.app, category.media_type)).map((category) => (
             <option key={category.id} value={category.id}>
               {libraryLabel(category)}
             </option>
@@ -436,7 +443,7 @@ function AddInstance({
   categories,
   onAdded,
 }: {
-  categories: readonly { id: number; name: string }[];
+  categories: readonly { id: number; name: string; media_type: string }[];
   onAdded: () => void;
 }) {
   const libraryLabel = useLibraryLabel();
@@ -523,7 +530,7 @@ function AddInstance({
         Library
         <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
           <option value="">{t("arrImport.matchByRootFolder")}</option>
-          {categories.map((category) => (
+          {categories.filter((category) => librariesOfApp(app, category.media_type)).map((category) => (
             <option key={category.id} value={category.id}>
               {libraryLabel(category)}
             </option>

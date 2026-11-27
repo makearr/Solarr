@@ -33,7 +33,7 @@ func TestSetRootFolderPolicy_UpdatesReadOnlyAllowRenameAndReserve(t *testing.T) 
 		t.Fatalf("CreateRootFolder: %v", err)
 	}
 
-	if err := cache.SetRootFolderPolicy(t.Context(), root.ID, true, true, 50_000_000_000); err != nil {
+	if err := cache.SetRootFolderPolicy(t.Context(), root.ID, true, true, 50_000_000_000, 5); err != nil {
 		t.Fatalf("SetRootFolderPolicy: %v", err)
 	}
 
@@ -60,7 +60,7 @@ func TestSetRootFolderPolicy_RejectsANegativeReserve(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRootFolder: %v", err)
 	}
-	if err := cache.SetRootFolderPolicy(t.Context(), root.ID, false, false, -1); err == nil {
+	if err := cache.SetRootFolderPolicy(t.Context(), root.ID, false, false, -1, 5); err == nil {
 		t.Fatal("SetRootFolderPolicy: expected an error for a negative reserve, got nil")
 	}
 }
@@ -361,5 +361,20 @@ func TestCategoryIDsOf_AnswersOnlyThatMediaTypesLibraries(t *testing.T) {
 	}
 	if got := cache.Snapshot().CategoryMediaTypes(); !slices.Equal(got, []string{"music", "tv"}) {
 		t.Errorf("CategoryMediaTypes = %v, want each type once, in order of appearance", got)
+	}
+}
+
+func TestReserveBytesIsTheLargerOfTheAbsoluteAndPercentReserve(t *testing.T) {
+	total := int64(1_000_000_000_000)
+	root := settings.RootFolder{TotalBytes: &total, MinFreeBytes: 8_000_000_000, MinFreePercent: 5}
+	if got := root.ReserveBytes(); got != 50_000_000_000 {
+		t.Fatalf("reserve = %d, want the 5%% of the folder", got)
+	}
+	root.MinFreeBytes = 80_000_000_000
+	if got := root.ReserveBytes(); got != 80_000_000_000 {
+		t.Fatalf("reserve = %d, want the absolute reserve", got)
+	}
+	if got := (settings.RootFolder{MinFreeBytes: 8, MinFreePercent: 5}).ReserveBytes(); got != 8 {
+		t.Fatalf("unmeasured size: reserve = %d, want the absolute reserve", got)
 	}
 }

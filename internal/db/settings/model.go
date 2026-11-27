@@ -338,6 +338,10 @@ type RootFolder struct {
 	// MinFreeBytes is the user's own reserve: placement.Resolve refuses a
 	// root once FreeBytes minus an item's size would fall below this.
 	MinFreeBytes int64
+	// MinFreePercent is the share of the root's size kept free as well; the larger of the two reserves counts.
+	MinFreePercent int64
+	// LibraryBytes is what the library holds on the root, as the capacity sweep last measured it.
+	LibraryBytes int64
 	// CapacityCheckedAt is nil until the capacity job has run once; a nil
 	// or stale reading is the caller's signal to refresh before relying on
 	// TotalBytes/FreeBytes/Writable for a placement decision.
@@ -426,3 +430,13 @@ const (
 
 // RuleFields are every field a condition may name.
 var RuleFields = []RuleField{RuleGenre, RuleLanguage, RuleCountry, RuleAniList}
+
+// ReserveBytes is the free space the root keeps: the larger of the absolute reserve and its percentage of the size
+// last measured. Every write path reads the reserve here.
+func (r RootFolder) ReserveBytes() int64 {
+	var total int64
+	if r.TotalBytes != nil {
+		total = *r.TotalBytes
+	}
+	return max(r.MinFreeBytes, total/100*r.MinFreePercent)
+}

@@ -7149,6 +7149,16 @@ export interface components {
              */
             min_free_bytes?: number;
             /**
+             * Format: int64
+             * @description Share of the folder kept free as well; the larger reserve counts.
+             */
+            min_free_percent?: number;
+            /**
+             * Format: int64
+             * @description What the library holds on this folder
+             */
+            library_bytes?: number;
+            /**
              * Format: date-time
              * @description Absent until the capacity job has run once for this root.
              */
@@ -14738,6 +14748,11 @@ export interface operations {
                     allow_rename: boolean;
                     /** Format: int64 */
                     min_free_bytes: number;
+                    /**
+                     * Format: int64
+                     * @description Share of the folder kept free as well; the larger of this and min_free_bytes counts. Absent keeps the default of 5.
+                     */
+                    min_free_percent?: number;
                 };
             };
         };

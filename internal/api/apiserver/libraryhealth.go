@@ -169,12 +169,12 @@ func blockedPresentView(present []BlockedPresent) []gen.BlockedPresent {
 func (s *Server) rootsNearReserve() []gen.RootNearReserve {
 	var near []gen.RootNearReserve
 	for _, folder := range s.auth.Settings.Snapshot().RootFolders() {
-		if !isNearReserve(folder.Online, folder.FreeBytes, folder.MinFreeBytes) {
+		if !isNearReserve(folder.Online, folder.FreeBytes, folder.ReserveBytes()) {
 			continue
 		}
 		near = append(near, gen.RootNearReserve{
 			RootFolderId: folder.ID, Path: folder.Path,
-			FreeBytes: *folder.FreeBytes, MinFreeBytes: folder.MinFreeBytes,
+			FreeBytes: *folder.FreeBytes, MinFreeBytes: folder.ReserveBytes(),
 		})
 	}
 	if near == nil {

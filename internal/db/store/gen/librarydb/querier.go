@@ -1393,6 +1393,8 @@ type Querier interface {
 	RetryWebhookPending(ctx context.Context, arg RetryWebhookPendingParams) error
 	// Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.
 	RootHoldsFiles(ctx context.Context, rootFolderID int64) (int64, error)
+	// Bytes the library holds on a root: each file once, at its primary path.
+	RootLibraryBytes(ctx context.Context, rootFolderID int64) (int64, error)
 	// Ranked cross-media search over titles and aliases (migration 0010, section 21.1).
 	// One row per matching work, even if several of its titles match: the best (lowest) bm25
 	// rank wins, so a common alias never crowds out the rest of the results. media_type is

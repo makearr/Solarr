@@ -2240,6 +2240,20 @@ func (q *Queries) RootHoldsFiles(ctx context.Context, rootFolderID int64) (int64
 	return holds, err
 }
 
+const rootLibraryBytes = `-- name: RootLibraryBytes :one
+SELECT CAST(COALESCE(SUM(o.size_bytes), 0) AS INTEGER) AS bytes
+FROM library_path lp JOIN media_object o ON o.id = lp.media_object_id
+WHERE lp.root_folder_id = ? AND lp.is_primary = 1 AND lp.missing_since IS NULL
+`
+
+// Bytes the library holds on a root: each file once, at its primary path.
+func (q *Queries) RootLibraryBytes(ctx context.Context, rootFolderID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, rootLibraryBytes, rootFolderID)
+	var bytes int64
+	err := row.Scan(&bytes)
+	return bytes, err
+}
+
 const setAudioFingerprint = `-- name: SetAudioFingerprint :exec
 UPDATE media_object SET audio_fp = ?, audio_fp_prefix = ? WHERE id = ?
 `

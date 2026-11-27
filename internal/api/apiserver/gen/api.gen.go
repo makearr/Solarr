@@ -7026,8 +7026,14 @@ type RootFolder struct {
 	Id           int64   `json:"id"`
 	Label        *string `json:"label,omitempty"`
 
+	// LibraryBytes What the library holds on this folder
+	LibraryBytes *int64 `json:"library_bytes,omitempty"`
+
 	// MinFreeBytes The user's own reserve; placement refuses to dip below it.
 	MinFreeBytes *int64 `json:"min_free_bytes,omitempty"`
+
+	// MinFreePercent Share of the folder kept free as well; the larger reserve counts.
+	MinFreePercent *int64 `json:"min_free_percent,omitempty"`
 
 	// OfflineAuto Offline because Solarr could not reach it, checked every five minutes and declared online again once reached; absent for a root a person declared offline, which only a person brings back.
 	OfflineAuto *bool `json:"offline_auto,omitempty"`
@@ -9759,7 +9765,10 @@ type AddRootFolderJSONBody struct {
 type UpdateRootFolderPolicyJSONBody struct {
 	AllowRename  bool  `json:"allow_rename"`
 	MinFreeBytes int64 `json:"min_free_bytes"`
-	ReadOnly     bool  `json:"read_only"`
+
+	// MinFreePercent Share of the folder kept free as well; the larger of this and min_free_bytes counts. Absent keeps the default of 5.
+	MinFreePercent *int64 `json:"min_free_percent,omitempty"`
+	ReadOnly       bool   `json:"read_only"`
 }
 
 // DrainRootFolderJSONBody defines parameters for DrainRootFolder.

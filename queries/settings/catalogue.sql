@@ -63,7 +63,7 @@ DELETE FROM category WHERE id = ?;
 -- name: ListRootFolders :many
 SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
        total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
+       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries, min_free_percent, library_bytes
 FROM root_folder ORDER BY path;
 
 -- name: CreateRootFolder :one
@@ -71,7 +71,7 @@ INSERT INTO root_folder (path, label, online, min_free_bytes)
 VALUES (?, ?, ?, ?)
 RETURNING id, path, label, online, writable, writable_reason, read_only, allow_rename,
           total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries;
+       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries, min_free_percent, library_bytes;
 
 -- name: SetRootFolderOnline :exec
 -- A person's declaration: never Solarr's own, and the emptiness it accepts is the new normal.
@@ -84,14 +84,14 @@ UPDATE root_folder SET online = ?, offline_auto = ?, offline_reason = ?, seen_en
 -- read_only and allow_rename are the user's own policy (section 11.7,
 -- Invariant 69); min_free_bytes is their reserve. Kept separate from
 -- SetRootFolderCapacity below, which only the capacity job ever calls.
-UPDATE root_folder SET read_only = ?, allow_rename = ?, min_free_bytes = ? WHERE id = ?;
+UPDATE root_folder SET read_only = ?, allow_rename = ?, min_free_bytes = ?, min_free_percent = ? WHERE id = ?;
 
 -- name: SetRootFolderCapacity :exec
 -- The capacity-polling job's own write: everything it probes, in one
 -- statement, so a root's reading is never partially updated.
 UPDATE root_folder
 SET writable = ?, writable_reason = ?, total_bytes = ?, free_bytes = ?,
-    capacity_checked_at = ?, fs_id = ?, capabilities_json = ?
+    capacity_checked_at = ?, fs_id = ?, capabilities_json = ?, library_bytes = ?
 WHERE id = ?;
 
 -- name: SetRootFolderDrainState :exec

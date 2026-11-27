@@ -51,10 +51,10 @@ export function RootFolderSection() {
 
   const setPolicy = useMutation({
     meta: { handlesErrors: true },
-    mutationFn: async (args: { id: number; readOnly: boolean; allowRename: boolean; minFreeBytes: number }) => {
+    mutationFn: async (args: { id: number; readOnly: boolean; allowRename: boolean; minFreeBytes: number; minFreePercent: number }) => {
       await ok(api.PATCH("/rootfolders/{id}", {
         params: { path: { id: args.id } },
-        body: { read_only: args.readOnly, allow_rename: args.allowRename, min_free_bytes: args.minFreeBytes },
+        body: { read_only: args.readOnly, allow_rename: args.allowRename, min_free_bytes: args.minFreeBytes, min_free_percent: args.minFreePercent },
       }));
     },
     onSuccess: invalidate,
@@ -108,8 +108,8 @@ export function RootFolderSection() {
                     key={root.id}
                     root={root}
                     categories={categories.data ?? []}
-                    onSavePolicy={(readOnly, allowRename, minFreeBytes) =>
-                      setPolicy.mutate({ id: root.id, readOnly, allowRename, minFreeBytes })
+                    onSavePolicy={(readOnly, allowRename, minFreeBytes, minFreePercent) =>
+                      setPolicy.mutate({ id: root.id, readOnly, allowRename, minFreeBytes, minFreePercent })
                     }
                     onToggleOnline={() => setOnline.mutate({ id: root.id, online: !root.online })}
                     onAttachCategory={(categoryId) => attachCategory.mutate({ rootFolderId: root.id, categoryId })}
@@ -210,7 +210,7 @@ function RootFolderCard({
 }: {
   root: RootFolder;
   categories: LibraryCategory[];
-  onSavePolicy: (readOnly: boolean, allowRename: boolean, minFreeBytes: number) => void;
+  onSavePolicy: (readOnly: boolean, allowRename: boolean, minFreeBytes: number, minFreePercent: number) => void;
   onToggleOnline: () => void;
   onAttachCategory: (categoryId: number) => void;
   onDetachCategory: (categoryId: number) => void;
@@ -225,19 +225,22 @@ function RootFolderCard({
   const [readOnly, setReadOnly] = useState(root.read_only ?? false);
   const [allowRename, setAllowRename] = useState(root.allow_rename ?? false);
   const [minFreeBytes, setMinFreeBytes] = useState(root.min_free_bytes ?? 0);
+  const [minFreePercent, setMinFreePercent] = useState(root.min_free_percent ?? 5);
   const [editingLibraryId, setEditingLibraryId] = useState<number | undefined>();
   const [confirming, setConfirming] = useState<"remove" | { detach: { id: number; name: string } }>();
   const attached = root.categories ?? [];
   const dirty =
     readOnly !== (root.read_only ?? false) ||
     allowRename !== (root.allow_rename ?? false) ||
-    minFreeBytes !== (root.min_free_bytes ?? 0);
+    minFreeBytes !== (root.min_free_bytes ?? 0) ||
+    minFreePercent !== (root.min_free_percent ?? 5);
 
   const total = root.total_bytes ?? 0;
   const free = root.free_bytes ?? 0;
   const used = total > 0 ? total - free : 0;
   const usedPct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
-  const reservePct = total > 0 ? Math.min(100, Math.round(((root.min_free_bytes ?? 0) / total) * 100)) : 0;
+  const reserveBytes = Math.max(root.min_free_bytes ?? 0, (total / 100) * (root.min_free_percent ?? 5));
+  const reservePct = total > 0 ? Math.min(100, Math.round((reserveBytes / total) * 100)) : 0;
   const name = root.label || root.path;
 
   return (
@@ -263,6 +266,7 @@ function RootFolderCard({
         >
           {total > 0 ? (
             <>
+              <span title={t("rootFolders.libraryBytesHelp")}>{t("rootFolders.libraryBytes", { size: formatBytes(root.library_bytes ?? 0) })}</span>
               <span className="relative h-1.5 w-28 overflow-hidden rounded-full bg-canvas">
                 <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${usedPct}%` }} />
                 {reservePct > 0 && (
@@ -342,10 +346,21 @@ function RootFolderCard({
             className="w-14 rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs text-ink
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           />
-          GB
+          GB {t("rootFolders.orPercent")}
+          <input
+            type="number"
+            min={0}
+            max={90}
+            value={minFreePercent}
+            disabled={busy}
+            onChange={(event) => setMinFreePercent(Math.min(90, Math.max(0, Number(event.target.value))))}
+            className="w-12 rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs text-ink
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          />
+          %
         </label>
         {dirty && (
-          <Button variant="primary" className="!px-2 !py-0.5 !text-xs" disabled={busy} onClick={() => onSavePolicy(readOnly, allowRename, minFreeBytes)}>
+          <Button variant="primary" className="!px-2 !py-0.5 !text-xs" disabled={busy} onClick={() => onSavePolicy(readOnly, allowRename, minFreeBytes, minFreePercent)}>
             Save
           </Button>
         )}

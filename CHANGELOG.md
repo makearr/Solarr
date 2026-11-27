@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Storage > Folders: a folder also reserves a percentage of its size (default 5%), the larger of that and the absolute reserve blocks writes, and the bytes the library holds on the folder show left of the usage bar. Schema: two columns on `root_folder` (edit in place; recreate a dev settings database). Connections: an *Arr connection offers only the libraries of its own media type.
 - Crossovers: an episode in an event opens that episode in its series (the season opens and the row is marked), shows its picture when the file is present, and episodes whose videos look alike are linked as the same broadcast.
 - Crossovers of a library list only events with a part in that library; a new root folder starts read only on a read-only filesystem and with renaming allowed where Solarr may write; the Disk page tells active watches that are not yet trusted from none; Needs attention no longer lists paused metadata providers nor "automatic searching is off" in observe and *Arr companion modes; absent NVENC reads "not present on this host"; the API key name field no longer suggests a name.
 - Setup assistant: testing a Radarr or Sonarr v3 connection reads the languages its profiles ask for; they start as the chosen languages when none were chosen yet, otherwise the Languages step offers them in a banner.

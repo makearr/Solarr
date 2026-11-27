@@ -100,7 +100,13 @@ func validateRootFolder(path string) config.Problems {
 // validateRootFolderPolicy checks a root folder's user-set placement policy
 // before it is written (ADR-44) -- readOnly and allowRename are plain bools,
 // nothing to validate about either.
-func validateRootFolderPolicy(minFreeBytes int64) config.Problems {
+func validateRootFolderPolicy(minFreeBytes, minFreePercent int64) config.Problems {
+	if minFreePercent < 0 || minFreePercent > 90 {
+		return config.Problems{{
+			Path: "min_free_percent", Value: strconv.FormatInt(minFreePercent, 10),
+			Expectation: "a share of the folder between 0 and 90",
+		}}
+	}
 	if minFreeBytes < 0 {
 		return config.Problems{{
 			Path: "min_free_bytes", Value: strconv.FormatInt(minFreeBytes, 10),

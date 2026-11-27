@@ -50,7 +50,7 @@ func CandidateOf(root settings.RootFolder, acceptsNew bool) RootCandidate {
 	}
 	return RootCandidate{
 		RootFolderID: root.ID, FSID: root.FSID, Online: root.Online, Writable: root.Writable, ReadOnly: root.ReadOnly,
-		AcceptsNew: acceptsNew, FreeBytes: freeBytes, TotalBytes: totalBytes, MinFreeBytes: root.MinFreeBytes,
+		AcceptsNew: acceptsNew, FreeBytes: freeBytes, TotalBytes: totalBytes, MinFreeBytes: root.ReserveBytes(),
 	}
 }
 

@@ -407,6 +407,8 @@ type RootFolder struct {
 	OfflineAuto       int64
 	OfflineReason     sql.NullString
 	SeenEntries       int64
+	MinFreePercent    int64
+	LibraryBytes      int64
 }
 
 type TargetProfile struct {

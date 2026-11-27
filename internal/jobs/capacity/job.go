@@ -40,6 +40,7 @@ type Job struct {
 	clock  clock.Clock
 	logger *slog.Logger
 	idle   func(root settings.RootFolder) bool
+	bytes  func(ctx context.Context, rootFolderID int64) (int64, error)
 }
 
 // Config is what a Job needs. Every field is required except Logger.
@@ -53,6 +54,8 @@ type Config struct {
 	// Idle says nothing has used the root's disk lately and the root has a reading already, so touching the disk
 	// would only keep it spinning; nil never skips.
 	Idle func(root settings.RootFolder) bool
+	// LibraryBytes is what the library holds on a root; nil leaves the figure at zero.
+	LibraryBytes func(ctx context.Context, rootFolderID int64) (int64, error)
 }
 
 // NewJob builds the handler.
@@ -61,7 +64,7 @@ func NewJob(config Config) *Job {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Job{fsys: config.FS, cache: config.Cache, clock: config.Clock, logger: logger, idle: config.Idle}
+	return &Job{fsys: config.FS, cache: config.Cache, clock: config.Clock, logger: logger, idle: config.Idle, bytes: config.LibraryBytes}
 }
 
 // Run refreshes every configured root folder once. One root failing (an
@@ -110,10 +113,16 @@ func (j *Job) refreshOne(ctx context.Context, root settings.RootFolder) error {
 
 	// Empty when unreadable: an unknown filesystem must never look like a shared one.
 	fsID, _ := j.fsys.FilesystemID(root.Path)
+	var held int64
+	if j.bytes != nil {
+		if held, err = j.bytes(ctx, root.ID); err != nil {
+			j.logger.WarnContext(ctx, "library bytes of a root unreadable", slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
+		}
+	}
 	return j.cache.SetRootFolderCapacity(ctx, root.ID, settings.RootFolderCapacity{
 		Writable: writable, WritableReason: reason,
 		TotalBytes: totalBytes, FreeBytes: freeBytes,
-		CheckedAt: j.clock.Now().Unix(), FSID: fsID,
+		CheckedAt: j.clock.Now().Unix(), FSID: fsID, LibraryBytes: held,
 	})
 }
 

@@ -631,6 +631,15 @@ func (p Physical) HoldsFiles(ctx context.Context, rootFolderID int64) (bool, err
 	return holds == 1, nil
 }
 
+// LibraryBytes is what the library holds on the root: each file once, at its primary path.
+func (p Physical) LibraryBytes(ctx context.Context, rootFolderID int64) (int64, error) {
+	bytes, err := librarydb.New(p.store.Read()).RootLibraryBytes(ctx, rootFolderID)
+	if err != nil {
+		return 0, fmt.Errorf("library: bytes on root %d: %w", rootFolderID, err)
+	}
+	return bytes, nil
+}
+
 // ErrPathNotFound means the (rootFolderID, relPath) pair Relocate was asked
 // to move no longer names a library_path row -- a concurrent change since
 // Plan ran (a rescan, another move, a manual edit), not a bug in the caller.

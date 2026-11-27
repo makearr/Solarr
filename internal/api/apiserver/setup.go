@@ -201,7 +201,7 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 
 	// A new root starts read only where the filesystem is, and may be renamed where Solarr is allowed to write at all.
 	renameAllowed := writable && !s.auth.Settings.Snapshot().SolarrMode().LibrariesReadOnly()
-	if err := s.auth.Settings.SetRootFolderPolicy(r.Context(), created.ID, readOnlyFilesystem, renameAllowed, created.MinFreeBytes); err != nil {
+	if err := s.auth.Settings.SetRootFolderPolicy(r.Context(), created.ID, readOnlyFilesystem, renameAllowed, created.MinFreeBytes, created.MinFreePercent); err != nil {
 		s.logger.Warn("root folder default policy could not be recorded", "path", path, "error", err)
 	}
 	s.recordRootCapacity(r.Context(), created.ID, path, writable)
@@ -236,7 +236,7 @@ func (s *Server) rootFolderView(folder settings.RootFolder) gen.RootFolder {
 		Id: folder.ID, Path: folder.Path, Online: folder.Online,
 		ReadOnly: &folder.ReadOnly, AllowRename: &folder.AllowRename,
 		TotalBytes: folder.TotalBytes, FreeBytes: folder.FreeBytes,
-		MinFreeBytes: &folder.MinFreeBytes,
+		MinFreeBytes: &folder.MinFreeBytes, MinFreePercent: &folder.MinFreePercent, LibraryBytes: &folder.LibraryBytes,
 	}
 	if folder.Label != "" {
 		label := folder.Label
@@ -289,7 +289,7 @@ func (s *Server) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	if err := s.auth.Settings.SetRootFolderPolicy(r.Context(), id, body.ReadOnly, body.AllowRename, body.MinFreeBytes); err != nil {
+	if err := s.auth.Settings.SetRootFolderPolicy(r.Context(), id, body.ReadOnly, body.AllowRename, body.MinFreeBytes, derefOr(body.MinFreePercent, 5)); err != nil {
 		if errors.Is(err, settings.ErrNotFound) {
 			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such root folder")
 			return

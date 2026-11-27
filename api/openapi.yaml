@@ -872,6 +872,7 @@ paths:
                 read_only: { type: boolean }
                 allow_rename: { type: boolean }
                 min_free_bytes: { type: integer, format: int64, minimum: 0 }
+                min_free_percent: { type: integer, format: int64, minimum: 0, maximum: 90, description: "Share of the folder kept free as well; the larger of this and min_free_bytes counts. Absent keeps the default of 5." }
       responses:
         "200":
           description: Updated.
@@ -10984,6 +10985,8 @@ components:
           type: integer
           format: int64
           description: The user's own reserve; placement refuses to dip below it.
+        min_free_percent: { type: integer, format: int64, description: "Share of the folder kept free as well; the larger reserve counts." }
+        library_bytes: { type: integer, format: int64, description: What the library holds on this folder, as the capacity sweep last measured it. }
         capacity_checked_at:
           type: string
           format: date-time

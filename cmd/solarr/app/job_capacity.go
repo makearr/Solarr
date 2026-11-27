@@ -24,7 +24,7 @@ func (p *process) registerCapacityJob(registry *jobs.Registry, executor *jobs.Ex
 		return err
 	}
 	executor.Handle(capacity.ReachJobType, capacity.NewReachJob(capacity.Config{
-		FS: p.fsys, Cache: p.cache, Logger: p.logger, HoldsFiles: library.NewPhysical(p.library).HoldsFiles, Idle: p.diskTurns.rootIdle,
+		FS: p.fsys, Cache: p.cache, Logger: p.logger, HoldsFiles: library.NewPhysical(p.library).HoldsFiles, LibraryBytes: library.NewPhysical(p.library).LibraryBytes, Idle: p.diskTurns.rootIdle,
 	}))
 	return nil
 }

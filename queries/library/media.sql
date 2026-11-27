@@ -467,6 +467,12 @@ ORDER BY lp.media_object_id, d.work_id, f.media_ref;
 -- name: RootHoldsFiles :one
 SELECT CAST(EXISTS (SELECT 1 FROM library_path WHERE root_folder_id = ? AND missing_since IS NULL) AS INTEGER) AS holds;
 
+-- Bytes the library holds on a root: each file once, at its primary path.
+-- name: RootLibraryBytes :one
+SELECT CAST(COALESCE(SUM(o.size_bytes), 0) AS INTEGER) AS bytes
+FROM library_path lp JOIN media_object o ON o.id = lp.media_object_id
+WHERE lp.root_folder_id = ? AND lp.is_primary = 1 AND lp.missing_since IS NULL;
+
 -- Every video with frame hashes and its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
 -- name: ListHashedVideos :many
 SELECT o.id, o.size_bytes, o.phash, o.duration_ms, o.width, o.height, lp.root_folder_id, lp.rel_path, f.frames
