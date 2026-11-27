@@ -4,6 +4,9 @@ import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { useDebouncedValue } from "./useDebouncedValue";
+import { PageHeader } from "@/ui/PageHeader";
+import { ScrollText } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 
 const LEVELS = ["", "debug", "info", "warn", "error"] as const;
 type Level = (typeof LEVELS)[number];
@@ -32,8 +35,10 @@ export function Logs() {
 
   return (
     <div className="flex h-full flex-col gap-3 p-4">
+      <PageHeader
+        title="Logs"
+        facts={
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-sm font-medium">Logs</h1>
         <div className="flex gap-1">
           {LEVELS.map((option) => (
             <button
@@ -59,6 +64,8 @@ export function Logs() {
           className="w-48 rounded-md border border-border-subtle bg-surface px-2 py-1 text-sm"
         />
       </div>
+        }
+      />
       <p className="text-xs text-ink-muted">
         Kept in memory since this process started — not a log file. Nothing here survives a
         restart.
@@ -67,7 +74,7 @@ export function Logs() {
       {records.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {records.error !== null && <p className="text-sm text-ink-muted">{t("logs.readFailed")}</p>}
       {records.data && records.data.length === 0 && (
-        <p className="text-sm text-ink-muted">Nothing matches.</p>
+        <EmptyState icon={<ScrollText aria-hidden className="size-6" />} title={t("logs.nothingMatches")} />
       )}
 
       {records.data && records.data.length > 0 && (

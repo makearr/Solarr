@@ -1,7 +1,9 @@
+import { useDensityScale } from "@/lib/density";
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { showToast } from "@/lib/toast";
 import { api, ok } from "@/api/client";
 import { invalidateWorkLists } from "@/lib/resources";
 import type { components } from "@/api/schema";
@@ -158,6 +160,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
   const [hidden, setHidden] = usePreference<string[]>(`works.hidden-columns.${library?.media_type ?? ""}`, []);
   const frameRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow();
+  const densityScale = useDensityScale();
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const isPoster = view === "poster";
   const defaultSort = lead && !portrait ? "artist" : "title";
@@ -181,7 +184,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
       groupHeaderHeight: GROUP_HEADER_HEIGHT,
       rowHeight: isPoster
         ? posterRowHeight(options, metrics.cellWidth, portrait ? 1.5 : 1)
-        : view === "overview" ? OVERVIEW_ROW_HEIGHT : narrow ? CARD_HEIGHT : TABLE_ROW_HEIGHT,
+        : view === "overview" ? OVERVIEW_ROW_HEIGHT : narrow ? CARD_HEIGHT : Math.round(TABLE_ROW_HEIGHT * densityScale),
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (work) => work.id,
       fetchPage: ({ cursor, query, signal }) => ok(api.GET("/works", {
@@ -427,7 +430,7 @@ function BulkBar({
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
   const [confirm, setConfirm] = useState<
-    { kind: "monitor"; monitored: boolean; count: number } | { kind: "option"; option: string; count: number } | { kind: "remove" }
+    { kind: "option"; option: string; count: number } | { kind: "remove" }
   >();
   const [editing, setEditing] = useState(false);
   const [movingLibrary, setMovingLibrary] = useState(false);
@@ -439,13 +442,24 @@ function BulkBar({
     onDone();
     invalidateWorkLists(queryClient);
   };
-  const preview = useMutation({
+  // Monitoring is reversible, so it applies at once and the toast offers the way back instead of asking first.
+  const setMonitored = useMutation({
     mutationFn: async (monitored: boolean) => {
-      const { data, error } = await api.POST("/works/bulk/monitor", { body: { ...selectionBody(request), monitored, preview: true } });
+      const { data, error } = await api.POST("/works/bulk/monitor", { body: { ...selectionBody(request), monitored } });
       if (error) throw error;
       return { monitored, count: data.count };
     },
-    onSuccess: ({ monitored, count: matched }) => setConfirm({ kind: "monitor", monitored, count: matched }),
+    onSuccess: ({ monitored, count: matched }) => {
+      const body = { ...selectionBody(request), monitored: !monitored };
+      showToast({
+        message: t(monitored ? "workIndex.monitoredCount" : "workIndex.unmonitoredCount", { count: matched }),
+        action: {
+          label: t("toast.undo"),
+          run: () => void api.POST("/works/bulk/monitor", { body }).then(() => invalidateWorkLists(queryClient)),
+        },
+      });
+      changed();
+    },
   });
   // A monitor option goes through the bulk edit, so "select all matching" reaches every work, counted first.
   const optionPreview = useMutation({
@@ -460,10 +474,6 @@ function BulkBar({
     mutationFn: async () => {
       if (confirm?.kind === "option") {
         await ok(api.POST("/works/bulk/edit", { body: { ...selectionBody(request), monitor_option: confirm.option } }));
-        return;
-      }
-      if (confirm?.kind === "monitor") {
-        await ok(api.POST("/works/bulk/monitor", { body: { ...selectionBody(request), monitored: confirm.monitored } }));
         return;
       }
       let failed = 0;
@@ -482,10 +492,10 @@ function BulkBar({
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle bg-surface px-4 py-2 text-xs">
       <span className="font-medium">{selected}</span>
-      <Button busy={preview.isPending} onClick={() => preview.mutate(true)}>
+      <Button busy={setMonitored.isPending} onClick={() => setMonitored.mutate(true)}>
         {t("action.monitor")}
       </Button>
-      <Button busy={preview.isPending} onClick={() => preview.mutate(false)}>
+      <Button busy={setMonitored.isPending} onClick={() => setMonitored.mutate(false)}>
         {t("action.unmonitor")}
       </Button>
       <Button onClick={() => setEditing(true)}>{t("action.edit")}</Button>
@@ -498,7 +508,7 @@ function BulkBar({
               </option>
             ))}
           </select>
-          <Button busy={preview.isPending} onClick={() => optionPreview.mutate()}>
+          <Button busy={optionPreview.isPending} onClick={() => optionPreview.mutate()}>
             Apply
           </Button>
         </span>
@@ -545,11 +555,9 @@ function BulkBar({
         <ConfirmDialog
           title={confirm.kind === "remove" ? `${t("action.remove")} ${explicitIds.length} ${words.works}` : "Change the selection"}
           consequence={
-            confirm.kind === "monitor"
-              ? `${confirm.monitored ? "Monitor" : "Unmonitor"} ${confirm.count} ${confirm.count === 1 ? words.work : words.works}.`
-              : confirm.kind === "option"
-                ? `Monitor ${optionLabel.toLowerCase()} of ${confirm.count} ${confirm.count === 1 ? words.work : words.works}. ${words.Parts} already chosen by hand are decided again.`
-                : t("work.remove.consequence", words)
+            confirm.kind === "option"
+              ? `Monitor ${optionLabel.toLowerCase()} of ${confirm.count} ${confirm.count === 1 ? words.work : words.works}. ${words.Parts} already chosen by hand are decided again.`
+              : t("work.remove.consequence", words)
           }
           confirmLabel={confirm.kind === "remove" ? t("action.remove") : "Apply"}
           danger={confirm.kind === "remove"}

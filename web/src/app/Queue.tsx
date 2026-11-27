@@ -6,6 +6,8 @@ import { api, ok } from "@/api/client";
 import { t } from "@/lib/i18n";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import type { components } from "@/api/schema";
+import { Download } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 
 type QueueItem = components["schemas"]["QueueItem"];
 type QueueClient = components["schemas"]["QueueClient"];
@@ -31,7 +33,7 @@ export function Queue() {
           <>
             <ClientList clients={queue.data.clients} items={queue.data.items} />
             {queue.data.items.length === 0 ? (
-              <Message>{t("queue.nothingIsDownloadingWhat")}</Message>
+              <EmptyState icon={<Download aria-hidden className="size-6" />} title={t("queue.nothingIsDownloadingWhat")} />
             ) : (
               <QueueTable items={queue.data.items} />
             )}

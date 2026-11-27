@@ -10,6 +10,8 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 - Every settings card keeps its help behind a "?" next to the title (hover, focus or tap), and a setting that saves when you change it confirms with a "Saved" toast.
 - Web UI preferences: Comfortable or Compact density for lists and poster grids.
 - One page header for the settings and configuration pages, with breadcrumbs (Library, artist, album) on an item's page; empty lists show an icon, a sentence and the next step.
+- Every page now opens with the same header (lists, jobs, logs, calendar and people included), and Compact density also tightens table rows.
+- Settings pages save by themselves a moment after you stop typing, with a "Saved" tick; bulk Monitor / Unmonitor applies at once with an Undo; irreversible actions ask in one shared dialog.
 - Dashboard: "Needs attention" and the system health checks are for administrators only (the server refuses everyone else), an administrator gets a "Finish setting up" checklist (library with root folder, indexer, download client, metadata key) that disappears when done or when hidden, each person can show, hide and reorder the dashboard's sections under Web UI, and the libraries are one slim row each.
 - Discover: every recommendation card names the library it would be added to, and its Add and Not interested buttons are always visible (touch works); Not interested shows an Undo toast. The Discover page is one feed with All, per-library and Hidden chips, and the dashboard row is exactly two rows of cards with no sideways scrolling.
 - Failed actions and actions that say what they did now show a toast with the server's detail instead of only a line in the status bar.

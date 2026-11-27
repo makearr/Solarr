@@ -15,6 +15,7 @@ import { Dialog } from "@/ui/Dialog";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { formatSize } from "./work/workFormat";
+import { useConfirm } from "@/ui/useConfirm";
 
 type Item = components["schemas"]["TranscodeItem"];
 type StreamPlan = { index: number; type: string; action: string; reason?: string; codec?: string; language?: string };
@@ -33,6 +34,7 @@ const quietButton = "rounded-md border border-border-subtle px-2 py-1 text-xs te
 
 /** Settings > Transcode > Files: every judged file, what is to happen to it and why, with retry and restore. */
 export function TranscodeFiles() {
+  const { ask, dialog } = useConfirm();
   const queryClient = useQueryClient();
   const libraries = useQuery({ queryKey: ["transcode-summary"], queryFn: async () => (await api.GET("/transcode/summary")).data });
   const [detail, setDetail] = useState<Item | null>(null);
@@ -117,7 +119,15 @@ export function TranscodeFiles() {
               type="button"
               className={quietButton}
               disabled={restore.isPending}
-              onClick={() => window.confirm(t("transcode.files.restoreConfirm", { date: item.restorable_until ? new Date(item.restorable_until).toLocaleDateString() : "-" })) && restore.mutate(item)}
+              onClick={() =>
+                ask({
+                  title: t("transcode.files.restore"),
+                  consequence: t("transcode.files.restoreConfirm", { date: item.restorable_until ? new Date(item.restorable_until).toLocaleDateString() : "-" }),
+                  confirmLabel: t("transcode.files.restore"),
+                  danger: false,
+                  run: () => restore.mutate(item),
+                })
+              }
             >
               {t("transcode.files.restore")}
             </button>
@@ -129,6 +139,7 @@ export function TranscodeFiles() {
   const request = list.selectionRequest;
   return (
     <div className="flex h-full flex-col">
+      {dialog}
       <h1 className="sr-only">{t("transcode.filesLink")}</h1>
       <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle p-3">
         <Link to="/settings/transcode" className="text-xs text-ink-muted hover:text-ink">

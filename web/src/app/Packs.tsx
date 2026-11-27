@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { PageHeader } from "@/ui/PageHeader";
 
 type Pack = components["schemas"]["Pack"];
 type PackItem = components["schemas"]["PackItem"];
@@ -26,12 +27,7 @@ export function Packs() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex items-center gap-3">
-        <h1 className="text-sm font-medium">Packs</h1>
-        <span className="text-xs text-ink-muted">
-          {t("packs.oneSourceManyWorks")}
-        </span>
-      </div>
+      <PageHeader title="Packs" subtitle={t("packs.oneSourceManyWorks")} />
 
       {packs.isLoading && <Message>Loading packs…</Message>}
       {packs.error !== null && <Message>{t("packs.packsCouldNotBe")}</Message>}

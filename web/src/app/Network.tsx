@@ -109,7 +109,7 @@ function NetworkForm({
             min={0}
             max={65535}
             value={port}
-            disabled={busy}
+           
             onChange={(event) => setPort(Number(event.target.value))}
             className={inputStyle}
           />
@@ -125,7 +125,7 @@ function NetworkForm({
       <Card
         title={t("network.proxy")}
         help="Send Solarr's own internet traffic (metadata providers, indexers) through a proxy. Addresses in the bypass list always go direct."
-        toggle={<Toggle label="Use a proxy" checked={proxyEnabled} disabled={busy} onChange={setProxyEnabled} />}
+        toggle={<Toggle label="Use a proxy" checked={proxyEnabled} onChange={setProxyEnabled} />}
       >
         <div className={`flex flex-col gap-3 ${proxyEnabled ? "" : "opacity-60"}`}>
           <label className={labelStyle}>
@@ -134,7 +134,7 @@ function NetworkForm({
               type="text"
               placeholder="socks5://host:1080"
               value={proxyURL}
-              disabled={busy}
+             
               onChange={(event) => setProxyURL(event.target.value)}
               className={`${inputStyle} max-w-md`}
             />
@@ -146,7 +146,7 @@ function NetworkForm({
               rows={4}
               placeholder={"10.0.0.0/8\n.lan"}
               value={proxyBypass}
-              disabled={busy}
+             
               onChange={(event) => setProxyBypass(event.target.value)}
               className={`${inputStyle} max-w-md font-mono`}
             />
@@ -158,7 +158,7 @@ function NetworkForm({
       <Card
         title="IP whitelist"
         help="Only these addresses may reach Solarr. /api/v1/health always stays reachable, and a list that would exclude the address you are using now is refused."
-        toggle={<Toggle label="Only allow these addresses" checked={allowEnabled} disabled={busy} onChange={setAllowEnabled} />}
+        toggle={<Toggle label="Only allow these addresses" checked={allowEnabled} onChange={setAllowEnabled} />}
       >
         <label className={`flex flex-col gap-1 text-xs text-ink-muted ${allowEnabled ? "" : "opacity-60"}`}>
           Allowed networks
@@ -166,7 +166,7 @@ function NetworkForm({
             rows={4}
             placeholder={"10.0.0.0/8\n192.168.1.0/24"}
             value={allowCIDRs}
-            disabled={busy}
+           
             onChange={(event) => setAllowCIDRs(event.target.value)}
             className={`${inputStyle} max-w-md font-mono`}
           />

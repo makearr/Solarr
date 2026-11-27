@@ -12,6 +12,7 @@ import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { IdentificationCandidates, type IdentificationCandidateView } from "./IdentificationCandidates";
 import { IdentifyAs, type IdentityChoice, queryFromPath } from "./IdentifyAs";
+import { PageHeader } from "@/ui/PageHeader";
 
 type IdentificationAttempt = components["schemas"]["IdentificationAttempt"];
 
@@ -89,16 +90,14 @@ export function UnidentifiedReview() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
-        <header className="flex flex-col gap-1">
-          <Link to="/unidentified" className="text-xs text-ink-muted hover:text-ink">
-            ← Unidentified
-          </Link>
-          <h1 className="break-all font-mono text-sm text-ink">{review.data.file.rel_path}</h1>
-          <p className="text-xs text-ink-muted">
-            Pick the {words.work} this file belongs to. Each pass below shows what it looked at and why it did not decide on
-            its own.
-          </p>
-        </header>
+        <PageHeader
+          breadcrumbs={[
+            <Link key="unidentified" to="/unidentified" className="hover:text-ink hover:underline">Unidentified</Link>,
+            <span key="file" aria-current="page" className="break-all font-mono">{review.data.file.rel_path}</span>,
+          ]}
+          title={<span className="break-all font-mono text-sm">{review.data.file.rel_path}</span>}
+          subtitle={`Pick the ${words.work} this file belongs to. Each pass below shows what it looked at and why it did not decide on its own.`}
+        />
 
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <label className="flex items-center gap-1.5 text-ink">

@@ -10,10 +10,13 @@ import { useFavoriteIds } from "@/lib/useFavorites";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
+import { useConfirm } from "@/ui/useConfirm";
 import { HeartButton } from "@/ui/HeartButton";
 
 import { Card } from "./SettingsCard";
 import { orderedTags } from "./TagChips";
+import { Tag as TagIcon } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 
 type TagNode = components["schemas"]["TagNode"];
 
@@ -32,6 +35,7 @@ function sourceLabel(source: string): string {
 export function Tags() {
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
+  const { ask, dialog } = useConfirm();
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { tree?: string; tag?: number };
   const favorites = useFavoriteIds("tag");
@@ -220,7 +224,7 @@ export function Tags() {
       {tree.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {tree.error !== null && !tree.isLoading && <p className="text-sm text-danger">{t("tags.theTagsCouldNot")}</p>}
       {tree.data && rows.length === 0 && (
-        <p className="text-sm text-ink-muted">{genreTree === "" ? favoritesOnly ? "No favorite tags here." : "No tags of your own yet. Add one here or from an Edit dialog." : "No genres yet; a refresh brings the providers'."}</p>
+        <EmptyState icon={<TagIcon aria-hidden className="size-6" />} title={genreTree === "" ? favoritesOnly ? "No favorite tags here." : "No tags of your own yet." : "No genres yet."} hint={genreTree === "" ? favoritesOnly ? undefined : "Add one here or from an Edit dialog." : "A refresh brings the providers'."} />
       )}
       <ul className="flex max-w-3xl flex-col rounded-md border border-border-subtle">
         {rows.map(({ tag, depth }) => (
@@ -251,9 +255,12 @@ export function Tags() {
                       disabled={remove.isPending}
                       onClick={() => {
                         const back = tag.source === "user" || tag.source === "shipped" ? "" : " A provider's genre comes back with the next refresh; merge it instead to keep it away.";
-                        if (confirm(`Delete the tag "${tag.name}"? It comes off ${tag.works} ${tag.works === 1 ? "item" : "items"}; tags below it move up.${back}`)) {
-                          remove.mutate(tag.id);
-                        }
+                        ask({
+                          title: `Delete the tag "${tag.name}"?`,
+                          consequence: `It comes off ${tag.works} ${tag.works === 1 ? "item" : "items"}; tags below it move up.${back}`,
+                          confirmLabel: "Delete",
+                          run: () => remove.mutate(tag.id),
+                        });
                       }}
                       className={button}
                     >
@@ -263,11 +270,14 @@ export function Tags() {
                       type="button"
                       disabled={block.isPending}
                       title={t("tags.deleteItAndNever")}
-                      onClick={() => {
-                        if (confirm(`Block the tag "${tag.name}"? It comes off ${tag.works} ${tag.works === 1 ? "item" : "items"} and is not created again until you unblock it below.`)) {
-                          block.mutate(tag.id);
-                        }
-                      }}
+                      onClick={() =>
+                        ask({
+                          title: `Block the tag "${tag.name}"?`,
+                          consequence: `It comes off ${tag.works} ${tag.works === 1 ? "item" : "items"} and is not created again until you unblock it below.`,
+                          confirmLabel: "Block",
+                          run: () => block.mutate(tag.id),
+                        })
+                      }
                       className={button}
                     >
                       Block
@@ -288,6 +298,7 @@ export function Tags() {
       {block.isError && <p className="text-xs text-danger">{t("tags.thatCouldNotBe2")}</p>}
       {administrator && <BlockedTags />}
       {openTag && <TagItems tag={openTag} />}
+      {dialog}
     </Card>
   );
 }

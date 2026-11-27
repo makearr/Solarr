@@ -373,7 +373,7 @@ function CollectionDetail({
       {monitor.isSuccess && monitor.variables?.id === franchise.id && custom && !monitor.variables.monitored && (
         <p className="text-xs text-ink-muted">{t("collection.monitoredMembers", { count: monitor.data?.added ?? 0 })}</p>
       )}
-      {franchise.members.length === 0 && <p className="text-sm text-ink-muted">{t("collection.empty")}</p>}
+      {franchise.members.length === 0 && <EmptyState title={t("collection.empty")} />}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
         {franchise.members.map((member) => {
           const key = member.work_id ? `w${member.work_id}` : `${member.provider}:${member.external_id}`;
@@ -508,7 +508,7 @@ function DuplicatesDialog({ categoryId, onClose }: { categoryId: string; onClose
     >
       {found.isLoading && <p className="text-sm text-ink-muted">{t("work.loading")}</p>}
       {found.isError && <p className="text-sm text-danger">{t("franchise.failed")}</p>}
-      {found.data && groups.length === 0 && <p className="text-sm text-ink-muted">{t("franchise.duplicates.none")}</p>}
+      {found.data && groups.length === 0 && <EmptyState title={t("franchise.duplicates.none")} />}
       <ul className="flex max-h-96 flex-col gap-2 overflow-y-auto text-sm">
         {groups.map((group) => (
           <li key={group.keep.id} className="rounded border border-border-subtle p-2">

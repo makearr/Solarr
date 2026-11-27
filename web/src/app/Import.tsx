@@ -21,6 +21,7 @@ import { IdentificationCandidates } from "./IdentificationCandidates";
 import { IdentifyAs, type IdentityChoice, queryFromPath } from "./IdentifyAs";
 import { PathPicker, useRecentPaths } from "./PathPicker";
 import { SettingRow, Switch } from "./SettingsCard";
+import { useConfirm } from "@/ui/useConfirm";
 
 type ImportSession = components["schemas"]["ImportSession"];
 type ImportUnit = components["schemas"]["ImportUnit"];
@@ -966,6 +967,7 @@ function SessionRow({
   onSelect: () => void;
   progress: ImportProgress | undefined;
 }) {
+  const { ask, dialog } = useConfirm();
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
 
@@ -1012,6 +1014,7 @@ function SessionRow({
         selected ? "border-accent bg-surface" : "border-border-subtle bg-surface hover:border-accent/50"
       }`}
     >
+      {dialog}
       <div className="flex items-start gap-2">
         <button
           type="button"
@@ -1071,11 +1074,14 @@ function SessionRow({
         {FINISHED_STATES.has(session.state) && session.units_committed > 0 && (
           <button
             type="button"
-            onClick={() => {
-              if (confirm("Revert this session? Every placed file moves back through the recycle bin.")) {
-                revert.mutate();
-              }
-            }}
+            onClick={() =>
+              ask({
+                title: "Revert this session?",
+                consequence: "Every placed file moves back through the recycle bin.",
+                confirmLabel: "Revert",
+                run: () => revert.mutate(),
+              })
+            }
             disabled={revert.isPending}
             title={t("import.revertThisSession")}
             className="shrink-0 rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50
@@ -1092,11 +1098,15 @@ function SessionRow({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              if (confirm(`Commit all ${session.units_queued} held units using their top-ranked candidate?`)) {
-                commitHeld.mutate();
-              }
-            }}
+            onClick={() =>
+              ask({
+                title: `Commit all ${session.units_queued} held units?`,
+                consequence: "Each is placed using its top-ranked candidate.",
+                confirmLabel: "Commit all",
+                danger: false,
+                run: () => commitHeld.mutate(),
+              })
+            }
             disabled={placing}
             className="rounded-md border border-border-subtle px-2 py-1 text-ink hover:border-accent
                        disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2

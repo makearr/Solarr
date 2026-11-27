@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { EmptyState } from "@/ui/EmptyState";
 
 import { formatSize } from "./work/workFormat";
+import { PageHeader } from "@/ui/PageHeader";
 
 type Defect = components["schemas"]["DefectItem"];
 type Action = "delete" | "rerequest";
@@ -52,10 +53,7 @@ export function Defects() {
   const toggle = (id: number) => setChosen((current) => { const next = new Set(current); if (!next.delete(id)) next.add(id); return next; });
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-3 p-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">{t("defects.title", { library: library?.name ?? "" })}</h1>
-        <p className="text-sm text-ink-muted">{t("defects.intro")}</p>
-      </header>
+      <PageHeader title={t("defects.title", { library: library?.name ?? "" })} subtitle={t("defects.intro")} />
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="tabular-nums text-ink-muted">{t("defects.count", { count: total })}</span>
         <Button disabled={rows.length === 0} onClick={() => setChosen(chosen.size === rows.length ? new Set() : new Set(rows.map((row) => row.media_object_id)))}>

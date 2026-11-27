@@ -43,7 +43,7 @@ export function PageHeader({
               <h1 className="text-xl font-semibold">{title}</h1>
               {subtitle && <div className="text-sm text-ink-muted">{subtitle}</div>}
             </div>
-            {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+            {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
           </div>
           {facts}
         </div>

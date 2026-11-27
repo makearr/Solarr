@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, ok } from "@/api/client";
 import { ThemeToggle } from "./ThemeToggle";
 import { t } from "@/lib/i18n";
+import { PageHeader } from "@/ui/PageHeader";
 
 /** AGPL section 13's own screen (documentation/licence-compliance.md): build
  *  identity, the Corresponding Source offer, the full licence text and
@@ -41,7 +42,7 @@ export function About() {
       <main className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-6">
           <section className="rounded-lg border border-border-subtle bg-surface p-5">
-            <h1 className="text-sm font-medium">{t("about.title")}</h1>
+            <PageHeader title={t("about.title")} />
 
             {about.isLoading && <p className="mt-2 text-xs text-ink-muted">Loading…</p>}
             {about.error !== null && (

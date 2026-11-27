@@ -271,9 +271,7 @@ function MemoryCopiesCard() {
         </label>
       )}
       <div className="flex items-center gap-3">
-        <Button variant="primary" onClick={() => save.mutate(current)} disabled={save.isPending || !dirty || (turnsOn && (!current.acknowledged || short))}>
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
+        <SaveBar dirty={dirty} busy={save.isPending} canSave={!turnsOn || (current.acknowledged && !short)} onSave={() => save.mutate(current)} sticky={false} />
         {data.restart_required && <span className="text-xs text-warn">Saved; restart Solarr to apply it.</span>}
       </div>
       {save.isError && <p className="text-xs text-danger">Refused: the container does not have the memory, or the risk was not confirmed.</p>}
@@ -374,7 +372,6 @@ function DatabaseMemoryCard() {
               min={128}
               max={16384}
               value={shown}
-              disabled={save.isPending}
               onChange={(event) => setMib(Number(event.target.value))}
               className={inputStyle}
             />
@@ -382,16 +379,14 @@ function DatabaseMemoryCard() {
           <button
             type="button"
             onClick={() => setMib(Math.round(data.default_kb / 1024))}
-            disabled={save.isPending || shown * 1024 === data.default_kb}
+            disabled={shown * 1024 === data.default_kb}
             className="mb-5 rounded-md border border-border-subtle px-2 py-1.5 text-xs text-ink-muted hover:text-ink disabled:opacity-50
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             Set defaults
           </button>
           <div className="mb-5">
-            <Button variant="primary" type="submit" disabled={save.isPending || !dirty}>
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
+            <SaveBar dirty={dirty} busy={save.isPending} onSave={submit} sticky={false} error={save.isError ? t("cacheSettings.memoryNotSaved") : null} />
           </div>
         </div>
         {data.restart_required && (
@@ -488,7 +483,7 @@ function BudgetForm({
       min={min}
       max={max}
       value={value}
-      disabled={busy}
+     
       onChange={(event) => set(Number(event.target.value))}
       className={inputStyle}
     />
@@ -553,6 +548,7 @@ function ClearButton({ onClear, busy }: { onClear: () => void; busy: boolean }) 
           onClear();
         }}
         disabled={busy}
+       
         className="rounded-md border border-danger px-2 py-1 text-danger disabled:opacity-50
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >

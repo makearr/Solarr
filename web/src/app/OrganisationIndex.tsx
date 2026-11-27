@@ -1,3 +1,4 @@
+import { useDensityScale } from "@/lib/density";
 import { LetterRail } from "@/ui/LetterRail";
 import { useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
@@ -27,6 +28,8 @@ import {
 import { CreditTile } from "./PersonPage";
 import { FollowPanel } from "./FollowPanel";
 import { Poster } from "./Poster";
+import { PageHeader } from "@/ui/PageHeader";
+import { EmptyState } from "@/ui/EmptyState";
 
 type Organisation = components["schemas"]["OrganisationEntry"];
 
@@ -40,6 +43,7 @@ export function OrganisationIndex() {
   const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
   const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
   const frameRef = useRef<HTMLDivElement>(null);
+  const densityScale = useDensityScale();
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const view = useRouteView(ORGANISATION_FILTER_KEYS);
   const [storedMode, setMode] = usePreference<IndexView>(`organisations.view.${categoryId}`, "poster");
@@ -54,7 +58,7 @@ export function OrganisationIndex() {
     {
       name: `organisations-${categoryId}`,
       idOf: (organisation) => organisation.id,
-      rowHeight: mode === "list" ? 44 : posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth),
+      rowHeight: mode === "list" ? Math.round(44 * densityScale) : posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth),
       itemsPerRow: mode === "list" ? 1 : metrics.columns,
       fetchPage: ({ cursor, query, signal }) => ok(api.GET("/organisations", {
         params: {
@@ -126,9 +130,12 @@ export function OrganisationIndex() {
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
         {list.error !== null && <p className="p-4 text-sm text-danger">{t("organisations.loadFailed")}</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <p className="p-4 text-sm text-ink-muted">
-            {view.query.filters.favorite === "only" ? "No favorites here yet. Press the heart to find one again here." : view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
-          </p>
+          <div className="p-4">
+            <EmptyState
+              icon={<Building2 aria-hidden className="size-6" />}
+              title={view.query.filters.favorite === "only" ? "No favorites here yet. Press the heart to find one again here." : view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
+            />
+          </div>
         )}
         {list.items.length > 0 && mode === "list" && <ListTable list={list} columns={columns} idOf={(organisation) => organisation.id} />}
         {list.items.length > 0 && mode === "poster" && (
@@ -176,31 +183,32 @@ export function OrganisationPage() {
   const fromType = types.find((type) => type.key === fromLibrary?.media_type);
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5 p-4">
-      {from && (
-        <Link
-          to="/library/$categoryId/$level"
-          params={{ categoryId: from, level: fromLibrary?.levels.find((level) => level.entity === "organisation")?.key ?? "networks" }}
-          className="text-xs text-ink-muted hover:text-ink"
-        >
-          ← {fromType?.organisation.many || "Back"}
-        </Link>
-      )}
-      <div className="flex items-center gap-4">
-        {organisation.logo_url ? (
-          <span className="flex h-16 items-center rounded-lg bg-white/90 px-3">
-            <img src={remoteImage(organisation.logo_url, "thumb")} alt="" className="max-h-12 max-w-40 object-contain" />
-          </span>
-        ) : (
-          <Building2 aria-hidden className="size-10 text-ink-muted" />
-        )}
-        <div>
+      <PageHeader
+        breadcrumbs={[
+          from ? (
+            <Link key="library" to="/library/$categoryId/$level" params={{ categoryId: from, level: fromLibrary?.levels.find((level) => level.entity === "organisation")?.key ?? "networks" }} className="hover:text-ink hover:underline">
+              {fromLibrary?.name ?? fromType?.organisation.many ?? "Back"}
+            </Link>
+          ) : undefined,
+          <span key="organisation" aria-current="page">{organisation.name}</span>,
+        ].filter((crumb) => crumb !== undefined)}
+        image={
+          organisation.logo_url ? (
+            <span className="flex h-16 items-center rounded-lg bg-white/90 px-3">
+              <img src={remoteImage(organisation.logo_url, "thumb")} alt="" className="max-h-12 max-w-40 object-contain" />
+            </span>
+          ) : (
+            <Building2 aria-hidden className="size-10 text-ink-muted" />
+          )
+        }
+        title={
           <span className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold">{organisation.name}</h1>
+            {organisation.name}
             <HeartButton subject="organisation" id={organisation.id} name={organisation.name} />
           </span>
-          <p className="text-sm text-ink-muted">{[organisation.country?.toUpperCase(), organisation.kind].filter(Boolean).join(" · ")}</p>
-        </div>
-      </div>
+        }
+        subtitle={[organisation.country?.toUpperCase(), organisation.kind].filter(Boolean).join(" · ")}
+      />
       <FollowPanel subject="organisation" subjectId={organisation.id} libraryIds={sectionIds} />
       {sectionIds.map((categoryId) => {
         const library = libraries.data?.find((entry) => entry.id === categoryId);

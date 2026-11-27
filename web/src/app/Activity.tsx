@@ -10,6 +10,7 @@ import { useRouteView } from "@/list/useRouteView";
 import { useNarrow } from "@/list/useNarrow";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
+import { PageHeader } from "@/ui/PageHeader";
 
 type Job = components["schemas"]["Job"];
 
@@ -56,9 +57,10 @@ export function Activity() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h1 className="text-sm font-medium">Jobs</h1>
-
+      <div className="shrink-0 border-b border-border-subtle px-4 py-2">
+        <PageHeader
+          title="Jobs"
+          facts={
         <select
           aria-label={t("activity.filterState")}
           className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs"
@@ -72,8 +74,9 @@ export function Activity() {
             </option>
           ))}
         </select>
-
-        <div className="ml-auto flex items-center gap-2 text-xs">
+          }
+          actions={
+        <div className="flex items-center gap-2 text-xs">
           {!list.selectionIsEmpty && (
             <>
               <span className="text-ink-muted">
@@ -95,6 +98,8 @@ export function Activity() {
             {view === "table" ? "Grid" : "Table"}
           </button>
         </div>
+          }
+        />
       </div>
 
       <div className="min-h-0 flex-1">

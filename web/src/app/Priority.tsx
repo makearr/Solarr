@@ -178,7 +178,7 @@ function PriorityForm({
           <Field label="Search every" help="How often a run starts." className="w-36">
             <select
               value={minutes ?? ""}
-              disabled={busy}
+             
               onChange={(event) => setMinutes(event.target.value ? Number(event.target.value) : undefined)}
               className={inputStyle}
             >
@@ -196,7 +196,7 @@ function PriorityForm({
               min={0}
               max={1000}
               value={searchesPerHour}
-              disabled={busy}
+             
               onChange={(event) => setSearchesPerHour(Number(event.target.value))}
               className={inputStyle}
             />
@@ -208,7 +208,7 @@ function PriorityForm({
           >
             <select
               value={huntMode}
-              disabled={busy}
+             
               onChange={(event) => setHuntMode(event.target.value as HuntMode)}
               className={`${inputStyle} max-w-sm`}
             >
@@ -237,7 +237,7 @@ function PriorityForm({
                       max={100}
                       value={share.share}
                       aria-label={`${share.name ?? `Library ${share.library_id}`} share`}
-                      disabled={busy}
+                     
                       onChange={(event) =>
                         setShares(shares.map((entry, at) => (at === index ? { ...entry, share: Number(event.target.value) } : entry)))
                       }
@@ -257,10 +257,10 @@ function PriorityForm({
         help="How urgently each kind of wish is fetched: a bigger weight is searched sooner. Waiting also raises an item's urgency, so nothing starves."
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <WeightField label="User request" value={userRequestWeight} onChange={setUserRequestWeight} busy={busy} />
-          <WeightField label="New release" value={newReleaseWeight} onChange={setNewReleaseWeight} busy={busy} />
-          <WeightField label="Gap" value={gapWeight} onChange={setGapWeight} busy={busy} />
-          <WeightField label="Upgrade" value={upgradeWeight} onChange={setUpgradeWeight} busy={busy} />
+          <WeightField label="User request" value={userRequestWeight} onChange={setUserRequestWeight} />
+          <WeightField label="New release" value={newReleaseWeight} onChange={setNewReleaseWeight} />
+          <WeightField label="Gap" value={gapWeight} onChange={setGapWeight} />
+          <WeightField label="Upgrade" value={upgradeWeight} onChange={setUpgradeWeight} />
         </div>
         <Field
           label="Freshness window (days)"
@@ -271,7 +271,7 @@ function PriorityForm({
             type="number"
             min={1}
             value={newReleaseDays}
-            disabled={busy}
+           
             onChange={(event) => setNewReleaseDays(Number(event.target.value))}
             className={`${inputStyle} w-28`}
           />
@@ -285,7 +285,7 @@ function PriorityForm({
             type="number"
             min={1}
             value={rssFreshHours}
-            disabled={busy}
+           
             onChange={(event) => setRssFreshHours(Number(event.target.value))}
             className={`${inputStyle} w-28`}
           />
@@ -306,7 +306,7 @@ function PriorityForm({
                   max={1000}
                   value={lanes[key]}
                   aria-label={`${label} request share`}
-                  disabled={busy}
+                 
                   onChange={(event) => setLanes({ ...lanes, [key]: Number(event.target.value) })}
                   className={`${inputStyle} w-24`}
                 />
@@ -326,12 +326,10 @@ function WeightField({
   label,
   value,
   onChange,
-  busy,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
-  busy: boolean;
 }) {
   return (
     <label className={labelStyle}>
@@ -340,7 +338,7 @@ function WeightField({
         type="number"
         min={0}
         value={value}
-        disabled={busy}
+       
         onChange={(event) => onChange(Number(event.target.value))}
         className={inputStyle}
       />

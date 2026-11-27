@@ -13,7 +13,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 
 import { summariseTarget } from "./QualityTargets";
 import type { components } from "@/api/schema";
-import { Button } from "@/ui/Button";
+import { SaveBar } from "./SettingsCard";
 import { inputStyle } from "@/ui/form";
 
 /** Says a setting follows its media type's default, or offers to return an own choice to it (the choice cleared). */
@@ -448,14 +448,7 @@ function LibraryQualityEditor() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="primary"
-          type="button"
-          disabled={!dirty || save.isPending}
-          onClick={() => save.mutate()}
-        >
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
+        <SaveBar dirty={dirty} busy={save.isPending} onSave={() => save.mutate()} sticky={false} />
         {dirty && (
           <button
             type="button"

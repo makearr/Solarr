@@ -12,6 +12,7 @@ import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 import { formatBytes } from "../Queue";
+import { PageHeader } from "@/ui/PageHeader";
 
 type Row = components["schemas"]["WatchedWork"];
 
@@ -82,16 +83,14 @@ export function WatchedPage() {
   if (!administrator) {
     return (
       <div className="flex h-full flex-col gap-3 p-4">
-        <h1 className="text-sm font-medium">{t("watched.title")}</h1>
-        <p className="text-sm text-ink-muted">{t("watched.administratorOnly")}</p>
+        <PageHeader title={t("watched.title")} subtitle={t("watched.administratorOnly")} />
       </div>
     );
   }
 
   return (
     <div className="flex h-full flex-col gap-3 p-4">
-      <h1 className="text-sm font-medium">{t("watched.title")}</h1>
-      <p className="text-xs text-ink-muted">{t("watched.intro")}</p>
+      <PageHeader title={t("watched.title")} subtitle={t("watched.intro")} />
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <label className="flex items-center gap-2">
           {t("watched.days")}

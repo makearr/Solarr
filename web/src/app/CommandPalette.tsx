@@ -117,7 +117,7 @@ function Palette() {
     ...(searchable
       ? [
           ...(found.data ?? []).map((result) => ({
-            id: `i:${result.work.id}`, group: "items" as const, label: result.work.title, hint: result.work.year ? String(result.work.year) : undefined,
+            id: `i:${result.work.id}`, group: "items" as const, label: result.work.title, hint: [result.work.artist, result.work.year].filter(Boolean).join(" · ") || undefined,
             run: go("/works/$id", { params: { id: String(result.work.id) } }),
           })),
           ...(people.data ?? []).map((person) => ({

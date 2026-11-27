@@ -11,7 +11,7 @@ import { inputStyle } from "@/ui/form";
 
 import { useDebouncedValue } from "./useDebouncedValue";
 import { RenamePlanner } from "./RenamePlanner";
-import { SettingRow, Switch } from "./SettingsCard";
+import { SaveBar, SettingRow, Switch } from "./SettingsCard";
 
 type NamingSettings = components["schemas"]["NamingSettings"];
 type Tagging = components["schemas"]["Tagging"];
@@ -332,19 +332,18 @@ export function LibraryNaming() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={!dirty || save.isPending || (examples.data?.problems.length ?? 0) > 0}
-          onClick={() =>
+        <SaveBar
+          dirty={dirty}
+          busy={save.isPending}
+          canSave={(examples.data?.problems.length ?? 0) === 0}
+          sticky={false}
+          onSave={() =>
             save.mutate({
               settings: namingDirty ? draft : undefined,
               tags: taggingDirty ? taggingDraft : undefined,
             })
           }
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50"
-        >
-          {save.isPending ? "Saving…" : "Save"}
-        </button>
+        />
         {dirty && (
           <button
             type="button"

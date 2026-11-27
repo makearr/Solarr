@@ -8,6 +8,7 @@ import { throttle } from "@/lib/throttle";
 import * as query from "./query";
 import * as selection from "./selection";
 import type { ViewState } from "./useRouteView";
+import { useDensityScale } from "@/lib/density";
 
 /** A page as every collection endpoint returns it: items plus an opaque cursor. */
 export interface Page<T> {
@@ -118,8 +119,10 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
 
   // A table row holds one item, a poster row holds however many fit across.
   const perRow = Math.max(1, Math.floor(source.itemsPerRow ?? 1));
-  const rowHeight = source.rowHeight ?? DEFAULT_ROW_HEIGHT;
-  const groupHeaderHeight = source.groupHeaderHeight ?? DEFAULT_ROW_HEIGHT;
+  const densityScale = useDensityScale();
+  // A source that sets its own height has already applied the density to it.
+  const rowHeight = source.rowHeight ?? Math.round(DEFAULT_ROW_HEIGHT * densityScale);
+  const groupHeaderHeight = source.groupHeaderHeight ?? Math.round(DEFAULT_ROW_HEIGHT * densityScale);
   const { groupOf } = source;
   const layout = useMemo(
     () => (groupOf ? groupLayout(items, perRow, groupOf) : null),

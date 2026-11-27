@@ -1,5 +1,7 @@
 import { Fragment, useState } from "react";
 
+import { PageHeader } from "@/ui/PageHeader";
+import { useConfirm } from "@/ui/useConfirm";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -116,6 +118,7 @@ export function PersonPage() {
   const monitorAll = usePersonAction(id, "/people/{id}/monitor-all");
   const [editing, setEditing] = useState(false);
   const [merging, setMerging] = useState(false);
+  const { ask, dialog } = useConfirm();
   const remove = useMutation({
     mutationFn: async () => {
       await ok(api.POST("/people/{id}/remove", { params: { path: { id } } }));
@@ -156,57 +159,61 @@ export function PersonPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-        {from !== undefined && (
-          <Link
-            to="/library/$categoryId/$level"
-            params={{ categoryId: String(from), level: libraryOf(from)?.levels.find((level) => level.entity === "person")?.key ?? "people" }}
-            className="text-xs text-ink-muted hover:text-ink"
-          >
-            ← {typeOf(libraryOf(from))?.lead_people.many || "People"}
-          </Link>
-        )}
-        <header className="flex items-start gap-5">
-          <div className="flex shrink-0 flex-col items-center gap-2">
-            {person.image_url ? (
-              <img src={remoteImage(person.image_url, "small")} alt="" className="size-40 rounded-full border border-border-subtle object-cover" />
-            ) : (
-              <CoverArt subject="people" workId={person.id} title={person.name} size="full" className="size-40 shrink-0 rounded-full object-cover" />
-            )}
-            {leads && <ChooseImage subject="people" id={person.id} title={person.name} />}
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1">
-            <div className="flex items-start justify-between gap-4">
-              <span className="flex items-center gap-2">
-                <h1 className="text-xl font-semibold">{person.name}</h1>
-                <HeartButton subject="person" id={person.id} name={person.name} />
-                {from !== undefined && <IgnoreHeldButton item={{ categoryId: from, subject: "person", id: person.id }} />}
-              </span>
+        <PageHeader
+          breadcrumbs={[
+            from !== undefined ? (
+              <Link key="library" to="/library/$categoryId/$level" params={{ categoryId: String(from), level: libraryOf(from)?.levels.find((level) => level.entity === "person")?.key ?? "people" }} className="hover:text-ink hover:underline">
+                {libraryOf(from)?.name ?? typeOf(libraryOf(from))?.lead_people.many ?? "People"}
+              </Link>
+            ) : undefined,
+            <span key="person" aria-current="page">{person.name}</span>,
+          ].filter((crumb) => crumb !== undefined)}
+          image={
+            <div className="flex shrink-0 flex-col items-center gap-2">
+              {person.image_url ? (
+                <img src={remoteImage(person.image_url, "small")} alt="" className="size-40 rounded-full border border-border-subtle object-cover" />
+              ) : (
+                <CoverArt subject="people" workId={person.id} title={person.name} size="full" className="size-40 shrink-0 rounded-full object-cover" />
+              )}
+              {leads && <ChooseImage subject="people" id={person.id} title={person.name} />}
+            </div>
+          }
+          title={
+            <span className="flex items-center gap-2">
+              {person.name}
+              <HeartButton subject="person" id={person.id} name={person.name} />
+              {from !== undefined && <IgnoreHeldButton item={{ categoryId: from, subject: "person", id: person.id }} />}
+            </span>
+          }
+          actions={
+            <>
               {administrator && (
-                <span className="flex shrink-0 gap-2">
+                <>
                   <Button onClick={() => setEditing(true)}>Edit</Button>
                   <Button onClick={() => setMerging(true)}>Merge into…</Button>
-                </span>
+                </>
               )}
               {administrator && leads && (
                 <button
                   type="button"
                   disabled={remove.isPending}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Stop following ${person.name} and remove them from the library?\n\n` +
-                          "Their works and any files stay exactly where they are — this only removes the person.",
-                      )
-                    ) {
-                      remove.mutate();
-                    }
-                  }}
+                  onClick={() =>
+                    ask({
+                      title: `Remove ${person.name}?`,
+                      consequence: "Stops following them and removes them from the library. Their works and any files stay exactly where they are; only the person goes.",
+                      confirmLabel: "Remove",
+                      run: () => remove.mutate(),
+                    })
+                  }
                   className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted enabled:hover:text-danger"
                 >
                   Remove
                 </button>
               )}
-            </div>
+            </>
+          }
+          facts={
+            <div className="flex flex-col gap-1.5">
             {facts.length > 0 && <p className="text-sm text-ink-muted">{facts.join(" · ")}</p>}
             {person.aliases.length > 0 && <p className="text-xs text-ink-muted">{t("personPage.alsoKnownAs", { names: person.aliases.join(", ") })}</p>}
             {person.genres.length > 0 && (
@@ -241,8 +248,9 @@ export function PersonPage() {
                 ))}
               </div>
             )}
-          </div>
-        </header>
+            </div>
+          }
+        />
 
         {person.images && person.images.length > 1 && (
           <section aria-label="Pictures" className="flex gap-2 overflow-x-auto pb-1">
@@ -272,9 +280,7 @@ export function PersonPage() {
               <button
                 type="button"
                 disabled={monitorAll.isPending}
-                onClick={() => {
-                  if (window.confirm(`Monitor every album of ${person.name}?`)) monitorAll.mutate();
-                }}
+                onClick={() => monitorAll.mutate()}
                 className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50"
               >
                 Monitor all
@@ -303,6 +309,7 @@ export function PersonPage() {
         {sectionIds.length === 0 && <p className="text-sm text-ink-muted">{t("personPage.noWorkInYour")}</p>}
         {editing && <EditPerson person={person} onClose={() => setEditing(false)} />}
         {merging && <MergePerson person={person} onClose={() => setMerging(false)} />}
+        {dialog}
 
         {profiled.length > 0 && <KnownForSection personId={person.id} categoryIds={profiled} />}
       </div>

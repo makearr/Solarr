@@ -14,6 +14,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import { Button } from "@/ui/Button";
 import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
+import { SaveBar } from "./SettingsCard";
 
 type Indexer = components["schemas"]["Indexer"];
 type ConnectionTestResult = components["schemas"]["ConnectionTestResult"];
@@ -413,11 +414,7 @@ function MusicCategories({ indexer, onSaved }: { indexer: Indexer; onSaved: () =
           onChange={(event) => setText(event.target.value)}
         />
       </label>
-      {text !== current && (
-        <button type="submit" disabled={save.isPending} className="rounded-md border border-border-subtle px-2 py-0.5 hover:text-ink">
-          Save
-        </button>
-      )}
+      <SaveBar dirty={text !== current} busy={save.isPending} sticky={false} />
       {save.isError && <span className="text-danger">Refused.</span>}
       <span>{listedMedia(indexer.categories_json)}</span>
     </form>
@@ -683,11 +680,7 @@ function QueryLimit({ indexer, onSaved }: { indexer: Indexer; onSaved: () => voi
         {t("indexers.requestsPerHour")}
         <input className={`${inputStyle} w-20`} inputMode="numeric" value={text} placeholder="no limit" onChange={(event) => setText(event.target.value)} />
       </label>
-      {text !== current && (
-        <button type="submit" disabled={save.isPending} className="rounded-md border border-border-subtle px-2 py-0.5 hover:text-ink">
-          Save
-        </button>
-      )}
+      <SaveBar dirty={text !== current} busy={save.isPending} sticky={false} />
     </form>
   );
 }

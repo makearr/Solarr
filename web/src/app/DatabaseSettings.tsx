@@ -8,7 +8,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 import { Button } from "@/ui/Button";
 
-import { Card, Field } from "./SettingsCard";
+import { Card, Field, SaveBar } from "./SettingsCard";
 import { BackupRetentionEditor } from "./Scheduler";
 
 /** Settings > Database, expert tier: where Solarr's own folders spend space, how many backups are kept, and the
@@ -121,13 +121,11 @@ function PicturesCard() {
         </Field>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" onClick={() => save.mutate(current)} disabled={save.isPending || !dirty}>
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
+        <SaveBar dirty={dirty} busy={save.isPending} onSave={() => save.mutate(current)} sticky={false} />
         <Button variant="secondary" onClick={() => recompress.mutate()} disabled={recompress.isPending || run?.running === true || dirty}>
           {run?.running ? "Recompressing…" : "Recompress stored pictures"}
         </Button>
-        {dirty && <span className="text-xs text-ink-muted">Save first; Recompress uses the saved figures.</span>}
+        {dirty && <span className="text-xs text-ink-muted">Recompress uses the saved figures; it waits for the save.</span>}
       </div>
       {run && (
         <p className="text-xs text-ink-muted">

@@ -10,6 +10,7 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { IgnoreButton } from "@/ui/IgnoreButton";
 
+import { PageHeader } from "@/ui/PageHeader";
 import { ExternalPreview, useWorkPreview } from "./ExternalPreview";
 import { AddToLibrary } from "./work/AddToSolarr";
 
@@ -54,34 +55,28 @@ export function ExternalItem() {
   const item = found.data?.find((candidate) => candidate.provider === provider && candidate.external_id === externalId);
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
-      <Link to="/library/$categoryId/discover" params={{ categoryId }} className="w-fit text-xs text-ink-muted hover:text-ink">
-        {library?.name ?? ""}
-      </Link>
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <div className="w-40 shrink-0">
-          {(preview?.poster_url ?? item?.poster_url) ? (
-            <img src={remoteImage((preview?.poster_url ?? item?.poster_url) as string, "small")} alt="" className="aspect-[2/3] w-full rounded-lg border border-border-subtle object-cover" />
-          ) : (
-            <div className="flex aspect-[2/3] w-full items-center justify-center rounded-lg border border-border-subtle bg-surface text-3xl text-ink-muted">
-              {title.trim().charAt(0).toUpperCase() || "?"}
-            </div>
-          )}
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <h1 className="text-xl font-semibold">
+      <PageHeader
+        breadcrumbs={[
+          <Link key="library" to="/library/$categoryId/discover" params={{ categoryId }} className="hover:text-ink hover:underline">{library?.name ?? ""}</Link>,
+          <span key="item" aria-current="page">{item?.title ?? title}</span>,
+        ]}
+        image={
+          (preview?.poster_url ?? item?.poster_url) ? (
+          <img src={remoteImage((preview?.poster_url ?? item?.poster_url) as string, "small")} alt="" className="aspect-[2/3] w-full rounded-lg border border-border-subtle object-cover" />
+        ) : (
+          <div className="flex aspect-[2/3] w-full items-center justify-center rounded-lg border border-border-subtle bg-surface text-3xl text-ink-muted">
+            {title.trim().charAt(0).toUpperCase() || "?"}
+          </div>
+        )
+        }
+        title={
+          <>
             {item?.title ?? title}
             {item?.year ? <span className="font-normal text-ink-muted"> ({item.year})</span> : null}
-          </h1>
-          {item?.subtitle && <p className="text-sm text-ink-muted">{item.subtitle}</p>}
-          <div className="flex flex-wrap items-center gap-2">
-            {item?.status && <Chip>{item.status}</Chip>}
-            <Chip title={t("external.providerHelp")}>{provider}</Chip>
-          </div>
-          {found.isPending && title !== "" && <p className="text-sm text-ink-muted">{t("external.loading")}</p>}
-          {(preview?.overview ?? item?.overview) && <p className="max-w-prose text-sm leading-relaxed">{preview?.overview ?? item?.overview}</p>}
-          {preview?.tagline && <p className="text-sm italic text-ink-muted">{preview.tagline}</p>}
-          {found.data && !item && !preview && <p className="text-sm text-ink-muted">{t("external.notFound")}</p>}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          </>
+        }
+        actions={
+          <>
             {item?.library_id ? (
               <Link to="/works/$id" params={{ id: String(item.library_id) }} className="text-sm text-ok">
                 {t("discover.inLibrary")}
@@ -92,9 +87,22 @@ export function ExternalItem() {
               </Button>
             )}
             {!item?.library_id && <IgnoreButton item={{ categoryId: Number(categoryId), provider, externalId, title: item?.title ?? title }} />}
+          </>
+        }
+        facts={
+          <div className="flex min-w-0 flex-col gap-2">
+          {item?.subtitle && <p className="text-sm text-ink-muted">{item.subtitle}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            {item?.status && <Chip>{item.status}</Chip>}
+            <Chip title={t("external.providerHelp")}>{provider}</Chip>
           </div>
-        </div>
-      </div>
+          {found.isPending && title !== "" && <p className="text-sm text-ink-muted">{t("external.loading")}</p>}
+          {(preview?.overview ?? item?.overview) && <p className="max-w-prose text-sm leading-relaxed">{preview?.overview ?? item?.overview}</p>}
+          {preview?.tagline && <p className="text-sm italic text-ink-muted">{preview.tagline}</p>}
+          {found.data && !item && !preview && <p className="text-sm text-ink-muted">{t("external.notFound")}</p>}
+          </div>
+        }
+      />
       {preview && <ExternalPreview preview={preview} categoryId={categoryId} />}
       {adding && (
         <AddToLibrary

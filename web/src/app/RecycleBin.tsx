@@ -4,16 +4,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
-import { Button } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
 import { formatBytes } from "./Queue";
+import { SaveBar } from "./SettingsCard";
+import { useConfirm } from "@/ui/useConfirm";
 
 const GB = 1024 * 1024 * 1024;
 
 /** The recycle bin's space bound, for every library (asked 2026-09-30); each library keeps its own
  *  retention in days under its File Management. */
 export function RecycleBin() {
+  const { ask, dialog } = useConfirm();
   const queryClient = useQueryClient();
   const limits = useQuery({
     queryKey: ["recycleBinLimits"],
@@ -63,6 +65,7 @@ export function RecycleBin() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
+      {dialog}
       <PageHeader title={t("pageTitle.recycleBin")} />
       <p className="text-xs text-ink-muted">
         Nothing Solarr removes is deleted at once: it goes to its root folder&apos;s recycle bin and is removed after
@@ -88,18 +91,7 @@ export function RecycleBin() {
           <span className="text-xs text-ink-muted">% of the root folder</span>
         </label>
       </section>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="primary"
-          type="button"
-          disabled={!dirty || save.isPending}
-          onClick={() => save.mutate()}
-        >
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
-        {save.isError && <span className="text-xs text-danger">{t("recycleBin.thatWasNotSaved")}</span>}
-        {save.isSuccess && !dirty && <span className="text-xs text-ink-muted">Saved; the next cleanup applies it.</span>}
-      </div>
+      <SaveBar dirty={dirty} busy={save.isPending} onSave={() => save.mutate()} sticky={false} error={save.isError ? t("recycleBin.thatWasNotSaved") : null} />
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4 text-sm">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-medium">
@@ -108,9 +100,14 @@ export function RecycleBin() {
           <button
             type="button"
             disabled={!contents.data?.total_entries || empty.isPending}
-            onClick={() => {
-              if (window.confirm("Remove everything in the recycle bin for good? This cannot be undone.")) empty.mutate();
-            }}
+            onClick={() =>
+              ask({
+                title: "Empty the recycle bin?",
+                consequence: "Everything in it is removed for good. This cannot be undone.",
+                confirmLabel: "Empty recycle bin",
+                run: () => empty.mutate(),
+              })
+            }
             className="ml-auto rounded-md border border-danger px-3 py-1 text-xs text-danger disabled:opacity-50"
           >
             {empty.isPending ? "Emptying…" : "Empty recycle bin"}

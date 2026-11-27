@@ -15,6 +15,7 @@ import { Chip } from "@/ui/Chip";
 import { InteractiveSearch } from "../InteractiveSearch";
 import { grabNote } from "./grabNote";
 import { fileTagChips } from "./workFormat";
+import { PageHeader } from "@/ui/PageHeader";
 
 type Part = components["schemas"]["WantedPart"];
 
@@ -86,8 +87,10 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-3 p-4">
+      <PageHeader
+        title="Wanted"
+        facts={
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-2 text-sm font-medium">Wanted</h1>
         {(["missing", "cutoff"] as const).map((key) => (
           <button
             key={key}
@@ -99,18 +102,22 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
             {key === "missing" ? "Missing" : "Cutoff unmet"}
           </button>
         ))}
-        {rows.length > 0 && (view === "cutoff" || view === "missing") && (
+      </div>
+        }
+        actions={
+        rows.length > 0 && (view === "cutoff" || view === "missing") ? (
           <button
             type="button"
             disabled={sweep !== null}
             onClick={() => void searchListed()}
-            className="ml-auto flex items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
+            className="flex items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
           >
             <Search aria-hidden className="size-3.5" />
             {sweep ? `Searching ${sweep.done + 1} of ${sweep.total}` : `Search listed ${words.groups}`}
           </button>
-        )}
-      </div>
+        ) : undefined
+        }
+      />
       <p className="text-xs text-ink-muted">
         {view === "missing"
           ? `Monitored ${words.parts} that are out and not on disk. Search looks for the whole ${words.group}, so a pack can fill several rows at once.`

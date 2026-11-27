@@ -41,13 +41,14 @@ export function IndexerCatalog() {
 
   return (
     <div ref={scroller} className="mx-auto flex h-full max-w-4xl flex-col gap-4 overflow-y-auto p-6">
-      <header className="flex flex-col gap-1">
-        <Link to="/connections/indexers" className="text-xs text-accent underline underline-offset-2">← Indexers</Link>
-        <PageHeader title={t("pageTitle.addIndexers")} />
-        <p className="text-sm leading-relaxed text-ink-muted">
-          Tick the ones to add; the next page asks for their addresses and keys. None is added until you confirm.
-        </p>
-      </header>
+      <PageHeader
+        breadcrumbs={[
+          <Link key="indexers" to="/connections/indexers" className="hover:text-ink hover:underline">Indexers</Link>,
+          <span key="add" aria-current="page">{t("pageTitle.addIndexers")}</span>,
+        ]}
+        title={t("pageTitle.addIndexers")}
+        subtitle="Tick the ones to add; the next page asks for their addresses and keys. None is added until you confirm."
+      />
 
       <div className="flex flex-wrap items-end gap-2 text-xs">
         <label className="flex min-w-56 flex-1 flex-col gap-1 text-ink-muted">
@@ -240,11 +241,15 @@ export function IndexerSetup() {
 
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
-      <header className="flex flex-col gap-1">
-        <Link to="/connections/indexers/add" className="text-xs text-accent underline underline-offset-2">← Choose others</Link>
-        <h1 className="text-lg font-semibold">Set up {chosen.length} indexer{chosen.length === 1 ? "" : "s"}</h1>
-        <p className="text-sm leading-relaxed text-ink-muted">{t("indexerCatalog.eachNeedsItsAddress")}</p>
-      </header>
+      <PageHeader
+        breadcrumbs={[
+          <Link key="indexers" to="/connections/indexers" className="hover:text-ink hover:underline">Indexers</Link>,
+          <Link key="choose" to="/connections/indexers/add" className="hover:text-ink hover:underline">{t("pageTitle.addIndexers")}</Link>,
+          <span key="set-up" aria-current="page">Set up</span>,
+        ]}
+        title={`Set up ${chosen.length} indexer${chosen.length === 1 ? "" : "s"}`}
+        subtitle={t("indexerCatalog.eachNeedsItsAddress")}
+      />
       {kinds.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {!kinds.isLoading && chosen.length === 0 && (
         <p className="text-sm text-ink-muted">

@@ -82,18 +82,18 @@ function StreamingForm({
         help="Files the browser cannot play as they are (most MKV, HEVC, FLAC in Safari, WMA) are converted by ffmpeg while they stream. Off, only files the browser plays itself can be previewed."
       >
         <SettingRow label="Convert on the server" help={report.ffmpeg_available ? undefined : "ffmpeg is not installed, so nothing can be converted."}>
-          <Switch label="Convert on the server" checked={draft.transcode_enabled} disabled={busy} onChange={(value) => set({ transcode_enabled: value })} />
+          <Switch label="Convert on the server" checked={draft.transcode_enabled} onChange={(value) => set({ transcode_enabled: value })} />
         </SettingRow>
         <SettingRow label="Conversions at once" help="A further one is refused until one ends.">
-          <input type="number" min={1} max={32} className={`${inputStyle} w-24`} value={draft.max_sessions} disabled={busy}
+          <input type="number" min={1} max={32} className={`${inputStyle} w-24`} value={draft.max_sessions}
             onChange={(event) => set({ max_sessions: Number(event.target.value) })} />
         </SettingRow>
         <SettingRow label="Largest picture height" help="Taller video is scaled down while it is converted, whatever quality the viewer picks. 0 sets no cap.">
-          <input type="number" min={0} max={4320} className={`${inputStyle} w-24`} value={draft.max_height} disabled={busy}
+          <input type="number" min={0} max={4320} className={`${inputStyle} w-24`} value={draft.max_height}
             onChange={(event) => set({ max_height: Number(event.target.value) })} />
         </SettingRow>
         <SettingRow label="Fallback video bitrate (kbit/s)" help="For a converted original whose own bitrate is unknown; each quality profile sets its own.">
-          <input type="number" min={200} max={100000} step={500} className={`${inputStyle} w-24`} value={draft.video_kbps} disabled={busy}
+          <input type="number" min={200} max={100000} step={500} className={`${inputStyle} w-24`} value={draft.video_kbps}
             onChange={(event) => set({ video_kbps: Number(event.target.value) })} />
         </SettingRow>
       </Card>
@@ -103,7 +103,7 @@ function StreamingForm({
         help="Encoding on a GPU leaves the processor free. Automatic uses the best encoder found working at start; choose one here to override it."
       >
         <SettingRow label="Encoder">
-          <select className={inputStyle} value={draft.hardware} disabled={busy}
+          <select className={inputStyle} value={draft.hardware}
             onChange={(event) => set({ hardware: event.target.value as StreamingSettings["hardware"] })}>
             {Object.entries(HARDWARE).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
@@ -111,7 +111,7 @@ function StreamingForm({
           </select>
         </SettingRow>
         <SettingRow label="Render device" help="Empty takes the one found, such as /dev/dri/renderD128.">
-          <input type="text" placeholder="/dev/dri/renderD128" className={`${inputStyle} w-56 font-mono`} value={draft.device ?? ""} disabled={busy}
+          <input type="text" placeholder="/dev/dri/renderD128" className={`${inputStyle} w-56 font-mono`} value={draft.device ?? ""}
             onChange={(event) => set({ device: event.target.value })} />
         </SettingRow>
         <div className="flex flex-col gap-1 border-t border-border-subtle pt-3 text-sm" aria-live="polite">

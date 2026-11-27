@@ -2,16 +2,20 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, Heart, Plus, Search } from "lucide-react";
 
+import { PageHeader } from "./PageHeader";
+
 const control = "rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink";
 
 /** The head of every index: its name, quick choices beside it, and the controls on the right in one order:
  *  quick filters, search, Filter, Sort, columns or picture options, the view, Add new. */
 export function Toolbar({ title, chips, children }: { title: ReactNode; chips?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2 text-xs">
-      <h1 className="mr-2 text-sm font-medium">{title}</h1>
-      {chips}
-      <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>
+    <div className="shrink-0 border-b border-border-subtle px-4 py-2 text-xs">
+      <PageHeader
+        title={title}
+        facts={chips ? <div className="flex flex-wrap items-center gap-2">{chips}</div> : undefined}
+        actions={children}
+      />
     </div>
   );
 }

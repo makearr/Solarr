@@ -12,7 +12,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import { useMetadataSettings } from "@/lib/resources";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
-import { Card, Toggle } from "./SettingsCard";
+import { Card, SaveBar, Toggle } from "./SettingsCard";
 import { MetadataTypeTab, useLibraryTypeDefaults } from "./TypeDefaults";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 
@@ -748,16 +748,7 @@ function UserAgentForm({
         </span>
       </label>
 
-      {dirty && (
-        <button
-          type="submit"
-          disabled={busy || agent.trim() === ""}
-          className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          Save
-        </button>
-      )}
+      <SaveBar dirty={dirty} busy={busy} canSave={agent.trim() !== ""} sticky={false} />
     </form>
   );
 }
@@ -804,16 +795,7 @@ function GraceForm({ stored, onSave, busy }: { stored: Grace; onSave: (grace: Gr
           <span className="text-[0.6875rem]">{field.help}</span>
         </label>
       ))}
-      {changed && (
-        <button
-          type="submit"
-          disabled={busy || !valid}
-          className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          Save
-        </button>
-      )}
+      <SaveBar dirty={changed} busy={busy} canSave={valid} sticky={false} />
     </form>
   );
 }
@@ -878,16 +860,7 @@ function BackfillForm({
         </span>
       </label>
 
-      {value !== stored && (
-        <button
-          type="submit"
-          disabled={busy || !valid}
-          className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          Save
-        </button>
-      )}
+      <SaveBar dirty={value !== stored} busy={busy} canSave={valid} sticky={false} />
     </form>
   );
 }

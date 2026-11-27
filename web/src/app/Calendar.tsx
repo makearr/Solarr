@@ -9,6 +9,8 @@ import type { components } from "@/api/schema";
 import { useNarrow } from "@/list/useNarrow";
 import { useLibraries } from "@/lib/resources";
 import { addDays, DayView, DaysView, entryKey, entryTarget, isoDate, MonthView, parseIso, weekStart, wednesdayStart } from "./CalendarViews";
+import { PageHeader } from "@/ui/PageHeader";
+import { useConfirm } from "@/ui/useConfirm";
 
 type CalendarEntry = components["schemas"]["CalendarEntry"];
 
@@ -70,8 +72,11 @@ export function Calendar() {
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
+      <PageHeader
+        title="Calendar"
+        subtitle={<span className="tabular-nums">{heading}</span>}
+        facts={
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-sm font-medium">Calendar</h1>
         {stepped && (
           <div className="flex items-center gap-1">
             <Link
@@ -99,7 +104,6 @@ export function Calendar() {
             </Link>
           </div>
         )}
-        <span className="text-sm tabular-nums">{heading}</span>
         <div className="ml-auto flex flex-wrap gap-1">
           {VIEWS.map(([id, label]) => (
             <Link
@@ -118,6 +122,8 @@ export function Calendar() {
           ))}
         </div>
       </div>
+        }
+      />
       <p className="flex flex-wrap items-center gap-x-3 text-xs text-ink-muted">
         <span>
           What you follow or have asked for (albums, episodes, films, books) in the libraries you can see. Dates come from
@@ -153,6 +159,7 @@ function Key({ className, label }: { className: string; label: string }) {
 /** A link for a calendar client (2026-09-19): the per-user token in it is the credential, so
  *  it carries only this user's libraries, and a new link revokes the old one. */
 function FeedPanel() {
+  const { ask, dialog } = useConfirm();
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   const feed = useQuery({
@@ -178,6 +185,7 @@ function FeedPanel() {
 
   return (
     <section className="flex flex-wrap items-center gap-2 rounded-lg border border-border-subtle bg-surface px-3 py-2 text-xs">
+      {dialog}
       <span className="font-medium">{t("calendar.calendarLink")}</span>
       {link ? (
         <>
@@ -200,12 +208,18 @@ function FeedPanel() {
           <button
             type="button"
             disabled={create.isPending}
-            onClick={() => {
-              if (window.confirm("Make a new link? The current one stops working.")) {
-                setCopied(false);
-                create.mutate();
-              }
-            }}
+            onClick={() =>
+              ask({
+                title: "Make a new link?",
+                consequence: "The current one stops working.",
+                confirmLabel: "Make a new link",
+                danger: false,
+                run: () => {
+                  setCopied(false);
+                  create.mutate();
+                },
+              })
+            }
             className="rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink"
           >
             New link

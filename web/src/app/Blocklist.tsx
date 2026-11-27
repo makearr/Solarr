@@ -4,6 +4,8 @@ import { api, ok } from "@/api/client";
 import { t } from "@/lib/i18n";
 
 import { Card } from "./SettingsCard";
+import { Ban } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 
 /** The engine's reason codes in words; a code this build does not know is shown as it is. */
 const REASON_LABELS: Record<string, string> = {
@@ -44,7 +46,7 @@ export function Blocklist() {
       {entries.isLoading && <Message>Loading…</Message>}
       {entries.error !== null && <Message>{t("blocklist.theBlocklistCouldNot")}</Message>}
       {entries.data && entries.data.items.length === 0 && (
-        <Message>{t("blocklist.nothingIsBlockedFailed")}</Message>
+        <EmptyState icon={<Ban aria-hidden className="size-6" />} title={t("blocklist.nothingIsBlockedFailed")} />
       )}
 
       {entries.data && entries.data.items.length > 0 && (

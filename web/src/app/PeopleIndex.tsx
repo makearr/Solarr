@@ -1,7 +1,8 @@
+import { useDensityScale } from "@/lib/density";
 import { LetterRail } from "@/ui/LetterRail";
 import { useMemo, useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { User } from "lucide-react";
+import { User, Users } from "lucide-react";
 import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
@@ -27,6 +28,7 @@ import {
 import { CoverArt } from "./CoverArt";
 import { CustomFilterMenu } from "./CustomFilterMenu";
 import { Poster } from "./Poster";
+import { EmptyState } from "@/ui/EmptyState";
 
 type Person = components["schemas"]["PersonEntry"];
 type Role = MediaTypeInfo["roles"][number];
@@ -78,6 +80,7 @@ export function PeopleIndex() {
   const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
   const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
   const frameRef = useRef<HTMLDivElement>(null);
+  const densityScale = useDensityScale();
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const works = categoryId ? (type?.work.many ?? "works").toLowerCase() : "works";
   const workOne = categoryId ? (type?.work.one ?? "work").toLowerCase() : "work";
@@ -115,7 +118,7 @@ export function PeopleIndex() {
           ? posterRowHeight({ ...options, showAvailability: options.showAvailability }, metrics.cellWidth)
           : mode === "overview"
             ? OVERVIEW_ROW_HEIGHT / 1.6
-            : 44,
+            : Math.round(44 * densityScale),
       itemsPerRow: mode === "poster" ? metrics.columns : 1,
       fetchPage: async ({ cursor, query, signal }) => {
         const filters = query.filters;
@@ -220,15 +223,15 @@ export function PeopleIndex() {
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
         {list.error !== null && <p className="p-4 text-sm text-danger">{t("people.loadFailed")}</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <p className="max-w-xl p-4 text-sm text-ink-muted">
-            {view.query.filters.favorite === "only"
+          <div className="max-w-xl p-4">
+            <EmptyState icon={<Users aria-hidden className="size-6" />} title={view.query.filters.favorite === "only"
               ? "No favorites here yet. Press the heart on a person to find them again here."
               : monitored === "true"
               ? "Nobody is followed yet. Open a person and choose Follow to have their new works added for you."
               : monitored === "false"
                 ? "Everyone listed here is followed."
-                : "Nobody here yet. People arrive with the works that credit them: as a library is scanned and its metadata fetched."}
-          </p>
+                : "Nobody here yet. People arrive with the works that credit them: as a library is scanned and its metadata fetched."} />
+          </div>
         )}
         {list.items.length > 0 && mode === "list" && <ListTable list={list} columns={columns} idOf={(person) => person.id} />}
         {list.items.length > 0 && mode === "overview" && (

@@ -20,6 +20,7 @@ import { IgnoreButton } from "@/ui/IgnoreButton";
 import { useDebouncedValue } from "../useDebouncedValue";
 import { AddToSolarr } from "./AddToSolarr";
 import { IncompleteDiscographies } from "./IncompleteDiscographies";
+import { PageHeader } from "@/ui/PageHeader";
 
 type Candidate = components["schemas"]["AddCandidate"];
 type LibraryEntry = components["schemas"]["Library"];
@@ -63,8 +64,10 @@ export function AddWork() {
   const kindLabel = kinds.find((entry) => entry.key === kind)?.label.toLowerCase() ?? "";
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-4">
+      <PageHeader
+        title={`Add to ${library.name}`}
+        facts={
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-base font-semibold">Add to {library.name}</h1>
         {siblings.length > 1 && (
           <div className="flex gap-1" role="group" aria-label="Type">
             {siblings.map((entry) => (
@@ -91,6 +94,8 @@ export function AddWork() {
           </div>
         )}
       </div>
+        }
+      />
       <label className="relative flex items-center">
         <Search aria-hidden className="pointer-events-none absolute left-3 size-4 text-ink-muted" />
         <input

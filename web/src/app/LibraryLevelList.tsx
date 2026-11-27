@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowDown, ArrowUp, Columns3 } from "lucide-react";
+import { ArrowDown, ArrowUp, Columns3, Inbox } from "lucide-react";
 import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
@@ -25,6 +25,7 @@ import {
   POSTER_WIDTHS, PosterOptionsMenu, RowActions, posterRowHeight, type IndexEntry, type IndexView, type PosterOptions,
 } from "./IndexViews";
 import { formatBytes } from "./Queue";
+import { EmptyState } from "@/ui/EmptyState";
 
 type LevelItem = components["schemas"]["LibraryLevelItem"];
 
@@ -229,7 +230,7 @@ export function LibraryLevelList() {
       {list.error !== null && (
         <Message>{(list.error as { detail?: string }).detail ?? "This view could not be read."}</Message>
       )}
-      {!list.isLoading && list.error === null && list.items.length === 0 && <Message>{t("levelList.empty")}</Message>}
+      {!list.isLoading && list.error === null && list.items.length === 0 && <EmptyState icon={<Inbox aria-hidden className="size-6" />} title={t("levelList.empty")} />}
 
       {list.items.length > 0 && (
         <div className="min-h-0 flex-1">

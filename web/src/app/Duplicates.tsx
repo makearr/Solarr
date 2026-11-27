@@ -15,6 +15,8 @@ import { Button } from "@/ui/Button";
 
 import { formatBytes } from "./Queue";
 import { SimilarVideos } from "./SimilarVideos";
+import { Copy } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 
 const skipReasons: Record<string, string> = {
   missing: "not found on disk",
@@ -304,7 +306,7 @@ export function Duplicates() {
       {data && data.files_pending > 0 && (
         <p className="text-xs text-ink-muted">{t("duplicates.fingerprintPending", { pending: data.files_pending, total: data.files_total })}</p>
       )}
-      {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate {words.parts} found.</p>}
+      {data && data.groups.length === 0 && <EmptyState icon={<Copy aria-hidden className="size-6" />} title={`No duplicate ${words.parts} found.`} />}
       {data && data.groups.length > 0 && (
         <>
           <p className="text-sm">

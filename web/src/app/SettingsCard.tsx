@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+import { Check } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Button } from "@/ui/Button";
 import { HelpTip } from "@/ui/HelpTip";
+
+const AUTOSAVE_MS = 1000;
 
 /** One group of related settings: a heading, what it does, an optional on/off switch and the fields. */
 export function Card({
@@ -42,7 +44,7 @@ export function Toggle({
 }: {
   label: string;
   checked: boolean;
-  disabled: boolean;
+  disabled?: boolean;
   onChange: (value: boolean) => void;
 }) {
   return (
@@ -73,37 +75,81 @@ export function Field({ label, help, children, className = "" }: { label: string
   );
 }
 
-/** The save bar of a settings page: stays in view at the foot of the scrolling pane. */
+/** Saves a settings form by itself: a second after the last edit inside its form (an edit that fails stays unsaved until the next one),
+ *  with the state beside it. There is no Save button; Undo returns to what is stored. */
 export function SaveBar({
   dirty,
   busy,
   onSave,
   onUndo,
   error,
+  canSave = true,
+  sticky = true,
 }: {
   dirty: boolean;
   busy: boolean;
-  onSave: () => void;
+  /** What saves; left out, the form the bar sits in is submitted. */
+  onSave?: () => void;
   onUndo?: () => void;
   error?: string | null;
+  /** False while the fields hold something that must not be stored yet; the change waits. */
+  canSave?: boolean;
+  /** Stays in view at the foot of a scrolling page; false sits where it is written, inside a card. */
+  sticky?: boolean;
 }) {
+  const bar = useRef<HTMLDivElement>(null);
+  const latest = useRef({ dirty: dirty && canSave, busy, onSave });
+  latest.current = { dirty: dirty && canSave, busy, onSave };
+  const [saved, setSaved] = useState(false);
+  const wasBusy = useRef(false);
+
+  useEffect(() => {
+    if (wasBusy.current && !busy && !dirty && !error) setSaved(true);
+    if (dirty) setSaved(false);
+    wasBusy.current = busy;
+  }, [busy, dirty, error]);
+
+  useEffect(() => {
+    const scope = bar.current?.closest("form") ?? bar.current?.closest("main") ?? bar.current?.parentElement;
+    if (!scope) return;
+    let timer: number | undefined;
+    const attempt = () => {
+      const now = latest.current;
+      if (now.busy) timer = window.setTimeout(attempt, 500);
+      else if (now.dirty) (now.onSave ?? (() => (scope instanceof HTMLFormElement ? scope.requestSubmit() : undefined)))();
+    };
+    const edited = (event: Event) => {
+      if (bar.current?.contains(event.target as Node)) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(attempt, AUTOSAVE_MS);
+    };
+    scope.addEventListener("input", edited);
+    scope.addEventListener("change", edited);
+    scope.addEventListener("click", edited);
+    return () => {
+      window.clearTimeout(timer);
+      scope.removeEventListener("input", edited);
+      scope.removeEventListener("change", edited);
+      scope.removeEventListener("click", edited);
+    };
+  }, []);
+
   return (
-    <div className="sticky bottom-0 -mx-1 flex items-center gap-3 border-t border-border-subtle bg-canvas/95 px-1 py-3 backdrop-blur">
-      <Button
-        variant="primary"
-        type="button"
-        disabled={busy || !dirty}
-        onClick={onSave}
-      >
-        {busy ? "Saving…" : "Save"}
-      </Button>
+    <div ref={bar} className={`flex min-h-8 items-center gap-3 text-xs text-ink-muted ${sticky ? "sticky bottom-0 -mx-1 min-h-12 border-t border-border-subtle bg-canvas/95 px-1 py-3 backdrop-blur" : ""}`} aria-live="polite">
+      {busy && <span>Saving…</span>}
+      {!busy && dirty && canSave && !error && <span>Unsaved changes: saving in a moment</span>}
+      {!busy && !dirty && saved && !error && (
+        <span className="flex items-center gap-1 text-ok">
+          <Check aria-hidden className="size-3.5" />
+          Saved
+        </span>
+      )}
       {dirty && onUndo && (
         <button type="button" onClick={onUndo} className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink">
           Undo
         </button>
       )}
-      {dirty && <span className="text-xs text-ink-muted">Unsaved changes</span>}
-      {error && <span className="text-xs text-danger">{error}</span>}
+      {error && <span className="text-danger">{error}</span>}
     </div>
   );
 }

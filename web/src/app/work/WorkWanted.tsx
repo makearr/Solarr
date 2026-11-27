@@ -19,6 +19,8 @@ import {
   type PosterOptions,
 } from "../IndexViews";
 import { usePreference } from "@/lib/usePreference";
+import { PageHeader } from "@/ui/PageHeader";
+import { EmptyState } from "@/ui/EmptyState";
 
 type Work = components["schemas"]["Work"];
 type Sort = "title" | "artist" | "year" | "searched";
@@ -135,8 +137,13 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h1 className="text-sm font-medium">Wanted</h1>
+      <div className="shrink-0 border-b border-border-subtle px-4 py-2">
+      <PageHeader
+        title="Wanted"
+        subtitle={view === "missing"
+            ? "Monitored and not yet complete."
+            : "Complete, but a file is below the library's cutoff. Search all looks for a strictly better release of each; the hunt also does it on its own, a few a day."}
+        facts={
         <div className="flex gap-1" role="group" aria-label={`Which wanted ${words.works}`}>
           {(["missing", "cutoff"] as const).map((option) => (
             <button
@@ -154,12 +161,9 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
             </button>
           ))}
         </div>
-        <span className="text-xs text-ink-muted">
-          {view === "missing"
-            ? "Monitored and not yet complete."
-            : "Complete, but a file is below the library's cutoff. Search all looks for a strictly better release of each; the hunt also does it on its own, a few a day."}
-        </span>
-        <span className="ml-auto flex items-center gap-2 text-xs text-ink-muted">
+        }
+        actions={
+        <span className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
           {layout === "poster" && <PosterOptionsMenu options={posterOptions} onChange={setOptions} />}
           <IndexViewToggle view={layout} onChange={(next) => setView({ layout: next })} />
           {searchLibrary.isSuccess &&
@@ -189,13 +193,15 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
           </>
           )}
         </span>
+        }
+      />
       </div>
 
       {layout !== "list" && (
         <div className="min-h-0 flex-1 overflow-y-auto">
           {works.isLoading && <Message>Loading…</Message>}
           {works.isSuccess && items.length === 0 && page === 0 && (
-            <Message>{t("workWanted.nothingWanted", { work: words.work ?? "" })}</Message>
+            <EmptyState icon={<Search aria-hidden className="size-6" />} title={t("workWanted.nothingWanted", { work: words.work ?? "" })} />
           )}
           {layout === "poster" ? (
             <PosterWall entries={items.map((work) => workEntry(work, categoryId, info))} options={posterOptions} />
@@ -227,7 +233,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
         {works.isLoading && <Message>Loading…</Message>}
         {works.isError && <Message>{t("workWanted.wantedItemsCouldNot")}</Message>}
         {works.isSuccess && items.length === 0 && page === 0 && (
-          <Message>{t("workWanted.nothingWanted", { work: words.work ?? "" })}</Message>
+          <EmptyState icon={<Search aria-hidden className="size-6" />} title={t("workWanted.nothingWanted", { work: words.work ?? "" })} />
         )}
         {items.map((work) => (
           <div key={work.id} role="row" className={`${GRID} border-b border-border-subtle py-1.5 text-sm`}>

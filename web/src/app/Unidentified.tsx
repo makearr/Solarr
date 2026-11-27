@@ -11,6 +11,9 @@ import { useRouteView } from "@/list/useRouteView";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaType } from "@/lib/useMediaTypes";
 import type { components } from "@/api/schema";
+import { PageHeader } from "@/ui/PageHeader";
+import { CheckCircle2 } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 
 type UnidentifiedFile = components["schemas"]["UnidentifiedFile"];
 
@@ -119,22 +122,24 @@ export function Unidentified() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h1 className="text-sm font-medium">Unidentified</h1>
-        <span className="text-xs text-ink-muted">
-          {t("unidentified.filesAScanCould")}
-        </span>
-        {canRetry && categoryId && (
+      <div className="shrink-0 border-b border-border-subtle px-4 py-2">
+        <PageHeader
+          title="Unidentified"
+          subtitle={t("unidentified.filesAScanCould")}
+          actions={
+        canRetry && categoryId ? (
         <button
           type="button"
           disabled={retry.isPending}
           onClick={() => retry.mutate()}
           title={t("unidentified.askTheProvidersAbout")}
-          className="ml-auto rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
+          className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
         >
           {retry.isSuccess ? `${retry.data.folders} folders queued: it runs in the background` : "Identify again"}
         </button>
-        )}
+        ) : undefined
+          }
+        />
       </div>
 
       <HeldImports categoryId={categoryId === undefined ? undefined : Number(categoryId)} />
@@ -143,7 +148,7 @@ export function Unidentified() {
         {list.isLoading && <Message>Loading the queue…</Message>}
         {list.error !== null && <Message>{t("unidentified.theQueueCouldNot")}</Message>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <Message>{t("unidentified.nothingHereEveryScanned")}</Message>
+          <EmptyState icon={<CheckCircle2 aria-hidden className="size-6" />} title={t("unidentified.nothingHereEveryScanned")} />
         )}
 
         {list.items.length > 0 && (

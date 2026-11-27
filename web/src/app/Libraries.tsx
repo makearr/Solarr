@@ -7,6 +7,9 @@ import { t } from "@/lib/i18n";
 
 import { AddLibraryForm } from "./NewLibrary";
 import { defaultLevelKey } from "./Sidebar";
+import { PageHeader } from "@/ui/PageHeader";
+import { Library } from "lucide-react";
+import { EmptyState } from "@/ui/EmptyState";
 
 type LibraryEntry = components["schemas"]["Library"];
 
@@ -19,16 +22,13 @@ export function Libraries() {
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-auto p-6">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight">Libraries</h1>
-        <p className="text-sm text-ink-muted">{t("libraries.subtitle")}</p>
-      </div>
+      <PageHeader title="Libraries" subtitle={t("libraries.subtitle")} />
 
       {libraries.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {libraries.error != null && <p className="text-sm text-danger">{t("libraries.readFailed")}</p>}
 
       {libraries.data && libraries.data.length === 0 && (
-        <p className="text-sm text-ink-muted">{t("libraries.empty")}</p>
+        <EmptyState icon={<Library aria-hidden className="size-6" />} title={t("libraries.empty")} />
       )}
 
       {libraries.data && libraries.data.length > 0 && (

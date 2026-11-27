@@ -17,6 +17,7 @@ import { AddLibraryForm } from "./NewLibrary";
 import { KindSelect } from "./LibraryKindSelect";
 import { DefaultLanguagesEditor } from "./DefaultLanguages";
 import { LibraryLanguageSelect, LibraryTargetSelect } from "./LibraryTargetSelect";
+import { useConfirm } from "@/ui/useConfirm";
 
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
@@ -226,6 +227,7 @@ function Row({
   searchPending: boolean;
   searchMessage: string | undefined;
 }) {
+  const { ask, dialog } = useConfirm();
   const mediaType = useMediaType(category.media_type);
   const further = category.library_id != null;
   const slot = "flex min-w-0 items-center [&>*]:w-full";
@@ -234,6 +236,7 @@ function Row({
     "focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50";
   return (
     <li className={`flex flex-wrap items-start gap-x-4 gap-y-2 py-2.5 pr-3 ${further ? "pl-8" : "pl-3"}`}>
+      {dialog}
       <div className="flex w-56 shrink-0 items-center gap-2">
         {further ? (
           <span className="text-sm text-ink-muted">also holds</span>
@@ -287,8 +290,13 @@ function Row({
             onChange={(event) => {
               const into = Number(event.target.value);
               const target = mergeTargets.find((other) => other.id === into);
-              if (target && window.confirm(`Merge ${category.name} into ${target.name}?\n\nIts works, folders and follows become ${target.name}'s and ${category.name} is removed. Files stay where they are.`)) {
-                onMerge(into);
+              if (target) {
+                ask({
+                  title: `Merge ${category.name} into ${target.name}?`,
+                  consequence: `Its works, folders and follows become ${target.name}'s and ${category.name} is removed. Files stay where they are.`,
+                  confirmLabel: "Merge",
+                  run: () => onMerge(into),
+                });
               }
             }}
             className="rounded-md border border-border-subtle bg-canvas px-1 py-1 text-xs text-ink-muted disabled:opacity-50"
