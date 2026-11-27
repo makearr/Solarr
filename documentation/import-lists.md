@@ -32,6 +32,8 @@ TMDB's trending and popular charts are no import lists any more: Discover reads 
 | `mdblist_list` | A public MDBList list (`/lists/{id}/items` or `/lists/{user}/{name}/items`); its shows only | the number, `user/name` or the mdblist.com link | 10 pages of 100 |
 | `listenbrainz_top` | Music libraries: the albums a ListenBrainz user listened to most (`/stats/user/{user}/release-groups`, no key; the user's statistics must be public) | user, range (week to all time) | 100 albums |
 | `openlibrary_list` | Book and audiobook libraries: the works of a public Open Library list (`<list>/seeds.json`; authors and editions are left out) | the list's link | 500 entries |
+| `hardcover_list` | Book and audiobook libraries: one of the signed-in Hardcover account's own lists, by name, slug, number or link (GraphQL `me.lists`, `list_books`; read only; the token under Settings, Metadata) | list | 1000 books |
+| `musicbrainz_collection` | Music libraries: a public MusicBrainz collection of release groups, by id or link (`/release-group?collection=`, through the MusicBrainz provider's sources and rate limit; not cached) | collection | 2000 groups |
 | `stashbox_favourites` | Adult libraries: the newest scenes of the performers and studios the key's account favourited at StashDB or FansDB | server, favourite (performers, studios, either), how many of the newest | 50, 100, 200 or 500 scenes |
 
 AniList needs no key. TMDB's lists use the owner's TMDB key (Settings, Metadata); without one a TMDB list fails with
@@ -43,7 +45,7 @@ A TMDB list may be given as a link. Its number is read from the link by pattern
 call another host. A link to any other host is refused when the list is saved.
 
 Movie libraries take `tmdb_list` and `mdblist_list` (a film is added by its TMDB id; a show on the list is foreign), TV libraries the same lists'
-shows. Letterboxd lists, Hardcover lists and MusicBrainz collections are not read yet.
+shows. Letterboxd has no public interface and is not read; its lists come in through MDBList.
 
 ## TV's resolution
 

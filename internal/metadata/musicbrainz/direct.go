@@ -641,6 +641,30 @@ func (d direct) LabelReleaseGroups(ctx context.Context, labelMBID string) ([]Rel
 	return all, nil
 }
 
+// CollectionReleaseGroups implements CollectionCatalogue: a public collection's release groups, paged like a discography.
+func (d direct) CollectionReleaseGroups(ctx context.Context, collectionMBID string) ([]ReleaseGroup, error) {
+	var all []ReleaseGroup
+	for page := 0; page < artistReleaseGroupsMaxPages; page++ {
+		offset := page * artistReleaseGroupsPageSize
+		requestURL := fmt.Sprintf("%s/release-group?collection=%s&limit=%d&offset=%d&fmt=json",
+			d.baseURL, url.QueryEscape(collectionMBID), artistReleaseGroupsPageSize, offset)
+		var parsed directBrowseResponse
+		if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+			return nil, fmt.Errorf("musicbrainz: collection %s: %w", collectionMBID, err)
+		}
+		for _, rg := range parsed.ReleaseGroups {
+			all = append(all, ReleaseGroup{
+				MBID: rg.ID, Title: rg.Title, PrimaryType: rg.PrimaryType,
+				SecondaryTypes: rg.SecondaryTypes, FirstReleaseDate: rg.FirstReleaseDate,
+			})
+		}
+		if len(parsed.ReleaseGroups) < artistReleaseGroupsPageSize || offset+len(parsed.ReleaseGroups) >= parsed.ReleaseGroupCount {
+			break
+		}
+	}
+	return all, nil
+}
+
 // luceneQuoted wraps a value in double quotes for a MusicBrainz Lucene query,
 // escaping the two characters that would otherwise break out of the quoted
 // phrase or be read as Lucene operators.

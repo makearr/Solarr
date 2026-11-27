@@ -571,6 +571,26 @@ func (p Provider) ReleaseGroupSeries(ctx context.Context, priority Priority, rel
 	return nil, false, fmt.Errorf("musicbrainz: no source answered series of %s: %w", releaseGroupMBID, errors.Join(errs...))
 }
 
+// CollectionReleaseGroups answers a public collection's release groups, asked fresh (a collection changes under its
+// owner) through the same sources, buckets and pace as every other MusicBrainz call.
+func (p Provider) CollectionReleaseGroups(ctx context.Context, priority Priority, collectionMBID string) ([]ReleaseGroup, error) {
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
+	r := routeFor[CollectionCatalogue](ctx, p)
+	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, catalogue CollectionCatalogue) ([]ReleaseGroup, error) {
+		return catalogue.CollectionReleaseGroups(ctx, collectionMBID)
+	})
+	if answered {
+		return answer.Value, nil
+	}
+	if len(errs) == 0 {
+		return nil, fmt.Errorf("musicbrainz: no source can browse a collection (mbid %s)", collectionMBID)
+	}
+	if !outage(errs) {
+		return nil, fmt.Errorf("musicbrainz: collection %s: %w", collectionMBID, ErrNotFound)
+	}
+	return nil, fmt.Errorf("musicbrainz: no source answered collection %s: %w", collectionMBID, errors.Join(errs...))
+}
+
 // LabelReleaseGroups answers what a label released, cache-first, from the sources that can browse it.
 func (p Provider) LabelReleaseGroups(ctx context.Context, priority Priority, labelMBID string) ([]ReleaseGroup, error) {
 	call := lookup{

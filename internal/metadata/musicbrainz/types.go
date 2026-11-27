@@ -260,6 +260,11 @@ type LabelCatalogue interface {
 	LabelReleaseGroups(ctx context.Context, labelMBID string) ([]ReleaseGroup, error)
 }
 
+// CollectionCatalogue is an optional Source capability: the release groups of a public MusicBrainz collection.
+type CollectionCatalogue interface {
+	CollectionReleaseGroups(ctx context.Context, collectionMBID string) ([]ReleaseGroup, error)
+}
+
 // Discography is an optional capability returning every release group credited to an artist by browse, for subscription.expand (section 19.6, todo 4.4) to admit per group; the proxy is unverified for it.
 type Discography interface {
 	ArtistReleaseGroups(ctx context.Context, artistMBID string) ([]ReleaseGroup, error)

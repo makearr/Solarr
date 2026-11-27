@@ -7,7 +7,9 @@ import (
 )
 
 // ImportListTypes implements media.ListResolving: the albums a ListenBrainz user listened to most.
-func (Module) ImportListTypes() []media.ListType { return []media.ListType{media.ListListenBrainzTop} }
+func (Module) ImportListTypes() []media.ListType {
+	return []media.ListType{media.ListListenBrainzTop, media.ListMusicBrainzCollection}
+}
 
 // ResolveListEntry implements media.ListResolving: a release group is added by its MusicBrainz id.
 func (Module) ResolveListEntry(_ context.Context, entry media.ListEntry) (media.ListMatch, error) {

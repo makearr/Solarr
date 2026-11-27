@@ -14,6 +14,9 @@ const (
 	// ListListenBrainzTop is the albums a ListenBrainz user listened to most (music libraries); ListOpenLibrary a reader's list of works (book libraries).
 	ListListenBrainzTop ListType = "listenbrainz_top"
 	ListOpenLibrary     ListType = "openlibrary_list"
+	// ListHardcover is a list of the signed-in Hardcover account (book libraries); ListMusicBrainzCollection a public MusicBrainz collection (music libraries).
+	ListHardcover             ListType = "hardcover_list"
+	ListMusicBrainzCollection ListType = "musicbrainz_collection"
 	// ListStashFavourites is the newest scenes of an account's favourites at a stash-box server (adult libraries).
 	ListStashFavourites ListType = "stashbox_favourites"
 )

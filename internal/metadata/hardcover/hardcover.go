@@ -253,3 +253,52 @@ func (c Client) chart(ctx context.Context, where, order map[string]any, limit, o
 	}
 	return found.Books, nil
 }
+
+// List is one of the signed-in account's lists.
+type List struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// MyLists reads the lists of the account the token belongs to; read only.
+func (c Client) MyLists(ctx context.Context) ([]List, error) {
+	var found struct {
+		Me []struct {
+			Lists []List `json:"lists"`
+		} `json:"me"`
+	}
+	if err := c.query(ctx, `{ me { lists(order_by: {id: asc}) { id name slug } } }`, nil, &found); err != nil {
+		return nil, err
+	}
+	var lists []List
+	for _, account := range found.Me {
+		lists = append(lists, account.Lists...)
+	}
+	return lists, nil
+}
+
+// ListBook is one book on a list.
+type ListBook struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+	Year  int    `json:"release_year"`
+}
+
+// ListBooks reads one page of a list's books in the list's own order.
+func (c Client) ListBooks(ctx context.Context, listID int64, limit, offset int) ([]ListBook, error) {
+	var found struct {
+		Rows []struct {
+			Book ListBook `json:"book"`
+		} `json:"list_books"`
+	}
+	const query = `query ($id: Int!, $n: Int!, $o: Int!) { list_books(where: {list_id: {_eq: $id}}, order_by: {position: asc}, limit: $n, offset: $o) { book { id title release_year } } }`
+	if err := c.query(ctx, query, map[string]any{"id": listID, "n": limit, "o": offset}, &found); err != nil {
+		return nil, err
+	}
+	books := make([]ListBook, 0, len(found.Rows))
+	for _, row := range found.Rows {
+		books = append(books, row.Book)
+	}
+	return books, nil
+}

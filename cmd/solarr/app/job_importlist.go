@@ -2,12 +2,16 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/metadata/hardcover"
 	"github.com/makearr/Solarr/internal/metadata/listenbrainz"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -22,6 +26,8 @@ func (p *process) importListService() importlist.Service {
 		Lists: p.cache, Records: library.NewImportLists(p.library), Exclusions: library.NewExclusions(p.library),
 		Works: library.NewSeries(p.library), Libraries: adapters.Categories{Cache: p.cache}, Media: p.media,
 		Catalogue: importlist.NewCatalogue(p.anilistShared, p.tmdbShared, func() importlist.Season { return importlist.SeasonOf(wall.Now()) }).WithStash(p.stashServers()).WithMDBList(p.mdblistLists()).
+			WithHardcover(hardcover.New(p.providerClient(providerHardcover, nil, httpx.ClientConfig{}), p.providerKey(settings.BookSourceHardcover))).
+			WithMusicBrainzCollections(musicBrainzCollections{provider: p.musicBrainzProvider()}).
 			WithListenBrainz(listenbrainz.New(p.providerClient(providerListenBrainz, nil, httpx.ClientConfig{}))).
 			WithOpenLibrary(openlibrary.New(p.providerClient(providerOpenLibrary, nil, httpx.ClientConfig{}))),
 		Clock: wall, Logger: p.logger,
@@ -93,4 +99,23 @@ func (p *process) registerArrPullJob(registry *jobs.Registry, executor *jobs.Exe
 
 func (p *process) enqueueArrPull(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.queue.Enqueue(ctx, jobs.Request{Type: arrPullJob.Type, ActionKey: string(arrPullJob.Type), Priority: jobs.PriorityLow, Payload: []byte("{}")})
+}
+
+// musicBrainzCollections reads collections through the one MusicBrainz provider, so the import lists share its rate limit.
+type musicBrainzCollections struct{ provider musicbrainz.Provider }
+
+func (m musicBrainzCollections) CollectionAlbums(ctx context.Context, collectionMBID string) ([]importlist.CollectionAlbum, error) {
+	groups, err := m.provider.CollectionReleaseGroups(ctx, musicbrainz.PriorityBackfill, collectionMBID)
+	if err != nil {
+		return nil, err
+	}
+	albums := make([]importlist.CollectionAlbum, len(groups))
+	for index, group := range groups {
+		albums[index] = importlist.CollectionAlbum{MBID: group.MBID, Title: group.Title}
+	}
+	return albums, nil
+}
+
+func (musicBrainzCollections) IsNotFound(err error) bool {
+	return errors.Is(err, musicbrainz.ErrNotFound)
 }

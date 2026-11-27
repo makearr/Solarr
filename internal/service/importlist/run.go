@@ -48,7 +48,7 @@ func FailureOf(err error) Failure {
 	switch {
 	case err == nil:
 		return FailureNone
-	case errors.Is(err, ErrNeedsKey):
+	case errors.Is(err, ErrNeedsKey), errors.Is(err, ErrNeedsHardcoverKey), errors.Is(err, ErrNeedsMDBListKey):
 		return FailureNeedsKey
 	case errors.Is(err, ErrListNotFound):
 		return FailureListNotFound
