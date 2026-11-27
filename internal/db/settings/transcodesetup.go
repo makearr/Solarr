@@ -333,7 +333,16 @@ type TranscodeWarning struct {
 
 // TranscodeWarnings lists how the setup is likely to miss its target.
 func TranscodeWarnings(setup TranscodeSetup, target QualityTarget) []TranscodeWarning {
+	return TranscodeWarningsOf(target.TranscodeKind(), setup, target)
+}
+
+// TranscodeWarningsOf is TranscodeWarnings for a file kind: a comic or an ebook is judged on its container and page
+// settings, not on a bitrate, so the bitrate rules say nothing about it.
+func TranscodeWarningsOf(kind string, setup TranscodeSetup, target QualityTarget) []TranscodeWarning {
 	warnings := []TranscodeWarning{}
+	if kind == "comic" || kind == "ebook" || kind == "other" || target.MediaType == "comic" {
+		return warnings
+	}
 	video := target.isTranscodeVideo()
 	if video && setup.Encode.RateMode == RateQuality && target.CRF > 0 {
 		if gap := setup.Encode.Quality - target.CRF; gap > 2 || gap < -2 {

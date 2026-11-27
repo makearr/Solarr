@@ -153,7 +153,7 @@ func cumulative(limits map[transcoder.Lane]int) *transcoder.Slots {
 }
 
 func TestSlots_LimitsAreCeilingsDownTheLaneOrder(t *testing.T) {
-	slots := cumulative(map[transcoder.Lane]int{transcoder.LaneCPU: 1, transcoder.LaneGPU: 2, transcoder.LaneAudio: 4, transcoder.LaneComic: 4, transcoder.LaneEbook: 5})
+	slots := cumulative(map[transcoder.Lane]int{transcoder.LaneCPU: 1, transcoder.LaneGPU: 2, transcoder.LaneAudio: 4, transcoder.LaneBooks: 5})
 	for _, lane := range []transcoder.Lane{transcoder.LaneCPU, transcoder.LaneGPU, transcoder.LaneAudio, transcoder.LaneAudio} {
 		if _, ok := slots.Acquire(lane); !ok {
 			t.Fatalf("a %s job was refused while one CPU, one GPU and two audio jobs fit under 1, 2 and 4", lane)
@@ -165,13 +165,13 @@ func TestSlots_LimitsAreCeilingsDownTheLaneOrder(t *testing.T) {
 	if _, ok := slots.Acquire(transcoder.LaneGPU); ok {
 		t.Error("a second GPU job fit beside the CPU one under a GPU ceiling of 2")
 	}
-	if _, ok := slots.Acquire(transcoder.LaneComic); ok {
-		t.Error("a comic job fit with four jobs running under a comic ceiling of 4")
+	if _, ok := slots.Acquire(transcoder.LaneBooks); !ok {
+		t.Error("a books job was refused with four running under a books ceiling of 5")
 	}
-	if _, ok := slots.Acquire(transcoder.LaneEbook); !ok {
-		t.Error("an ebook job was refused with four running under an ebook ceiling of 5")
+	if _, ok := slots.Acquire(transcoder.LaneBooks); ok {
+		t.Error("a second books job fit under a books ceiling of 5")
 	}
-	if free := slots.Free(); free[transcoder.LaneCPU] != 0 || free[transcoder.LaneGPU] != 0 || free[transcoder.LaneAudio] != 0 || free[transcoder.LaneComic] != 0 || free[transcoder.LaneEbook] != 0 {
+	if free := slots.Free(); free[transcoder.LaneCPU] != 0 || free[transcoder.LaneGPU] != 0 || free[transcoder.LaneAudio] != 0 || free[transcoder.LaneBooks] != 0 {
 		t.Errorf("free = %v, want none", free)
 	}
 }

@@ -12,6 +12,8 @@ import (
 	"io"
 	"path"
 	"strings"
+
+	"github.com/makearr/Solarr/internal/platform/zipbest"
 )
 
 // Runner runs an external tool; mediatool.Runner has this shape.
@@ -62,7 +64,7 @@ func HTMLToEPUB(title string, markup io.Reader, out io.Writer) error {
 	chapter := `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>` + html.EscapeString(title) + `</title></head><body>` + string(raw) + `</body></html>`
 	opf := `<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>` +
 		html.EscapeString(title) + `</dc:title><dc:identifier id="id">solarr-` + fmt.Sprint(len(raw)) + `</dc:identifier><dc:language>en</dc:language></metadata><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>`
-	writer := zip.NewWriter(out)
+	writer := zipbest.NewWriter(out)
 	if err := writeStored(writer, "mimetype", []byte("application/epub+zip")); err != nil {
 		return err
 	}
@@ -81,7 +83,7 @@ func RepackEPUB(source io.ReaderAt, size int64, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("ebookconv: open epub: %w", err)
 	}
-	writer := zip.NewWriter(out)
+	writer := zipbest.NewWriter(out)
 	if err := writeStored(writer, "mimetype", []byte("application/epub+zip")); err != nil {
 		return err
 	}

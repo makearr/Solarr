@@ -16,10 +16,10 @@ func TestAnalyzeEbook_NeedsOnlyAFileOfAnotherFormatAndNeverGuessesAnUnsupportedT
 		verdict transcoder.Verdict
 		lane    transcoder.Lane
 	}{
-		"text becomes epub":   {"A Tale.txt", epub, transcoder.Needed, transcoder.LaneEbook},
+		"text becomes epub":   {"A Tale.txt", epub, transcoder.Needed, transcoder.LaneBooks},
 		"an epub is left":     {"A Tale.EPUB", epub, transcoder.NotNeeded, ""},
 		"a target of mobi":    {"A Tale.txt", settings.QualityTarget{MediaType: "book", Container: "mobi"}, transcoder.NotNeeded, ""},
-		"a docx wants pandoc": {"A Tale.docx", epub, transcoder.Needed, transcoder.LaneEbook},
+		"a docx wants pandoc": {"A Tale.docx", epub, transcoder.Needed, transcoder.LaneBooks},
 	} {
 		plan := transcoder.AnalyzeEbook(test.file, test.target)
 		if plan.Verdict != test.verdict || plan.Fixed != test.lane {

@@ -43,7 +43,7 @@ func (p *process) transcodeService() *transcoder.Service {
 				if playing {
 					lanes = global.PlaybackParallel
 				}
-				return map[transcoder.Lane]int{transcoder.LaneCPU: int(lanes.CPU), transcoder.LaneGPU: int(lanes.GPU), transcoder.LaneAudio: int(lanes.Audio), transcoder.LaneComic: int(lanes.Comic), transcoder.LaneEbook: int(lanes.Ebook)}
+				return map[transcoder.Lane]int{transcoder.LaneCPU: int(lanes.CPU), transcoder.LaneGPU: int(lanes.GPU), transcoder.LaneAudio: int(lanes.Audio), transcoder.LaneBooks: int(lanes.Books)}
 			}, p.transcoder.Active, cl),
 			Queue: p.queue, FS: p.fsys, Clock: cl, Logger: p.logger, ScratchDir: filepath.Join(p.config.Paths.CacheDir, "transcode-work"),
 			SafeMode: p.config.SafeMode,

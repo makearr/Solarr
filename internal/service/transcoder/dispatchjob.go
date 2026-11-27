@@ -145,11 +145,8 @@ func candidatesOf(kind string, picks []library.TranscodePick) []Candidate {
 	out := make([]Candidate, len(picks))
 	for i, pick := range picks {
 		lane := Lane(pick.Lane)
-		switch kind {
-		case KindComic:
-			lane = LaneComic
-		case KindEbook:
-			lane = LaneEbook
+		if kind == KindComic || kind == KindEbook {
+			lane = LaneBooks
 		}
 		out[i] = Candidate{MediaObjectID: pick.MediaObjectID, Lane: lane, LastRunSeq: pick.LastRunSeq, RootFolderID: pick.RootFolderID, Interrupted: pick.Interrupted}
 	}

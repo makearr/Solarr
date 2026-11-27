@@ -20,6 +20,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/archive"
 	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/zipbest"
 )
 
 // DefaultQuality is the page quality when the aim names none.
@@ -86,7 +87,7 @@ func Repack(ctx context.Context, fsys fsx.FS, source, output, scratch string, ai
 	var result Result
 	used := map[string]bool{}
 	err = fsx.WriteAtomic(fsys, output, func(out io.Writer) error {
-		writer := zip.NewWriter(out)
+		writer := zipbest.NewWriter(out)
 		for index, file := range files {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -96,7 +97,7 @@ func Repack(ctx context.Context, fsys fsx.FS, source, output, scratch string, ai
 				return err
 			}
 			used[strings.ToLower(name)] = true
-			member, err := writer.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store, Modified: file.info.ModTime})
+			member, err := writer.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate, Modified: file.info.ModTime})
 			if err != nil {
 				return err
 			}

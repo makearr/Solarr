@@ -65,7 +65,7 @@ func (a Transcode) Summary(ctx context.Context) (apiserver.TranscodeSummaryView,
 			}
 		}
 		if stored, err := a.Settings.TranscodeSetup(ctx, one.Target.ID); err == nil {
-			view.Warnings = settings.TranscodeWarnings(stored.Setup, *one.Target)
+			view.Warnings = settings.TranscodeWarningsOf(one.Kind(), stored.Setup, *one.Target)
 		}
 		if ratios, err := a.Library.DoneRatios(ctx, one.CategoryID); err == nil {
 			if warning, ok := settings.TranscodeResultsWarning(ratios, *one.Target); ok {

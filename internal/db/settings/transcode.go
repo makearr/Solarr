@@ -21,26 +21,24 @@ const (
 	KeyTranscodeParallelCPU                 = "transcode.parallel_cpu"
 	KeyTranscodeParallelGPU                 = "transcode.parallel_gpu"
 	KeyTranscodeParallelAudio               = "transcode.parallel_audio"
-	KeyTranscodeParallelComic               = "transcode.parallel_comic"
-	KeyTranscodeParallelEbook               = "transcode.parallel_ebook"
+	KeyTranscodeParallelBooks               = "transcode.parallel_books"
 	KeyTranscodePlaybackParallelCPU         = "transcode.playback_parallel_cpu"
 	KeyTranscodePlaybackParallelGPU         = "transcode.playback_parallel_gpu"
 	KeyTranscodePlaybackParallelAudio       = "transcode.playback_parallel_audio"
-	KeyTranscodePlaybackParallelComic       = "transcode.playback_parallel_comic"
-	KeyTranscodePlaybackParallelEbook       = "transcode.playback_parallel_ebook"
+	KeyTranscodePlaybackParallelBooks       = "transcode.playback_parallel_books"
 	KeyTranscodeOriginalsRetainDays         = "transcode.originals_retain_days"
 	KeyTranscodeOriginalsCapGB              = "transcode.originals_cap_gb"
 	maxTranscodeParallel              int64 = 16
 )
 
 // LaneLimits are how many conversions run at once on each kind of work. The limits are ceilings down the order CPU, GPU,
-// audio, comics, ebooks: a conversion counts against its own lane's ceiling and every later one, so each limit is at
+// video, video hardware, audio, books: a conversion counts against its own lane's ceiling and every later one, so each limit is at
 // least the one before it (CPU 1, GPU 2, audio 4 allows one CPU and one GPU job beside two audio ones).
-type LaneLimits struct{ CPU, GPU, Audio, Comic, Ebook int64 }
+type LaneLimits struct{ CPU, GPU, Audio, Books int64 }
 
 // InOrder lists the limits in ceiling order with the settings path of each, for validation.
 func (l LaneLimits) InOrder(prefix string) []NamedLimit {
-	return []NamedLimit{{prefix + ".cpu", l.CPU}, {prefix + ".gpu", l.GPU}, {prefix + ".audio", l.Audio}, {prefix + ".comic", l.Comic}, {prefix + ".ebook", l.Ebook}}
+	return []NamedLimit{{prefix + ".cpu", l.CPU}, {prefix + ".gpu", l.GPU}, {prefix + ".audio", l.Audio}, {prefix + ".books", l.Books}}
 }
 
 // NamedLimit is one lane's limit with its settings path.
@@ -87,16 +85,16 @@ type CategoryTranscode struct {
 
 // TranscodeGlobal answers the instance-wide policy.
 func (s *Snapshot) TranscodeGlobal() TranscodeGlobal {
-	lanes := func(cpu, gpu, audio, comic, ebook string, defaults LaneLimits) LaneLimits {
+	lanes := func(cpu, gpu, audio, books string, defaults LaneLimits) LaneLimits {
 		return LaneLimits{
 			CPU: s.policyInt(cpu, defaults.CPU), GPU: s.policyInt(gpu, defaults.GPU), Audio: s.policyInt(audio, defaults.Audio),
-			Comic: s.policyInt(comic, defaults.Comic), Ebook: s.policyInt(ebook, defaults.Ebook),
+			Books: s.policyInt(books, defaults.Books),
 		}
 	}
 	return TranscodeGlobal{
 		Enabled:          s.policyBool(KeyTranscodeEnabled, false),
-		Parallel:         lanes(KeyTranscodeParallelCPU, KeyTranscodeParallelGPU, KeyTranscodeParallelAudio, KeyTranscodeParallelComic, KeyTranscodeParallelEbook, LaneLimits{CPU: 1, GPU: 2, Audio: 4, Comic: 4, Ebook: 4}),
-		PlaybackParallel: lanes(KeyTranscodePlaybackParallelCPU, KeyTranscodePlaybackParallelGPU, KeyTranscodePlaybackParallelAudio, KeyTranscodePlaybackParallelComic, KeyTranscodePlaybackParallelEbook, LaneLimits{GPU: 1, Audio: 1, Comic: 1, Ebook: 1}),
+		Parallel:         lanes(KeyTranscodeParallelCPU, KeyTranscodeParallelGPU, KeyTranscodeParallelAudio, KeyTranscodeParallelBooks, LaneLimits{CPU: 1, GPU: 2, Audio: 4, Books: 4}),
+		PlaybackParallel: lanes(KeyTranscodePlaybackParallelCPU, KeyTranscodePlaybackParallelGPU, KeyTranscodePlaybackParallelAudio, KeyTranscodePlaybackParallelBooks, LaneLimits{GPU: 1, Audio: 1, Books: 1}),
 		Originals: OriginalsPolicy{
 			RetainDays: s.policyInt(KeyTranscodeOriginalsRetainDays, 7), CapGB: s.policyInt(KeyTranscodeOriginalsCapGB, 100),
 		},
@@ -134,13 +132,11 @@ func (c *Cache) SetTranscodeGlobal(ctx context.Context, cl clock.Clock, global T
 		KeyTranscodeParallelCPU:           number(global.Parallel.CPU),
 		KeyTranscodeParallelGPU:           number(global.Parallel.GPU),
 		KeyTranscodeParallelAudio:         number(global.Parallel.Audio),
-		KeyTranscodeParallelComic:         number(global.Parallel.Comic),
-		KeyTranscodeParallelEbook:         number(global.Parallel.Ebook),
+		KeyTranscodeParallelBooks:         number(global.Parallel.Books),
 		KeyTranscodePlaybackParallelCPU:   number(global.PlaybackParallel.CPU),
 		KeyTranscodePlaybackParallelGPU:   number(global.PlaybackParallel.GPU),
 		KeyTranscodePlaybackParallelAudio: number(global.PlaybackParallel.Audio),
-		KeyTranscodePlaybackParallelComic: number(global.PlaybackParallel.Comic),
-		KeyTranscodePlaybackParallelEbook: number(global.PlaybackParallel.Ebook),
+		KeyTranscodePlaybackParallelBooks: number(global.PlaybackParallel.Books),
 		KeyTranscodeOriginalsRetainDays:   number(global.Originals.RetainDays),
 		KeyTranscodeOriginalsCapGB:        number(global.Originals.CapGB),
 	})

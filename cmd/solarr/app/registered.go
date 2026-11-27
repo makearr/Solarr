@@ -991,6 +991,10 @@ func (p *process) comicResolver() comic.Resolver {
 	return comic.Resolver{
 		Service: p.comicService(), Logger: p.logger, Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
 		Locks: p.locksFor("comic"), Threshold: p.acceptThreshold,
+		Languages: func(categoryID int64) []string {
+			category, found := p.cache.Snapshot().Category(categoryID)
+			return settings.LanguageProfileFor(p.cache.Snapshot().DefaultLanguages(), found && category.Kind == "manga").AudioPreferred
+		},
 	}
 }
 

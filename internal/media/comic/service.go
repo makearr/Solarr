@@ -64,9 +64,11 @@ func (s Service) Fetch(ctx context.Context, categoryID int64, ids map[string]str
 type Candidate struct {
 	// Provider and ID are what an add names it by: the first provider of the order that knows it.
 	Provider, ID, Title, Publisher, Overview, Cover string
-	Year, Count                                     int
-	Adult                                           bool
-	IDs                                             map[string]string
+	// Language is the edition's language (ISO 639-1, lower case), empty when the provider does not say.
+	Language    string
+	Year, Count int
+	Adult       bool
+	IDs         map[string]string
 }
 
 // Search looks a title up at every provider of the library's order, one candidate per series: a provider that names
@@ -86,6 +88,7 @@ func (s Service) Search(ctx context.Context, categoryID int64, query string, lim
 				found[i].Overview = firstNonEmpty(found[i].Overview, candidate.Overview)
 				found[i].Cover = firstNonEmpty(found[i].Cover, candidate.Cover)
 				found[i].Adult = found[i].Adult || candidate.Adult
+				found[i].Language = firstNonEmpty(found[i].Language, candidate.Language)
 				return
 			}
 		}
@@ -190,7 +193,7 @@ func (s Service) searchOne(ctx context.Context, key, kind, query string) []Candi
 			if one.GCDID > 0 {
 				ids[ProviderGCD] = strconv.Itoa(one.GCDID)
 			}
-			out = append(out, Candidate{Title: one.Name, Publisher: one.Publisher, Overview: one.Summary, Year: one.YearBegan, Count: one.IssueCount, IDs: ids})
+			out = append(out, Candidate{Title: one.Name, Publisher: one.Publisher, Overview: one.Summary, Year: one.YearBegan, Count: one.IssueCount, Language: "en", IDs: ids})
 		}
 	case settings.ComicSourceGCD:
 		if s.GCD == nil || isMangaKind(kind) {
@@ -201,7 +204,7 @@ func (s Service) searchOne(ctx context.Context, key, kind, query string) []Candi
 			s.warn(key, query, err)
 		}
 		for _, one := range found {
-			out = append(out, Candidate{Title: one.Name, Year: one.YearBegan, IDs: map[string]string{ProviderGCD: strconv.Itoa(one.ID)}})
+			out = append(out, Candidate{Title: one.Name, Year: one.YearBegan, Language: strings.ToLower(strings.TrimSpace(one.Language)), IDs: map[string]string{ProviderGCD: strconv.Itoa(one.ID)}})
 		}
 	case settings.TVSourceAniList:
 		if s.AniList == nil || !isMangaKind(kind) {

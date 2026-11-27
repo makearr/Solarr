@@ -33,7 +33,7 @@ func AnalyzeEbook(name string, target settings.QualityTarget) Plan {
 	case have == want:
 		return Plan{Verdict: NotNeeded, Reasons: []Reason{{Code: ReasonNothingToDo, Stream: -1}}}
 	}
-	return Plan{Verdict: Needed, Reasons: []Reason{{Code: ReasonContainer, Stream: -1, Have: have, Want: want}}, Container: want, Fixed: LaneEbook}
+	return Plan{Verdict: Needed, Reasons: []Reason{{Code: ReasonContainer, Stream: -1, Have: have, Want: want}}, Container: want, Fixed: LaneBooks}
 }
 
 // ebookPlan is the plan of a run: the file's own name against the target.
@@ -45,7 +45,7 @@ func (s *Service) convertEbook(ctx context.Context, run *fileRun) error {
 	if err := s.FS.MkdirAll(path.Dir(output), 0o755); err != nil {
 		return err
 	}
-	release, err := s.acquireLane(ctx, LaneEbook, run.progress)
+	release, err := s.acquireLane(ctx, LaneBooks, run.progress)
 	if err != nil {
 		return err
 	}

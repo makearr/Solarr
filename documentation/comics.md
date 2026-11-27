@@ -59,7 +59,7 @@ import inspects it, and that cbz is what is identified, named and placed.
   no comic archive (beside archives, images are extras); each such folder, to eight levels deep, is one cbz. Only
   its own files are pages; a subfolder is judged on its own.
 - **Order**: a page named `cover` first, the rest in natural order (`2` before `10`). Entries keep their names and
-  are stored uncompressed (images do not shrink); no `ComicInfo.xml` is written by the packing, since nothing is
+  are deflated at the maximum level (images barely shrink, text does); no `ComicInfo.xml` is written by the packing, since nothing is
   identified yet: *Kavita and Komga files* adds one after the import when switched on.
 - **Name and place**: the cbz is named after its folder and written to the import workspace (never to the source)
   through a temporary swapped in whole; a folder over 2 GiB (one issue's ceiling) or whose cbz name is already taken

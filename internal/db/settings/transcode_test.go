@@ -140,13 +140,13 @@ func TestASetupRoundTripsItsRevisionGoesUpOnSaveAndResetAndItFollowsTheTarget(t 
 func TestTranscodeGlobalDefaultsRoundTripAndRefuseOutOfRangeLimits(t *testing.T) {
 	cache, cl := newCache(t)
 	want := settings.TranscodeGlobal{
-		Parallel: settings.LaneLimits{CPU: 1, GPU: 2, Audio: 4, Comic: 4, Ebook: 4}, PlaybackParallel: settings.LaneLimits{GPU: 1, Audio: 1, Comic: 1, Ebook: 1}, Originals: settings.OriginalsPolicy{RetainDays: 7, CapGB: 100},
+		Parallel: settings.LaneLimits{CPU: 1, GPU: 2, Audio: 4, Books: 4}, PlaybackParallel: settings.LaneLimits{GPU: 1, Audio: 1, Books: 1}, Originals: settings.OriginalsPolicy{RetainDays: 7, CapGB: 100},
 	}
 	if got := cache.Snapshot().TranscodeGlobal(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("default = %+v", got)
 	}
 	want = settings.TranscodeGlobal{
-		Enabled: true, Parallel: settings.LaneLimits{CPU: 2, GPU: 3, Audio: 8, Comic: 8, Ebook: 9}, PlaybackParallel: settings.LaneLimits{CPU: 1, GPU: 1, Audio: 1, Comic: 1, Ebook: 1}, Originals: settings.OriginalsPolicy{RetainDays: 0, CapGB: 0},
+		Enabled: true, Parallel: settings.LaneLimits{CPU: 2, GPU: 3, Audio: 8, Books: 9}, PlaybackParallel: settings.LaneLimits{CPU: 1, GPU: 1, Audio: 1, Books: 1}, Originals: settings.OriginalsPolicy{RetainDays: 0, CapGB: 0},
 	}
 	if err := cache.SetTranscodeGlobal(t.Context(), cl, want); err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func TestTranscodeGlobalDefaultsRoundTripAndRefuseOutOfRangeLimits(t *testing.T)
 	if err := cache.SetTranscodeGlobal(t.Context(), cl, want); err == nil {
 		t.Error("17 parallel conversions accepted")
 	}
-	want.Parallel = settings.LaneLimits{CPU: 3, GPU: 2, Audio: 4, Comic: 4, Ebook: 4}
+	want.Parallel = settings.LaneLimits{CPU: 3, GPU: 2, Audio: 4, Books: 4}
 	if err := cache.SetTranscodeGlobal(t.Context(), cl, want); err == nil {
 		t.Error("a GPU limit under the CPU limit accepted: each limit counts the lanes before it")
 	}
@@ -198,7 +198,7 @@ func TestACategoryRowDefaultsToOffRoundTripsValidatesAndFollowsTheCategory(t *te
 func TestTranscodeExportCarriesPolicyRowsAndSavedSetupsToAnotherInstanceAndRefusesABadSetup(t *testing.T) {
 	source, cl := newCache(t)
 	films, _ := source.CreateCategory(t.Context(), "movie", "Films", 10)
-	global := settings.TranscodeGlobal{Enabled: true, Parallel: settings.LaneLimits{CPU: 2, GPU: 3, Audio: 5, Comic: 5, Ebook: 5}, Originals: settings.OriginalsPolicy{RetainDays: 3, CapGB: 50}}
+	global := settings.TranscodeGlobal{Enabled: true, Parallel: settings.LaneLimits{CPU: 2, GPU: 3, Audio: 5, Books: 5}, Originals: settings.OriginalsPolicy{RetainDays: 3, CapGB: 50}}
 	if err := source.SetTranscodeGlobal(t.Context(), cl, global); err != nil {
 		t.Fatal(err)
 	}
@@ -287,5 +287,17 @@ func TestTranscodeWarningsBitrateAndResultsOutsideTheRange(t *testing.T) {
 	}
 	if _, ok := settings.TranscodeResultsWarning([]int64{95, 100, 105, 110, 90, 100, 100, 100, 100, 100}, target); ok {
 		t.Error("a median inside the range warned")
+	}
+}
+
+func TestTranscodeWarningsOfAComicOrEbookNeverAskForABitrate(t *testing.T) {
+	setup := settings.TranscodeSetup{}
+	for _, kind := range []string{"comic", "ebook"} {
+		if got := settings.TranscodeWarningsOf(kind, setup, settings.QualityTarget{MediaType: "book", Container: "cbz"}); len(got) != 0 {
+			t.Errorf("%s: warnings = %v, want none", kind, got)
+		}
+	}
+	if got := settings.TranscodeWarningsOf("audio", setup, settings.QualityTarget{MediaType: "music"}); len(got) == 0 {
+		t.Error("an audio target without a bitrate lost its warning")
 	}
 }

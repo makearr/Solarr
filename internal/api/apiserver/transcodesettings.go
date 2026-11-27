@@ -12,11 +12,11 @@ import (
 )
 
 func transcodeLanes(limits settings.LaneLimits) gen.TranscodeLaneLimits {
-	return gen.TranscodeLaneLimits{Cpu: int(limits.CPU), Gpu: int(limits.GPU), Audio: int(limits.Audio), Comic: int(limits.Comic), Ebook: int(limits.Ebook)}
+	return gen.TranscodeLaneLimits{Cpu: int(limits.CPU), Gpu: int(limits.GPU), Audio: int(limits.Audio), Books: int(limits.Books)}
 }
 
 func transcodeLimits(lanes gen.TranscodeLaneLimits) settings.LaneLimits {
-	return settings.LaneLimits{CPU: int64(lanes.Cpu), GPU: int64(lanes.Gpu), Audio: int64(lanes.Audio), Comic: int64(lanes.Comic), Ebook: int64(lanes.Ebook)}
+	return settings.LaneLimits{CPU: int64(lanes.Cpu), GPU: int64(lanes.Gpu), Audio: int64(lanes.Audio), Books: int64(lanes.Books)}
 }
 
 func (s *Server) transcodeSettings(r *http.Request) (gen.TranscodeSettings, error) {
@@ -69,8 +69,8 @@ func (s *Server) SetTranscodeSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(
-		settings.KeyTranscodeEnabled, settings.KeyTranscodeParallelCPU, settings.KeyTranscodeParallelGPU, settings.KeyTranscodeParallelAudio, settings.KeyTranscodeParallelComic, settings.KeyTranscodeParallelEbook,
-		settings.KeyTranscodePlaybackParallelCPU, settings.KeyTranscodePlaybackParallelGPU, settings.KeyTranscodePlaybackParallelAudio, settings.KeyTranscodePlaybackParallelComic, settings.KeyTranscodePlaybackParallelEbook,
+		settings.KeyTranscodeEnabled, settings.KeyTranscodeParallelCPU, settings.KeyTranscodeParallelGPU, settings.KeyTranscodeParallelAudio, settings.KeyTranscodeParallelBooks,
+		settings.KeyTranscodePlaybackParallelCPU, settings.KeyTranscodePlaybackParallelGPU, settings.KeyTranscodePlaybackParallelAudio, settings.KeyTranscodePlaybackParallelBooks,
 		settings.KeyTranscodeOriginalsRetainDays, settings.KeyTranscodeOriginalsCapGB,
 	); err != nil {
 		writeError(w, s.logger, err)

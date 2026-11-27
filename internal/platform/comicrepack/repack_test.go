@@ -102,8 +102,8 @@ func readZip(t *testing.T, fsys *fsx.Mem, absolute string) map[string][]byte {
 	out := map[string][]byte{}
 	var order []string
 	for _, each := range reader.File {
-		if each.Method != zip.Store {
-			t.Errorf("%s is not stored", each.Name)
+		if each.Method != zip.Deflate {
+			t.Errorf("%s is not deflated", each.Name)
 		}
 		body, _ := each.Open()
 		out[each.Name], _ = io.ReadAll(body)
@@ -123,7 +123,7 @@ func joined(names []string) string {
 
 func newFS() *fsx.Mem { return fsx.NewMem(clock.NewFake(time.Unix(1_700_000_000, 0))) }
 
-func TestRepack_TarComicBecomesAStoredZipInNaturalOrder(t *testing.T) {
+func TestRepack_TarComicBecomesADeflatedZipInNaturalOrder(t *testing.T) {
 	fsys := newFS()
 	info := []byte("<ComicInfo/>")
 	put(t, fsys, "/lib/issue.cbt", tarOf(t, []member{

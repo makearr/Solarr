@@ -20,6 +20,8 @@ type Evidence struct {
 	// Series and Year are the series the evidence names; Publisher narrows a title shared by several.
 	Series, Publisher string
 	Year              int
+	// Language is the edition the file says it is in (ISO 639-1), from its ComicInfo or its names.
+	Language string
 }
 
 // EvidenceOf draws the series evidence from the strongest source a file has: its embedded ids, its embedded series name,
@@ -36,6 +38,7 @@ func EvidenceOf(info *comicinfo.Info, claims ...parsecomic.Claim) Evidence {
 			}
 		}
 		ev.Series, ev.Publisher, ev.Year = info.Series, info.Publisher, firstInt(info.Volume, info.Year)
+		ev.Language = info.Language
 		if ev.Year < 1900 {
 			ev.Year = info.Year
 		}
@@ -49,6 +52,9 @@ func EvidenceOf(info *comicinfo.Info, claims ...parsecomic.Claim) Evidence {
 		}
 		if ev.Publisher == "" {
 			ev.Publisher = claim.Publisher
+		}
+		if ev.Language == "" {
+			ev.Language = claim.Language
 		}
 	}
 	return ev
@@ -70,6 +76,8 @@ type Resolver struct {
 	Locks            *keyedlock.Locks
 	// Threshold is import.auto_commit_confidence; nil takes its default.
 	Threshold func() float64
+	// Languages are the editions the library prefers, best first (ISO 639-1); nil prefers none.
+	Languages func(categoryID int64) []string
 }
 
 // Confidence of a provider's single title match: the title alone is the threshold's floor, a year or publisher that agrees
@@ -106,7 +114,11 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, ev Evidence) (i
 		r.warn("search", ev.Series, err)
 		return 0, nil
 	}
-	picked, confidence, ok := pick(found, ev)
+	var preferred []string
+	if r.Languages != nil {
+		preferred = r.Languages(categoryID)
+	}
+	picked, confidence, ok := pick(found, ev, preferred)
 	if ok && model.AcceptsFolderMatch(confidence, r.Threshold) {
 		if id := r.add(ctx, categoryID, picked.IDs, Hint{Title: picked.Title, Year: picked.Year}); id != 0 {
 			return id, nil
@@ -149,8 +161,31 @@ func yearsAgree(wanted, held int) bool {
 	return wanted == 0 || held == 0 || wanted-held <= 1 && held-wanted <= 1
 }
 
+// editionsOf narrows candidates of one title to the edition wanted: the language the file itself says, else the library's
+// preferred languages in order. Candidates of unknown language stay out of the narrowing, and nothing narrows to none.
+func editionsOf(same []Candidate, fileLanguage string, preferred []string) []Candidate {
+	if len(same) < 2 {
+		return same
+	}
+	for _, wanted := range append([]string{fileLanguage}, preferred...) {
+		if wanted == "" {
+			continue
+		}
+		var matching []Candidate
+		for _, candidate := range same {
+			if candidate.Language == wanted {
+				matching = append(matching, candidate)
+			}
+		}
+		if len(matching) > 0 {
+			return matching
+		}
+	}
+	return same
+}
+
 // pick chooses the one candidate the evidence names and says how sure that is.
-func pick(found []Candidate, ev Evidence) (Candidate, float64, bool) {
+func pick(found []Candidate, ev Evidence, preferred []string) (Candidate, float64, bool) {
 	var same []Candidate
 	for _, candidate := range found {
 		if sameTitle(candidate.Title, ev.Series) && yearsAgree(ev.Year, candidate.Year) {
@@ -160,6 +195,7 @@ func pick(found []Candidate, ev Evidence) (Candidate, float64, bool) {
 	if len(same) == 0 {
 		return Candidate{}, 0, false
 	}
+	same = editionsOf(same, ev.Language, preferred)
 	best := same[0]
 	confidence := titleOnlyConfidence
 	if ev.Year != 0 && best.Year != 0 {

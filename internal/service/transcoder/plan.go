@@ -66,18 +66,17 @@ type Plan struct {
 // Lane is the pool of workers a conversion takes a place in.
 type Lane string
 
-// The lanes: audio is every conversion that encodes no video; comics and ebooks are the repacks and conversions of those files.
+// The lanes: audio is every conversion that encodes no video; books holds the comic repacks and ebook conversions.
 const (
 	LaneAudio Lane = "audio"
 	LaneGPU   Lane = "gpu"
 	LaneCPU   Lane = "cpu"
-	LaneComic Lane = "comic"
-	LaneEbook Lane = "ebook"
+	LaneBooks Lane = "books"
 )
 
 // LaneOrder is the one registry of lanes, in ceiling order: a conversion counts against its own lane's limit and every
 // later one (Settings, Transcode lists them in this order).
-var LaneOrder = []Lane{LaneCPU, LaneGPU, LaneAudio, LaneComic, LaneEbook}
+var LaneOrder = []Lane{LaneCPU, LaneGPU, LaneAudio, LaneBooks}
 
 // Lane is the lane of the plan when the video, if any, is encoded by the engine.
 func (p Plan) Lane(engine transcode.Accel) Lane {

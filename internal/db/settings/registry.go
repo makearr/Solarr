@@ -532,27 +532,15 @@ func NewDefaultRegistry() *Registry {
 		Default:  "4",
 	})
 	registry.MustRegister(SettingDef{
-		Key: KeyTranscodeParallelComic, Kind: KindInt, Tier: TierNormal,
-		Name:     "Transcode: parallel comic conversions",
-		HelpText: "How many comic repacks run at once, counted with every lane before it.",
+		Key: KeyTranscodeParallelBooks, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode: parallel book conversions",
+		HelpText: "How many comic repacks and ebook conversions run at once, counted with every lane before it.",
 		Default:  "4",
 	})
 	registry.MustRegister(SettingDef{
-		Key: KeyTranscodeParallelEbook, Kind: KindInt, Tier: TierNormal,
-		Name:     "Transcode: parallel ebook conversions",
-		HelpText: "How many ebook conversions run at once, counted with every lane before it.",
-		Default:  "4",
-	})
-	registry.MustRegister(SettingDef{
-		Key: KeyTranscodePlaybackParallelComic, Kind: KindInt, Tier: TierNormal,
-		Name:     "Transcode while playing: comics",
-		HelpText: "How many comic repacks may run while the web player converts.",
-		Default:  "1",
-	})
-	registry.MustRegister(SettingDef{
-		Key: KeyTranscodePlaybackParallelEbook, Kind: KindInt, Tier: TierNormal,
-		Name:     "Transcode while playing: ebooks",
-		HelpText: "How many ebook conversions may run while the web player converts.",
+		Key: KeyTranscodePlaybackParallelBooks, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode while playing: books",
+		HelpText: "How many book conversions may run while the web player converts.",
 		Default:  "1",
 	})
 	registry.MustRegister(SettingDef{

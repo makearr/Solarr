@@ -17135,15 +17135,14 @@ components:
     TranscodeLaneLimits:
       type: object
       description: >-
-        Ceilings down the order cpu, gpu, audio, comic, ebook: a conversion counts against its own lane's limit and
+        Ceilings down the order cpu (video), gpu (video hardware), audio, books (comics and ebooks): a conversion counts against its own lane's limit and
         every later one, so each limit is at least the one before it.
-      required: [cpu, gpu, audio, comic, ebook]
+      required: [cpu, gpu, audio, books]
       properties:
         cpu: { type: integer, minimum: 0, maximum: 16 }
         gpu: { type: integer, minimum: 0, maximum: 16 }
         audio: { type: integer, minimum: 0, maximum: 16 }
-        comic: { type: integer, minimum: 0, maximum: 16 }
-        ebook: { type: integer, minimum: 0, maximum: 16 }
+        books: { type: integer, minimum: 0, maximum: 16 }
 
     TranscodeGlobalSettings:
       type: object

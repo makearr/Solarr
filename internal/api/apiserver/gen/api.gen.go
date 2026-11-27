@@ -7704,10 +7704,10 @@ type TranscodeGlobalSettings struct {
 	// OriginalsRetainDays Days a replaced original stays in the recycle bin; 0 follows the bin's own retention.
 	OriginalsRetainDays int `json:"originals_retain_days"`
 
-	// Parallel Ceilings down the order cpu, gpu, audio, comic, ebook: a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it.
+	// Parallel Ceilings down the order cpu (video), gpu (video hardware), audio, books (comics and ebooks): a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it.
 	Parallel TranscodeLaneLimits `json:"parallel"`
 
-	// PlaybackParallel Ceilings down the order cpu, gpu, audio, comic, ebook: a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it.
+	// PlaybackParallel Ceilings down the order cpu (video), gpu (video hardware), audio, books (comics and ebooks): a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it.
 	PlaybackParallel TranscodeLaneLimits `json:"playback_parallel"`
 }
 
@@ -7793,12 +7793,11 @@ type TranscodeLadder struct {
 	QualityStep    float32 `json:"quality_step"`
 }
 
-// TranscodeLaneLimits Ceilings down the order cpu, gpu, audio, comic, ebook: a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it.
+// TranscodeLaneLimits Ceilings down the order cpu (video), gpu (video hardware), audio, books (comics and ebooks): a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it.
 type TranscodeLaneLimits struct {
 	Audio int `json:"audio"`
-	Comic int `json:"comic"`
+	Books int `json:"books"`
 	Cpu   int `json:"cpu"`
-	Ebook int `json:"ebook"`
 	Gpu   int `json:"gpu"`
 }
 

@@ -20,7 +20,7 @@ type Savings = components["schemas"]["TranscodeSavings"];
 
 const ORDERS = ["found", "alphabetical", "largest", "smallest", "oldest", "newest"] as const;
 /** The lanes in ceiling order: each limit counts the lanes before it, so it is at least the one before. */
-const LANES = ["cpu", "gpu", "audio", "comic", "ebook"] as const;
+const LANES = ["cpu", "gpu", "audio", "books"] as const;
 const CODECS = ["h264", "hevc", "av1", "vp9"] as const;
 const ENGINES = ["software", "qsv", "vaapi", "nvenc"] as const;
 const STATES = [
