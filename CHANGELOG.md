@@ -4,6 +4,9 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Command palette (Ctrl+K or /) replaces the header search box: every page and setting by name, actions (add to a library, rescan, switch theme), and a search of your items and people; it only lists what your account may open.
+- The notification bell opens a list of what needs attention and what failed lately, with "See all".
+- Keyboard shortcuts: g d, g l and g s go to the Dashboard, the first library and Settings, j / k / Enter walk the rows of a list, and ? lists them all.
 - Every settings card keeps its help behind a "?" next to the title (hover, focus or tap), and a setting that saves when you change it confirms with a "Saved" toast.
 - Web UI preferences: Comfortable or Compact density for lists and poster grids.
 - One page header for the settings and configuration pages, with breadcrumbs (Library, artist, album) on an item's page; empty lists show an icon, a sentence and the next step.

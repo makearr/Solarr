@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
-import { Menu, X } from "lucide-react";
+import { Menu, Search, X } from "lucide-react";
 
+import { setOverlay } from "@/lib/overlays";
 import { useApplyDensity } from "@/lib/density";
 import { t } from "@/lib/i18n";
 import { useNarrow } from "@/list/useNarrow";
@@ -14,7 +15,9 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { NotificationBell } from "./Notifications";
 import { PlayerProvider } from "./player/PlayerContext";
 import { PlayerDock } from "./player/PlayerDock";
-import { SearchBox } from "./SearchBox";
+import { CommandPalette } from "./CommandPalette";
+import { GlobalShortcuts } from "./GlobalShortcuts";
+import { ShortcutsHelp } from "./ShortcutsHelp";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 import { SectionTabs } from "./SectionTabs";
@@ -52,7 +55,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <Menu aria-hidden className="size-5" />
               </button>
             )}
-            <SearchBox />
+            <button
+              type="button"
+              onClick={() => setOverlay("palette")}
+              aria-keyshortcuts="Control+K /"
+              className="flex w-72 items-center gap-2 rounded-md border border-border-subtle bg-canvas px-2.5 py-1.5 text-left text-sm text-ink-muted
+                         hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <Search aria-hidden className="size-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{t("palette.trigger")}</span>
+              <kbd aria-hidden className="rounded border border-border-subtle px-1.5 text-[0.6875rem] leading-4">Ctrl K</kbd>
+            </button>
             <NotificationBell />
             <UserMenu />
           </header>
@@ -77,6 +90,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <Toaster />
+      <GlobalShortcuts />
+      <CommandPalette />
+      <ShortcutsHelp />
       <ErrorBoundary name="The player"><PlayerDock /></ErrorBoundary>
       {showFooter && <ErrorBoundary name="The status bar"><StatusBar /></ErrorBoundary>}
     </div>

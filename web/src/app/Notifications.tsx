@@ -1,3 +1,4 @@
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Link } from "@tanstack/react-router";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
@@ -15,7 +16,18 @@ import { pageTier } from "./sections";
 
 const SEEN_KEY = "solarr.notifications.seen";
 const SEEN_EVENT = "solarr:notifications-seen";
+const RECENT_IN_BELL = 5;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Looking at the notifications clears the bell; the list itself keeps what it showed. */
+function markSeen(): void {
+  try {
+    localStorage.setItem(SEEN_KEY, String(Date.now()));
+    window.dispatchEvent(new Event(SEEN_EVENT));
+  } catch {
+    // A per-browser convenience; losing it costs a badge that stays.
+  }
+}
 
 function readSeen(): number {
   try {
@@ -67,19 +79,55 @@ export function NotificationBell() {
   }, []);
   const fresh = events.filter((item) => item.kind === "failed" && new Date(item.at).getTime() > seen).length;
   const count = warnings.length + fresh;
+  const itemStyle = "flex cursor-default items-start gap-2 rounded px-2 py-1.5 outline-none data-[highlighted]:bg-canvas";
+  const label = count > 0 ? t("notifications.bellCount", { count }) : t("notifications.bell");
   return (
-    <Link
-      to="/activity/notifications"
-      aria-label={count > 0 ? `Notifications, ${count} need attention` : "Notifications"}
-      className="relative rounded-md p-1.5 text-ink-muted hover:text-ink"
-    >
-      <Bell aria-hidden className="size-4" />
-      {count > 0 && (
-        <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[0.625rem] leading-4 text-accent-ink">
-          {count}
-        </span>
-      )}
-    </Link>
+    <DropdownMenu.Root onOpenChange={(open) => open && markSeen()}>
+      <DropdownMenu.Trigger
+        aria-label={label}
+        className="relative rounded-md p-1.5 text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        <Bell aria-hidden className="size-4" />
+        {count > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[0.625rem] leading-4 text-accent-ink">
+            {count}
+          </span>
+        )}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" sideOffset={4} className="z-50 w-96 max-w-[calc(100vw-2rem)] rounded-md border border-border-subtle bg-surface p-1 text-sm shadow-lg">
+          {warnings.length === 0 && events.length === 0 && (
+            <div className="px-2 py-3 text-center text-ink-muted">{t("notifications.bellNothing")}</div>
+          )}
+          {warnings.slice(0, RECENT_IN_BELL).map((check) => (
+            <DropdownMenu.Item key={`${check.id}:${check.message}`} asChild>
+              <Link to={check.link ?? "/activity/notifications"} className={itemStyle}>
+                {check.severity === "error"
+                  ? <XCircle aria-hidden className="mt-0.5 size-4 shrink-0 text-danger" />
+                  : <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-muted" />}
+                <span className="min-w-0 flex-1">{healthMessage(check)}</span>
+              </Link>
+            </DropdownMenu.Item>
+          ))}
+          {events.slice(0, RECENT_IN_BELL).map((item) => (
+            <DropdownMenu.Item key={item.id} asChild>
+              <Link to="/activity/history" className={itemStyle}>
+                {item.kind === "failed"
+                  ? <XCircle aria-hidden className="mt-0.5 size-4 shrink-0 text-danger" />
+                  : <CheckCircle2 aria-hidden className="mt-0.5 size-4 shrink-0 text-ok" />}
+                <span className="min-w-0 flex-1 truncate">
+                  {item.kind === "failed" ? "Download failed" : item.kind === "imported" ? "Imported" : item.kind}: {item.album ?? item.release_title}
+                </span>
+              </Link>
+            </DropdownMenu.Item>
+          ))}
+          <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
+          <DropdownMenu.Item asChild>
+            <Link to="/activity/notifications" className={`${itemStyle} text-accent`}>{t("notifications.seeAll")}</Link>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 
@@ -88,14 +136,7 @@ export function Notifications() {
   const [seen] = useState(readSeen);
   // Opening the centre is looking at it: the bell clears, the list keeps what it showed.
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        localStorage.setItem(SEEN_KEY, String(Date.now()));
-        window.dispatchEvent(new Event(SEEN_EVENT));
-      } catch {
-        // A per-browser convenience; losing it costs a badge that stays.
-      }
-    }, 1500);
+    const timer = window.setTimeout(markSeen, 1500);
     return () => window.clearTimeout(timer);
   }, []);
 

@@ -71,9 +71,10 @@ export function ListTable<T>({
               <div
                 key={id}
                 role="row"
+                tabIndex={-1}
                 aria-selected={selected}
                 onClick={(event) => list.toggle(id, event.shiftKey)}
-                className={`absolute inset-x-0 grid cursor-default items-center gap-3 border-b
+                className={`absolute inset-x-0 grid cursor-default items-center gap-3 border-b focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent
                             border-border-subtle/60 px-3 text-sm
                             ${selected ? "bg-accent/10" : "hover:bg-surface"}`}
                 style={{
