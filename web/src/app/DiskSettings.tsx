@@ -171,6 +171,40 @@ function DiskSettings() {
       </Card>
 
       <Card
+        title={t("diskSettings.timings")}
+        help={t("diskSettings.timingsHelp")}
+      >
+        {data.timings.length === 0 ? (
+          <p className="text-xs text-ink-muted">{t("diskSettings.timingsEmpty")}</p>
+        ) : (
+          <table className="w-full text-left text-xs">
+            <thead className="text-ink-muted">
+              <tr>
+                <th className="py-1 pr-3 font-medium">{t("diskSettings.timingsFolder")}</th>
+                <th className="py-1 pr-3 font-medium">{t("diskSettings.timingsCalls")}</th>
+                <th className="py-1 pr-3 font-medium">{t("diskSettings.timingsRecent")}</th>
+                <th className="py-1 pr-3 font-medium">{t("diskSettings.timingsBaseline")}</th>
+                <th className="py-1 pr-3 font-medium">{t("diskSettings.timingsLoad")}</th>
+                <th className="py-1 font-medium">{t("diskSettings.timingsThroughput")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.timings.map((row) => (
+                <tr key={row.path} className="border-t border-border-subtle">
+                  <td className="py-1.5 pr-3 font-mono">{row.path}</td>
+                  <td className="py-1.5 pr-3">{Math.round(row.ops_per_min)}</td>
+                  <td className="py-1.5 pr-3">{row.recent_ms > 0 ? `${row.recent_ms.toFixed(2)} ms` : "-"}</td>
+                  <td className="py-1.5 pr-3">{row.baseline_ms > 0 ? `${row.baseline_ms.toFixed(2)} ms` : t("diskSettings.timingsLearning")}</td>
+                  <td className={`py-1.5 pr-3 ${row.degradation > 1.5 ? "text-warn" : ""}`}>{row.degradation > 1.05 ? t("diskSettings.timingsSlower", { x: row.degradation.toFixed(1) }) : t("diskSettings.timingsNormal")}</td>
+                  <td className="py-1.5">{`${formatBytes(row.bytes_per_sec)}/s`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      <Card
         title={t("diskSettings.libraryScans")}
         help="Solarr scans a root when it has reason to: right after start if the last scan is over 12 hours old, then weekly where its folders are watched, daily while its size and entry count are unchanged, every 6 hours otherwise. Changes inside watched folders are rescanned as they happen."
       >

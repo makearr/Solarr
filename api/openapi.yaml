@@ -11281,6 +11281,17 @@ components:
         samples: { type: integer }
         measured_at: { type: integer, format: int64, description: Unix seconds; absent when never measured. }
         error: { type: string }
+    DiskTiming:
+      type: object
+      required: [path, ops_per_min, recent_ms, baseline_ms, degradation, bytes_per_sec]
+      description: How Solarr's own calls to one root folder answered, taken from the work itself and never from a probe.
+      properties:
+        path: { type: string }
+        ops_per_min: { type: number, format: double, description: Metadata calls (stat, directory read, open) in the last full minute. }
+        recent_ms: { type: number, format: double, description: Mean metadata call over the last two minutes. }
+        baseline_ms: { type: number, format: double, description: What the same calls normally take; 0 until learned. }
+        degradation: { type: number, format: double, description: Recent over baseline, 1 when normal; the scheduler backs bulk work off above 1.5. }
+        bytes_per_sec: { type: number, format: double, description: Bytes Solarr read and wrote on the folder per second, last full minute. }
     DiskInotify:
       type: object
       required: [max_user_watches, budget_watches, used_by_us, directories, recommended_watches]
@@ -11329,9 +11340,10 @@ components:
         interval_hours: { type: integer, format: int64, minimum: 0, maximum: 8760 }
     DiskReport:
       type: object
-      required: [paths, latencies, inotify, scan]
+      required: [paths, latencies, timings, inotify, scan]
       properties:
         scan: { $ref: "#/components/schemas/DiskScan" }
+        timings: { type: array, items: { $ref: "#/components/schemas/DiskTiming" } }
         paths: { type: array, items: { $ref: "#/components/schemas/DiskPath" } }
         latencies: { type: array, items: { $ref: "#/components/schemas/DiskLatency" } }
         inotify: { $ref: "#/components/schemas/DiskInotify" }

@@ -365,3 +365,46 @@ func TestDispatcher_TickOnAnEmptyQueueWritesNothing(t *testing.T) {
 		t.Errorf("five ticks on an empty queue ran %d writes, want 0", after-before)
 	}
 }
+
+func TestDispatcher_BulkPoolTakesFewerJobsWhileTheDisksAreSlow(t *testing.T) {
+	queue, fake := newQueue(t)
+	executor := newExecutor(t, queue, fake, jobs.ModeNormal)
+	release := make(chan struct{})
+	var running atomic.Int64
+	executor.Handle(typeScan, jobs.HandlerFunc(func(context.Context, jobs.Job) error {
+		running.Add(1)
+		<-release
+		return nil
+	}))
+	var pressure atomic.Int64
+	pressure.Store(4)
+	dispatcher := jobs.NewDispatcher(queue, fake, executor, jobs.DispatcherConfig{
+		Sizes:    []jobs.PoolSize{{Pool: jobs.PoolScan, Capacity: 4}},
+		Pressure: func() float64 { return float64(pressure.Load()) },
+		Tick:     time.Second, Logger: quietLogger(),
+	})
+	for i := range 4 {
+		mustEnqueue(t, queue, jobs.Request{Type: typeScan, ActionKey: string(rune('a' + i))})
+	}
+
+	dispatcher.Tick(t.Context())
+	dispatcher.Tick(t.Context())
+	deadline := time.Now().Add(2 * time.Second)
+	for running.Load() < 1 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := running.Load(); got != 1 {
+		t.Fatalf("running under pressure = %d, want 1", got)
+	}
+
+	pressure.Store(1)
+	dispatcher.Tick(t.Context())
+	for running.Load() < 4 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := running.Load(); got != 4 {
+		t.Fatalf("running once the disks recover = %d, want 4", got)
+	}
+	close(release)
+	waitForQuiet(t, dispatcher)
+}

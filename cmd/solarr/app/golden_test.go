@@ -28,6 +28,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/egress"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/logbuffer"
+	"github.com/makearr/Solarr/internal/platform/measure"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -74,7 +75,8 @@ func newGoldenServerWith(t *testing.T, extra ...media.Module) goldenServer {
 
 	ring := logbuffer.NewRing(slog.DiscardHandler, 16)
 	running := &process{
-		build: Build{Version: "golden"}, config: loaded, fsys: fsx.NewOS(), logger: slog.New(ring), logRing: ring,
+		timings: &timings{rec: measure.New(clock.NewSystem())},
+		build:   Build{Version: "golden"}, config: loaded, fsys: fsx.NewOS(), logger: slog.New(ring), logRing: ring,
 		timezone: "UTC", configPath: filepath.Join(root, "config.yml"), tool: mediatool.New(nil, 0), extraMedia: extra,
 	}
 	t.Cleanup(running.close)

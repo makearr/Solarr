@@ -26,6 +26,16 @@ type DiskLatency struct {
 	Error          string
 }
 
+// DiskTiming is how Solarr's own calls to one root folder have been answering, measured from the work itself.
+type DiskTiming struct {
+	Path        string
+	OpsPerMin   float64
+	RecentMS    float64
+	BaselineMS  float64
+	Degradation float64
+	BytesPerSec float64
+}
+
 // DiskInotify is the host's watch limit and Solarr's share of it.
 type DiskInotify struct {
 	MaxUserWatches     int64
@@ -57,6 +67,7 @@ type DiskScan struct {
 type DiskReport struct {
 	Paths     []DiskPath
 	Latencies []DiskLatency
+	Timings   []DiskTiming
 	Inotify   DiskInotify
 	Scan      DiskScan
 }
@@ -185,6 +196,12 @@ func diskReportView(report DiskReport) gen.DiskReport {
 		}
 		latencies = append(latencies, latency)
 	}
+	timings := make([]gen.DiskTiming, 0, len(report.Timings))
+	for _, t := range report.Timings {
+		timings = append(timings, gen.DiskTiming{
+			Path: t.Path, OpsPerMin: t.OpsPerMin, RecentMs: t.RecentMS, BaselineMs: t.BaselineMS, Degradation: t.Degradation, BytesPerSec: t.BytesPerSec,
+		})
+	}
 	roots := make([]gen.DiskScanRoot, 0, len(report.Scan.Roots))
 	for _, r := range report.Scan.Roots {
 		root := gen.DiskScanRoot{
@@ -197,7 +214,7 @@ func diskReportView(report DiskReport) gen.DiskReport {
 		roots = append(roots, root)
 	}
 	return gen.DiskReport{
-		Paths: paths, Latencies: latencies,
+		Paths: paths, Latencies: latencies, Timings: timings,
 		Inotify: gen.DiskInotify{
 			MaxUserWatches: report.Inotify.MaxUserWatches, BudgetWatches: report.Inotify.BudgetWatches, UsedByUs: report.Inotify.UsedByUs,
 			Directories: report.Inotify.Directories, RecommendedWatches: report.Inotify.RecommendedWatches,

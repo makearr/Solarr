@@ -7422,6 +7422,35 @@ export interface components {
             measured_at?: number;
             error: string;
         };
+        /** @description How Solarr's own calls to one root folder answered, taken from the work itself and never from a probe. */
+        DiskTiming: {
+            path: string;
+            /**
+             * Format: double
+             * @description Metadata calls (stat
+             */
+            ops_per_min: number;
+            /**
+             * Format: double
+             * @description Mean metadata call over the last two minutes.
+             */
+            recent_ms: number;
+            /**
+             * Format: double
+             * @description What the same calls normally take; 0 until learned.
+             */
+            baseline_ms: number;
+            /**
+             * Format: double
+             * @description Recent over baseline
+             */
+            degradation: number;
+            /**
+             * Format: double
+             * @description Bytes Solarr read and wrote on the folder per second
+             */
+            bytes_per_sec: number;
+        };
         DiskInotify: {
             /**
              * Format: int64
@@ -7502,6 +7531,7 @@ export interface components {
         };
         DiskReport: {
             scan: components["schemas"]["DiskScan"];
+            timings: components["schemas"]["DiskTiming"][];
             paths: components["schemas"]["DiskPath"][];
             latencies: components["schemas"]["DiskLatency"][];
             inotify: components["schemas"]["DiskInotify"];

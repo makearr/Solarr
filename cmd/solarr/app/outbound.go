@@ -184,6 +184,9 @@ func (p *process) providerClient(provider string, guard *httpx.Guard, config htt
 		guard = httpx.NewGuard(nil, nil, nil)
 	}
 	config.Provider = provider
+	if p.timings != nil {
+		config.Meter = p.timings
+	}
 	config.RejectedKeyOpens = !strings.HasPrefix(provider, providerIndexerPrefix) && !strings.HasPrefix(provider, providerDownloaderPrefix) &&
 		!strings.HasPrefix(provider, providerArrPrefix) && !strings.HasPrefix(provider, providerMediaServerPrefix) && provider != providerProwlarr && provider != providerWhisparr
 	_, metadata := settings.MetadataProviderByKey(provider)

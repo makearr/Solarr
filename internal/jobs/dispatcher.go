@@ -112,8 +112,17 @@ type DispatcherConfig struct {
 	Tick time.Duration
 	// ShutdownGrace is how long a stop waits for running jobs before it gives up on them (DefaultShutdownGrace when zero).
 	ShutdownGrace time.Duration
-	Logger        *slog.Logger
+	// Pressure answers how much slower the disks are than they normally are (1 is normal); the bulk pools take fewer
+	// jobs at once while it is above BackoffAbove. Nil never backs off.
+	Pressure func() float64
+	Logger   *slog.Logger
 }
+
+// BackoffAbove is the degradation at which the bulk pools start to take fewer jobs; the share falls as 1 over the degradation.
+const BackoffAbove = 1.5
+
+// bulkPools read library disks for as long as they are let, so they are the ones that give way to playback and imports.
+var bulkPools = map[Pool]bool{PoolScan: true, PoolRescan: true, PoolFiles: true}
 
 // DefaultShutdownGrace stays under a container runtime's usual stop allowance once the server's own shutdown is counted.
 const DefaultShutdownGrace = 25 * time.Second
@@ -129,6 +138,7 @@ type Dispatcher struct {
 	leaseTTL time.Duration
 	owner    string
 	grace    time.Duration
+	pressure func() float64
 
 	// slotFreed collects the pools' slot-opened signals; lastReclaim spaces the lease sweeps (SCHED-1).
 	slotFreed   chan struct{}
@@ -167,13 +177,14 @@ func NewDispatcher(queue *Queue, cl clock.Clock, executor *Executor, config Disp
 	}
 
 	return &Dispatcher{
-		queue:  queue,
-		clock:  cl,
-		logger: config.Logger,
-		pools:  pools,
-		order:  order,
-		tick:   config.Tick,
-		grace:  config.ShutdownGrace,
+		queue:    queue,
+		clock:    cl,
+		logger:   config.Logger,
+		pools:    pools,
+		order:    order,
+		tick:     config.Tick,
+		grace:    config.ShutdownGrace,
+		pressure: config.Pressure,
 		// Taken from the executor rather than configured again: the value that
 		// claims a lease must be the value that renews it.
 		leaseTTL: executor.LeaseTTL(),
@@ -212,7 +223,10 @@ func (d *Dispatcher) Tick(ctx context.Context) {
 	for _, pool := range d.order {
 		workers := d.pools[pool]
 		capacity := workers.freeCapacity()
-		if capacity == 0 {
+		if capacity > 0 && bulkPools[pool] {
+			capacity = min(capacity, d.backedOff(workers)-len(workers.slots))
+		}
+		if capacity <= 0 {
 			continue
 		}
 
@@ -234,6 +248,20 @@ func (d *Dispatcher) Tick(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// backedOff is how many jobs the pool may run at once under the current disk pressure: all of them while the disks
+// behave, a share falling with the degradation, never fewer than one.
+func (d *Dispatcher) backedOff(workers *workerPool) int {
+	size := cap(workers.slots)
+	if d.pressure == nil {
+		return size
+	}
+	pressure := d.pressure()
+	if pressure <= BackoffAbove {
+		return size
+	}
+	return max(1, int(float64(size)/pressure))
 }
 
 func (d *Dispatcher) reclaim(ctx context.Context) {

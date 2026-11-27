@@ -57,6 +57,8 @@ type ClientConfig struct {
 	// AnswerFailed reads the start of a 200 answer and says it is a failure all the same: a GraphQL server reports its
 	// own errors that way, and the breaker has to count them.
 	AnswerFailed func(start []byte) bool
+	// Meter, when set, is told each answer's timing.
+	Meter Meter
 	// Jar keeps the cookies a site sets, redirects included; nil keeps none.
 	Jar http.CookieJar
 }
@@ -96,6 +98,9 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 	transport := config.Transport
 	if transport == nil {
 		transport = NewTransport(guard, config.Proxy)
+	}
+	if config.Meter != nil {
+		transport = meteredTransport{inner: transport, meter: config.Meter, provider: config.Provider, clock: c}
 	}
 
 	return &Client{

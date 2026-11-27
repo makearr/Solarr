@@ -63,6 +63,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/platform/logbuffer"
 	"github.com/makearr/Solarr/internal/platform/logthrottle"
+	"github.com/makearr/Solarr/internal/platform/measure"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/privilege"
 	"github.com/makearr/Solarr/internal/platform/remoteimage"
@@ -83,7 +84,9 @@ type Build struct {
 
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
-	health healthWatch
+	// timings records how long Solarr's own disk calls and requests take.
+	timings *timings
+	health  healthWatch
 	// sendLocks makes a release go to a download client once per item at a time, across every media type's dispatch.
 	sendLocks keyedlock.Locks
 	// resolverLocks makes one new title resolve once at a time per media type across scan, import and watch.
@@ -238,7 +241,8 @@ type process struct {
 // Refusing to start is preferred over starting with silent data loss.
 func Serve(ctx context.Context, configPath string, out io.Writer, build Build) error {
 	guard := &libraryGuard{}
-	fsys := fsx.FS(fsx.NewGuarded(fsx.NewOS(), guard.deny))
+	measured := &timings{rec: measure.New(clock.NewSystem())}
+	fsys := fsx.FS(fsx.NewMetered(fsx.NewGuarded(fsx.NewOS(), guard.deny), clock.NewSystem(), measured))
 
 	// Before anything logs a timestamp or reads a directory.
 	timezone := privilege.ApplyTimezone(os.LookupEnv, out)
@@ -277,7 +281,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	}
 
 	running := &process{
-		wall: clock.NewSystem(), build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
+		wall: clock.NewSystem(), timings: measured, build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
 		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
 		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{Dir: filepath.Join(loaded.Paths.CacheDir, "transcode"), IONice: mediatool.IONice{Class: 2, Level: 0}}, fsys).WithStallWatch(clock.NewSystem(), playbackStallAfter),
 	}
@@ -420,6 +424,15 @@ func (p *process) openDatabases(ctx context.Context) error {
 		return err
 	}
 	p.cache = cache
+	rootPaths := func() []string {
+		folders := cache.Snapshot().RootFolders()
+		paths := make([]string, len(folders))
+		for i, folder := range folders {
+			paths[i] = folder.Path
+		}
+		return paths
+	}
+	p.timings.roots.Store(&rootPaths)
 	p.settingsRegistry = settings.NewDefaultRegistry()
 	for _, profile := range cache.Snapshot().QualityProfiles() {
 		for _, mistake := range score.ValidateStrict([]byte(profile.RulesJSON)) {
@@ -627,6 +640,7 @@ func (p *process) startJobs(ctx context.Context) error {
 		ExtraPaths: []string{p.config.Paths.ConfigDir},
 	}
 	p.disks.ScanRoots = p.diskScanRoots
+	p.disks.Timings = p.timings.rec.Snapshot
 	p.diskTurns = newDiskTurns(p.disks, p.disks.Monitor, wall)
 	p.taskHours = statistics.NewTaskHours(p.statistics)
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
@@ -736,6 +750,7 @@ func (p *process) startJobs(ctx context.Context) error {
 	}
 	p.dispatcher = jobs.NewDispatcher(queue, wall, executor, jobs.DispatcherConfig{
 		ShutdownGrace: p.config.Workers.ShutdownGrace.AsDuration(),
+		Pressure:      func() float64 { return p.timings.rec.Load(measure.Disk) },
 		Sizes: []jobs.PoolSize{
 			{Pool: jobs.PoolSearch, Capacity: p.config.Workers.Search},
 			{Pool: jobs.PoolAcquire, Capacity: p.config.Workers.Acquire},

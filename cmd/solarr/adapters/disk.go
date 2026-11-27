@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/disklatency"
 	"github.com/makearr/Solarr/internal/platform/disktopo"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/measure"
 	"github.com/makearr/Solarr/internal/scanning/watch"
 )
 
@@ -26,6 +27,8 @@ type DiskManager struct {
 	Cache   *settings.Cache
 	Clock   clock.Clock
 	Monitor *disklatency.Monitor
+	// Timings lists what Solarr's own disk calls have measured.
+	Timings func() []measure.Stat
 	// ExtraPaths are folders that are not root folders but still use a disk (the config folder).
 	ExtraPaths []string
 	// ScanRoots says how each root stands with the scan schedule; nil means none.
@@ -167,6 +170,17 @@ func (a *DiskManager) Report(ctx context.Context) (apiserver.DiskReport, error) 
 			latency.MeasuredAtUnix = reading.MeasuredAt.Unix()
 		}
 		report.Latencies = append(report.Latencies, latency)
+	}
+	if a.Timings != nil {
+		for _, stat := range a.Timings() {
+			if stat.Kind != measure.Disk {
+				continue
+			}
+			report.Timings = append(report.Timings, apiserver.DiskTiming{
+				Path: stat.Key, OpsPerMin: stat.OpsPerMin, RecentMS: milliseconds(stat.Recent), BaselineMS: milliseconds(stat.Baseline),
+				Degradation: stat.Degradation, BytesPerSec: stat.BytesPerSec,
+			})
+		}
 	}
 	report.Scan.IntervalHours = int64(a.Cache.Snapshot().ScanInterval() / time.Hour)
 	if a.ScanRoots != nil {

@@ -20,6 +20,7 @@ import (
 const (
 	typeBackup = jobs.Type("db.backup")
 	typeImport = jobs.Type("import.run")
+	typeScan   = jobs.Type("library.scan_test")
 )
 
 func newQueue(t *testing.T) (*jobs.Queue, *clock.Fake) {
@@ -58,6 +59,7 @@ func newQueueWithStore(t *testing.T) (*jobs.Queue, *store.Store, *clock.Fake) {
 
 	registry := jobs.NewRegistry()
 	registry.MustRegister(jobs.Definition{Type: typeBackup, Pool: jobs.PoolMaintenance})
+	registry.MustRegister(jobs.Definition{Type: typeScan, Pool: jobs.PoolScan})
 	registry.MustRegister(jobs.Definition{
 		Type: typeImport, Pool: jobs.PoolImport, Mutating: true, MaxAttempts: 3,
 	})

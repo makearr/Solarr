@@ -3086,6 +3086,7 @@ type DiskReport struct {
 	Latencies []DiskLatency `json:"latencies"`
 	Paths     []DiskPath    `json:"paths"`
 	Scan      DiskScan      `json:"scan"`
+	Timings   []DiskTiming  `json:"timings"`
 }
 
 // DiskScan defines model for DiskScan.
@@ -3119,6 +3120,25 @@ type DiskScanRoot struct {
 
 	// Why Reason code: manual, never_scanned, startup_stale, startup_recent, watcher_lost, interval_passed, within_interval, size_or_count_changed, size_and_count_unchanged.
 	Why string `json:"why"`
+}
+
+// DiskTiming How Solarr's own calls to one root folder answered, taken from the work itself and never from a probe.
+type DiskTiming struct {
+	// BaselineMs What the same calls normally take; 0 until learned.
+	BaselineMs float64 `json:"baseline_ms"`
+
+	// BytesPerSec Bytes Solarr read and wrote on the folder per second
+	BytesPerSec float64 `json:"bytes_per_sec"`
+
+	// Degradation Recent over baseline
+	Degradation float64 `json:"degradation"`
+
+	// OpsPerMin Metadata calls (stat
+	OpsPerMin float64 `json:"ops_per_min"`
+	Path      string  `json:"path"`
+
+	// RecentMs Mean metadata call over the last two minutes.
+	RecentMs float64 `json:"recent_ms"`
 }
 
 // DismissedImportSessions defines model for DismissedImportSessions.
