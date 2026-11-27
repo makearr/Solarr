@@ -189,14 +189,17 @@ export function ConnectionForm({ initial, state, onAdded, onCancel, only }: {
       const instance = await ok(api.POST("/arr/instances", { body: { app, name: shown, base_url: baseUrl.trim(), api_key: apiKey.trim(), enabled: true, push_monitoring: false } }));
       const connection: WizardConnection = {
         instanceId: instance.id, app, name: shown, baseUrl: baseUrl.trim(), version: verdict?.version,
-        folderMaps: [], choices: { ...DEFAULT_CHOICES }, push: false,
+        folderMaps: [], choices: { ...DEFAULT_CHOICES }, push: false, languages: verdict?.languages ?? [],
       };
-      if (!entry.mediaType) return { ...state, connections: [...state.connections, connection] };
+      // Languages nobody chose yet start as the app's own.
+      const languages = state.languages === undefined && connection.languages?.length ? connection.languages : state.languages;
+      if (!entry.mediaType) return { ...state, languages, connections: [...state.connections, connection] };
       const roots = await api.GET("/arr/instances/{id}/rootfolders", { params: { path: { id: instance.id } } });
       connection.folderMaps = (roots.data ?? []).map((root) => ({ arrPath: root.path, here: root.path }));
       connection.libraryKey = `arr-${instance.id}`;
       return {
         ...state,
+        languages,
         connections: [...state.connections, connection],
         libraries: [
           ...state.libraries,

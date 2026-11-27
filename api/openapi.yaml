@@ -13421,6 +13421,10 @@ components:
           type: array
           description: The libraries that take the *Arr's Media Management into their File Management before the import.
           items: { type: integer, format: int64 }
+        naming_into:
+          type: array
+          description: The libraries that take the *Arr's naming formats, translated into Solarr's, before the import; the preview lists them as naming changes.
+          items: { type: integer, format: int64 }
         new_folders_library_id:
           type: integer
           format: int64
@@ -13446,6 +13450,10 @@ components:
         settings:
           type: array
           items: { $ref: "#/components/schemas/ArrPreviewSettings" }
+        naming_changes:
+          type: array
+          description: What taking the *Arr's naming would change against a new library of the app's media type, for a library that is not made yet; empty when the app has no naming to take.
+          items: { $ref: "#/components/schemas/ArrSettingChange" }
         setup: { $ref: "#/components/schemas/ArrPreviewSetup" }
 
     ArrConnectionTest:
@@ -13460,6 +13468,7 @@ components:
           enum: [wrong_key, wrong_port, unreachable, other]
           description: What to fix when not ok.
         message: { type: string, description: The plain-words detail of the failure. }
+        languages: { type: array, items: { type: string }, description: "When ok: the ISO 639-1 codes of the languages the app's profiles ask for, in profile order (Radarr's quality profiles, Sonarr v3's language profiles); empty for an app with none or a profile that takes any." }
 
     DiscoveredService:
       type: object
@@ -13513,14 +13522,27 @@ components:
         items: { type: integer, format: int64, description: Chosen items on it. }
         proposed_profile_id: { type: integer, format: int64, nullable: true, description: The Solarr profile of the same name; null is the library's. }
 
+    ArrSettingChange:
+      type: object
+      required: [key, label, current, proposed]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        current: { type: string, description: The library's value, in words. }
+        proposed: { type: string, description: The *Arr's value, in words. }
+
     ArrPreviewSettings:
       type: object
       required: [library_id, changes]
       properties:
         library_id: { type: integer, format: int64 }
+        naming_changes:
+          type: array
+          description: What taking the *Arr's naming would change, template by template with the translated template and an example name, and what could not be taken over; empty when the naming is the same.
+          items: { $ref: "#/components/schemas/ArrSettingChange" }
         changes:
           type: array
-          description: Only the settings that differ.
+          description: Only the File Management settings that differ.
           items:
             type: object
             required: [key, label, current, proposed]

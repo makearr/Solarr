@@ -50,7 +50,14 @@ func (a ArrSync) TestConnection(ctx context.Context, app settings.ArrApp, baseUR
 	if name == "" {
 		name = string(app)
 	}
-	return apiserver.ArrConnectionTest{OK: true, AppName: name, Version: status.Version}
+	test := apiserver.ArrConnectionTest{OK: true, AppName: name, Version: status.Version}
+	switch app {
+	case settings.ArrAppRadarr:
+		test.Languages, _ = client.Radarr().Languages(ctx)
+	case settings.ArrAppSonarr:
+		test.Languages, _ = client.Sonarr().Languages(ctx)
+	}
+	return test
 }
 
 // classifyArrProblem reads a failed call as what the person has to fix.

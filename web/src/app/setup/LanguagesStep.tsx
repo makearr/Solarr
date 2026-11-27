@@ -7,7 +7,8 @@ import { t } from "@/lib/i18n";
 
 import { LanguagePicker } from "../LanguagePicker";
 import { StepFrame } from "./StepFrame";
-import type { WizardState } from "./wizardState";
+import { quietButtonStyle } from "./ui";
+import { suggestedLanguages, type WizardState } from "./wizardState";
 
 // One click each; the editor below stays for anything else.
 const PRESETS: readonly (readonly string[])[] = [["en"], ["en", "de"], ["de", "en"], ["fr", "en"], ["es", "en"], ["ja", "en"]];
@@ -24,7 +25,8 @@ export function LanguagesStep({ state, onChange, onBack, onNext }: {
   onNext: () => void;
 }) {
   const current = useQuery({ queryKey: ["defaultLanguages"], queryFn: () => ok(api.GET("/defaultlanguages")) });
-  const [languages, setLanguages] = useState<string[]>(state.languages ?? []);
+  const suggestion = suggestedLanguages(state);
+  const [languages, setLanguages] = useState<string[]>(state.languages ?? suggestion);
   useEffect(() => {
     if (languages.length === 0 && current.data) setLanguages(current.data.languages.length > 0 ? current.data.languages : ["en"]);
   }, [current.data, languages.length]);
@@ -43,6 +45,14 @@ export function LanguagesStep({ state, onChange, onBack, onNext }: {
       }}
       canNext={languages.length > 0}
     >
+      {suggestion.length > 0 && JSON.stringify(suggestion) !== JSON.stringify(languages) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border-subtle bg-canvas p-3 text-xs">
+          <span className="flex-1">{t("setup.languages.fromArr", { languages: suggestion.map(languageName).join(" + ") })}</span>
+          <button type="button" onClick={() => choose(suggestion)} className={quietButtonStyle}>
+            {t("setup.languages.useThem")}
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2" role="group" aria-label={t("setup.languages.presets")}>
         {PRESETS.map((codes) => {
           const active = JSON.stringify(codes) === JSON.stringify(languages);

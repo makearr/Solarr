@@ -44,6 +44,8 @@ export interface WizardLibrary {
   kind: string;
   folders: string[];
   starter: Starter;
+  /** Take the *Arr's naming, translated, into the library; on unless switched off in the review. */
+  takeNaming?: boolean;
   /** An existing library picked to use as it is. */
   libraryId?: number;
   /** The library made at Finish, remembered so a retry does not make it twice. */
@@ -62,6 +64,8 @@ export interface WizardConnection {
   choices: ImportChoices;
   push: boolean;
   runId?: number;
+  /** The languages the app's own profiles ask for, read when it was tested. */
+  languages?: string[];
 }
 
 /** Everything the assistant remembers, on the server per account, so a reload or another browser picks up where it stopped. No secret is in it. */
@@ -102,6 +106,11 @@ export function useWizardState(): { state: WizardState; ready: boolean; update: 
 /** The steps shown in the stepper: the path's own once chosen, before that the two every path starts with. */
 export function stepsOf(path: WizardPath | undefined): readonly StepId[] {
   return path ? STEPS[path] : STEPS.migrate.slice(0, 1);
+}
+
+/** The languages the connected apps' profiles ask for, each once, in connection order. */
+export function suggestedLanguages(state: WizardState): string[] {
+  return [...new Set(state.connections.flatMap((connection) => connection.languages ?? []))];
 }
 
 export function libraryOf(state: WizardState, key: string | undefined): WizardLibrary | undefined {

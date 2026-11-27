@@ -1823,6 +1823,9 @@ type ArrConnectionTest struct {
 	// AppName What the app calls itself
 	AppName *string `json:"app_name,omitempty"`
 
+	// Languages When ok: the ISO 639-1 codes of the languages the app's profiles ask for, in profile order (Radarr's quality profiles, Sonarr v3's language profiles); empty for an app with none or a profile that takes any.
+	Languages *[]string `json:"languages,omitempty"`
+
 	// Message The plain-words detail of the failure.
 	Message *string `json:"message,omitempty"`
 	Ok      bool    `json:"ok"`
@@ -1890,9 +1893,12 @@ type ArrImportPreview struct {
 
 	// ItemKind What the counts count.
 	ItemKind ArrImportPreviewItemKind `json:"item_kind"`
-	Profiles []ArrPreviewProfile      `json:"profiles"`
-	Roots    []ArrPreviewRoot         `json:"roots"`
-	Settings []ArrPreviewSettings     `json:"settings"`
+
+	// NamingChanges What taking the *Arr's naming would change against a new library of the app's media type, for a library that is not made yet; empty when the app has no naming to take.
+	NamingChanges *[]ArrSettingChange  `json:"naming_changes,omitempty"`
+	Profiles      []ArrPreviewProfile  `json:"profiles"`
+	Roots         []ArrPreviewRoot     `json:"roots"`
+	Settings      []ArrPreviewSettings `json:"settings"`
 
 	// Setup What the *Arr's indexers, download clients and import lists would add here; absent when the options ask for none.
 	Setup *ArrPreviewSetup `json:"setup,omitempty"`
@@ -2017,7 +2023,7 @@ type ArrPreviewRoot struct {
 
 // ArrPreviewSettings defines model for ArrPreviewSettings.
 type ArrPreviewSettings struct {
-	// Changes Only the settings that differ.
+	// Changes Only the File Management settings that differ.
 	Changes []struct {
 		// Current The library's value
 		Current string `json:"current"`
@@ -2028,6 +2034,9 @@ type ArrPreviewSettings struct {
 		Proposed string `json:"proposed"`
 	} `json:"changes"`
 	LibraryId int64 `json:"library_id"`
+
+	// NamingChanges What taking the *Arr's naming would change, template by template with the translated template and an example name, and what could not be taken over; empty when the naming is the same.
+	NamingChanges *[]ArrSettingChange `json:"naming_changes,omitempty"`
 }
 
 // ArrPreviewSetup What the *Arr's indexers, download clients and import lists would add here; absent when the options ask for none.
@@ -2096,6 +2105,17 @@ type ArrRootFolder struct {
 	Path string `json:"path"`
 }
 
+// ArrSettingChange defines model for ArrSettingChange.
+type ArrSettingChange struct {
+	// Current The library's value
+	Current string `json:"current"`
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+
+	// Proposed The *Arr's value
+	Proposed string `json:"proposed"`
+}
+
 // ArrSyncOptions What one import brings in. Absent is monitored items and every album, as before options.
 type ArrSyncOptions struct {
 	// Albums Which albums, by what the *Arr holds of them.
@@ -2118,6 +2138,9 @@ type ArrSyncOptions struct {
 
 	// Monitored Monitored artists and albums.
 	Monitored *bool `json:"monitored,omitempty"`
+
+	// NamingInto The libraries that take the *Arr's naming formats, translated into Solarr's, before the import; the preview lists them as naming changes.
+	NamingInto *[]int64 `json:"naming_into,omitempty"`
 
 	// NewFoldersLibraryId The library the *Arr's root folders unknown here will be added to; the preview counts them for it and proposes its settings. The import itself places by the folders as they are by then.
 	NewFoldersLibraryId *int64 `json:"new_folders_library_id,omitempty"`

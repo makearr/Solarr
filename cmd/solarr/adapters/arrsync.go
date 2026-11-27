@@ -150,7 +150,7 @@ func (a ArrSync) runAndFinish(
 	ctx context.Context, importID, instanceID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
 	options apiserver.ArrSyncOptions,
 ) {
-	settingsErr := a.takeSettings(ctx, instance.App, client, options.SettingsInto)
+	settingsErr := errors.Join(a.takeSettings(ctx, instance.App, client, options.SettingsInto), a.takeNaming(ctx, instance.App, client, options.NamingInto))
 	foldersErr := a.rootFolders(ctx, instance, client, options)
 	// Indexers, clients and lists are small and first, so a long library walk never hides them.
 	notes, setupErr := a.importSetup(ctx, instance, client, options)
@@ -257,32 +257,55 @@ func (a ArrSync) takeSettings(ctx context.Context, app settings.ArrApp, client a
 		if err := a.Cache.SetCategoryFileManagement(ctx, id, next); err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", category.Name, err))
 		}
-		if app == settings.ArrAppLidarr && category.MediaType == "music" {
-			failures = append(failures, a.takeNaming(ctx, client, category))
-		}
 	}
 	return errors.Join(failures...)
 }
 
-// takeNaming gives a music library Lidarr's naming formats; a format it cannot express stays as the library has it.
-func (a ArrSync) takeNaming(ctx context.Context, client arrimport.LidarrClient, category settings.Category) error {
-	config, err := client.NamingConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("%s: read naming: %w", category.Name, err)
+// readNaming answers an app's naming settings; the comic managers have none.
+func readNaming(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) (arrimport.Naming, error) {
+	switch app {
+	case settings.ArrAppSonarr:
+		return client.Sonarr().Naming(ctx)
+	case settings.ArrAppRadarr:
+		return client.Radarr().Naming(ctx)
+	case settings.ArrAppReadarr:
+		return client.Readarr().Naming(ctx)
+	case settings.ArrAppWhisparr:
+		return client.Whisparr().Naming(ctx)
 	}
-	module, ok := a.namingModule(category.MediaType)
-	if !ok {
+	return client.Naming(ctx)
+}
+
+// takeNaming gives each library the *Arr's naming formats translated into its own; a format it cannot express stays as the library has it.
+func (a ArrSync) takeNaming(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient, libraries []int64) error {
+	if len(libraries) == 0 || app.ComicManager() {
 		return nil
 	}
-	profile := module.DefaultNamingProfile()
-	if category.Naming != nil {
-		profile = *category.Naming
+	config, err := readNaming(ctx, app, client)
+	if err != nil {
+		return fmt.Errorf("read naming: %w", err)
 	}
-	next, _, _ := arrNaming(module, profile, config)
-	if err := a.Cache.SetCategoryNaming(ctx, category.ID, next); err != nil {
-		return fmt.Errorf("%s: naming: %w", category.Name, err)
+	var failures []error
+	for _, id := range libraries {
+		category, found := a.Cache.Snapshot().Category(id)
+		if !found {
+			failures = append(failures, fmt.Errorf("library %d not found", id))
+			continue
+		}
+		module, ok := a.namingModule(category.MediaType)
+		if !ok {
+			continue
+		}
+		profile := module.DefaultNamingProfile()
+		if category.Naming != nil {
+			profile = *category.Naming
+		}
+		next, _, _ := arrNaming(module, profile, config)
+		if err := a.Cache.SetCategoryNaming(ctx, id, next); err != nil {
+			failures = append(failures, fmt.Errorf("%s: naming: %w", category.Name, err))
+		}
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 // namingModule is a media type's naming, when it declares one.

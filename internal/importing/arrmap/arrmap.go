@@ -92,13 +92,14 @@ type PreviewSource struct {
 	Follows  map[int64]PreviewFollow
 	Settings arrimport.MediaManagement
 	// Naming is the app's naming formats, nil from an app whose naming is not taken over.
-	Naming *arrimport.NamingConfig
+	Naming *arrimport.Naming
 }
 
 // PreviewClient is what a preview reads of every app beside its items.
 type PreviewClient interface {
 	RootFolders(ctx context.Context) ([]arrimport.LidarrRootFolder, error)
 	MediaManagement(ctx context.Context) (arrimport.MediaManagement, error)
+	Naming(ctx context.Context) (arrimport.Naming, error)
 }
 
 // ReadPreview completes a preview with the app's root folders, profiles and Media Management; only the last can fail it.
@@ -111,6 +112,9 @@ func ReadPreview(ctx context.Context, source PreviewSource, client PreviewClient
 	var err error
 	if source.Settings, err = client.MediaManagement(ctx); err != nil {
 		return PreviewSource{}, fmt.Errorf("media management: %w", err)
+	}
+	if naming, namingErr := client.Naming(ctx); namingErr == nil {
+		source.Naming = &naming
 	}
 	return source, nil
 }

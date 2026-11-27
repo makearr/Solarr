@@ -9570,6 +9570,8 @@ export interface components {
             }[];
             /** @description The libraries that take the *Arr's Media Management into their File Management before the import. */
             settings_into?: number[];
+            /** @description The libraries that take the *Arr's naming formats, translated into Solarr's, before the import; the preview lists them as naming changes. */
+            naming_into?: number[];
             /**
              * Format: int64
              * @description The library the *Arr's root folders unknown here will be added to; the preview counts them for it and proposes its settings. The import itself places by the folders as they are by then.
@@ -9587,6 +9589,8 @@ export interface components {
             /** @description Which release types the followed items take, one per *Arr follow profile in use (Lidarr's metadata profile). */
             follows?: components["schemas"]["ArrPreviewFollow"][];
             settings: components["schemas"]["ArrPreviewSettings"][];
+            /** @description What taking the *Arr's naming would change against a new library of the app's media type, for a library that is not made yet; empty when the app has no naming to take. */
+            naming_changes?: components["schemas"]["ArrSettingChange"][];
             setup?: components["schemas"]["ArrPreviewSetup"];
         };
         ArrConnectionTest: {
@@ -9601,6 +9605,8 @@ export interface components {
             problem?: "wrong_key" | "wrong_port" | "unreachable" | "other";
             /** @description The plain-words detail of the failure. */
             message?: string;
+            /** @description When ok: the ISO 639-1 codes of the languages the app's profiles ask for, in profile order (Radarr's quality profiles, Sonarr v3's language profiles); empty for an app with none or a profile that takes any. */
+            languages?: string[];
         };
         DiscoveredService: {
             /** @enum {string} */
@@ -9698,10 +9704,20 @@ export interface components {
              */
             proposed_profile_id?: number | null;
         };
+        ArrSettingChange: {
+            key: string;
+            label: string;
+            /** @description The library's value */
+            current: string;
+            /** @description The *Arr's value */
+            proposed: string;
+        };
         ArrPreviewSettings: {
             /** Format: int64 */
             library_id: number;
-            /** @description Only the settings that differ. */
+            /** @description What taking the *Arr's naming would change, template by template with the translated template and an example name, and what could not be taken over; empty when the naming is the same. */
+            naming_changes?: components["schemas"]["ArrSettingChange"][];
+            /** @description Only the File Management settings that differ. */
             changes: {
                 key: string;
                 label: string;

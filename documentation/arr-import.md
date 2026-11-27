@@ -25,6 +25,10 @@ over a hundred megabytes that takes minutes, so it is read as a stream with a tw
 Whisparr: a monitored **performer** or **studio** becomes a follow (their scenes arrive as the follow runs), a **scene** is added
 by its StashDB id, monitored as there ([adult.md](adult.md)).
 
+## Taking the naming scheme
+
+Every app but the comic managers has its naming read from `config/naming` into one shape (`arrimport.Naming`, each format filed under the Solarr slot it fills). `naming.TranslateArrTemplate` writes each template in Solarr's syntax: known tokens stay, an affix that shows only with a value (`{-Release Group}`) becomes a `[conditional]`, literal square brackets are escaped, a text token's `:30` becomes a truncation, and a token Solarr has no counterpart for is dropped and named ("Not taken over") with the leftover separators tidied. The preview lists the translated templates and example names per library (`naming_changes`, and for a library not made yet, top level against a new library's defaults); `naming_into` on the sync options takes them. The setup assistant ticks the box for each library it makes.
+
 ## Sending monitoring back
 
 A connection may send the monitored flag of what an import matched back to its *Arr (**off** until its owner turns it on, at the

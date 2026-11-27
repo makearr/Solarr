@@ -101,6 +101,9 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 	slices.SortFunc(preview.Follows, func(x, y apiserver.ArrPreviewFollow) int { return int(y.Items - x.Items) })
 	slices.SortFunc(preview.Profiles, func(x, y apiserver.ArrPreviewProfile) int { return int(y.Items - x.Items) })
 
+	if module, ok := a.namingModule(source.MediaType); ok && source.Naming != nil {
+		_, preview.NamingChanges, _ = arrNaming(module, module.DefaultNamingProfile(), *source.Naming)
+	}
 	var libraries []int64
 	for _, root := range preview.Roots {
 		if root.LibraryID != nil && root.Chosen > 0 && !slices.Contains(libraries, *root.LibraryID) {
@@ -113,15 +116,15 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 			continue
 		}
 		_, changes := arrFileManagement(category.FileManagement, source.Settings, instance.App, a.extraFileDefaults(category.MediaType))
+		var namingChanges []apiserver.ArrSettingChange
 		if module, ok := a.namingModule(category.MediaType); ok && source.Naming != nil {
 			profile := module.DefaultNamingProfile()
 			if category.Naming != nil {
 				profile = *category.Naming
 			}
-			_, namingChanges, _ := arrNaming(module, profile, *source.Naming)
-			changes = append(changes, namingChanges...)
+			_, namingChanges, _ = arrNaming(module, profile, *source.Naming)
 		}
-		preview.Settings = append(preview.Settings, apiserver.ArrPreviewSettings{LibraryID: id, Changes: changes})
+		preview.Settings = append(preview.Settings, apiserver.ArrPreviewSettings{LibraryID: id, Changes: changes, NamingChanges: namingChanges})
 	}
 	return preview, nil
 }

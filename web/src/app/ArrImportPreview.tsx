@@ -21,6 +21,8 @@ export function ArrImportPreviewPanel({
   onProfiles,
   settingsInto,
   onSettingsInto,
+  namingInto,
+  onNamingInto,
 }: {
   preview: Preview;
   appName: string;
@@ -29,6 +31,8 @@ export function ArrImportPreviewPanel({
   onProfiles: (choice: ProfileChoice) => void;
   settingsInto: number[];
   onSettingsInto: (libraries: number[]) => void;
+  namingInto: number[];
+  onNamingInto: (libraries: number[]) => void;
 }) {
   const libraries = useLibraries();
   const qualityProfiles = useQualityProfiles();
@@ -155,8 +159,36 @@ export function ArrImportPreviewPanel({
               ))}
             </ul>
           )}
+          {(library.naming_changes ?? []).length > 0 && (
+            <>
+              <label className="flex items-center gap-2 font-medium text-ink">
+                <input
+                  type="checkbox"
+                  checked={namingInto.includes(library.library_id)}
+                  onChange={(event) =>
+                    onNamingInto(event.target.checked ? [...namingInto, library.library_id] : namingInto.filter((id) => id !== library.library_id))
+                  }
+                />
+                {t("arrImportPreview.takeNaming", { app: appName, library: libraryName(library.library_id) ?? "the library" })}
+              </label>
+              <NamingChanges changes={library.naming_changes ?? []} />
+            </>
+          )}
         </div>
       ))}
     </div>
+  );
+}
+
+/** The translated templates and example names an *Arr's naming would give, and what could not be taken over. */
+export function NamingChanges({ changes }: { changes: { key: string; label: string; current: string; proposed: string }[] }) {
+  return (
+    <ul className="pl-6 text-ink-muted">
+      {changes.map((change) => (
+        <li key={change.key} className={change.key === "naming_unsupported" ? "text-warn" : undefined}>
+          {change.label}: {change.key === "naming_unsupported" ? change.proposed : <>{change.current} → <span className="text-ink">{change.proposed}</span></>}
+        </li>
+      ))}
+    </ul>
   );
 }

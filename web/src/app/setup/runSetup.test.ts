@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { starterProfile } from "./QualityStep";
 import { buildTasks, foldersOf, syncOptions } from "./runSetup";
-import { DEFAULT_CHOICES, EMPTY_WIZARD, stepsOf, type WizardConnection, type WizardLibrary, type WizardState } from "./wizardState";
+import { DEFAULT_CHOICES, EMPTY_WIZARD, stepsOf, suggestedLanguages, type WizardConnection, type WizardLibrary, type WizardState } from "./wizardState";
 
 const library: WizardLibrary = { key: "arr-3", name: "Movies", mediaType: "movie", kind: "", folders: [], starter: "arr" };
 const connection: WizardConnection = {
@@ -69,5 +69,16 @@ describe("the steps", () => {
     expect(stepsOf("migrate")).not.toContain("libraries");
     expect(stepsOf("fresh")).toContain("tools");
     expect(stepsOf("migrate")).toContain("features");
+  });
+});
+
+describe("suggestedLanguages", () => {
+  it("lists what the connected apps asked for, each once and in connection order", () => {
+    const state: WizardState = {
+      ...EMPTY_WIZARD,
+      connections: [{ ...connection, languages: ["ja", "en"] }, { ...connection, instanceId: 4, languages: ["en", "de"] }, { ...connection, instanceId: 5 }],
+    };
+    expect(suggestedLanguages(state)).toEqual(["ja", "en", "de"]);
+    expect(suggestedLanguages(EMPTY_WIZARD)).toEqual([]);
   });
 });

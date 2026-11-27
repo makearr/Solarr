@@ -177,6 +177,10 @@ async function startImport({ state, commit }: TaskHooks, instanceId: number): Pr
     options.profile_map = preview.profiles.map((profile) => ({ arr_profile_id: profile.arr_profile_id, profile_id: profile.proposed_profile_id ?? null }));
     options.settings_into = preview.settings.filter((one) => one.changes.length > 0 && one.library_id === libraryId).map((one) => one.library_id);
   }
+  if (library.takeNaming !== false && library.libraryId === undefined) {
+    const preview = await ok(api.POST("/arr/instances/{id}/preview", { params: { path: { id: instanceId } }, body: options }));
+    options.naming_into = preview.settings.filter((one) => (one.naming_changes ?? []).length > 0 && one.library_id === libraryId).map((one) => one.library_id);
+  }
   const started = await api.POST("/arr/instances/{id}/sync", { params: { path: { id: instanceId } }, body: options });
   if (started.data) {
     commit(replaceConnection(state(), instanceId, { runId: started.data.id }));

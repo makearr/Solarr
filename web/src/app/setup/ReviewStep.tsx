@@ -8,7 +8,8 @@ import { appTitle } from "./ConnectStep";
 import { foldersOf, libraryIdOf, syncOptions } from "./runSetup";
 import { StepFrame } from "./StepFrame";
 import { Verdict } from "./ui";
-import type { Starter, WizardConnection, WizardState } from "./wizardState";
+import { NamingChanges } from "../ArrImportPreview";
+import { replaceLibrary, type Starter, type WizardConnection, type WizardState } from "./wizardState";
 
 function starterLabel(starter: Starter, app?: string): string {
   switch (starter) {
@@ -26,7 +27,7 @@ function starterLabel(starter: Starter, app?: string): string {
 }
 
 /** Everything that will happen, read before any of it does; the import figures come from the *Arr itself, read-only. */
-export function ReviewStep({ state, onBack, onFinish }: { state: WizardState; onBack: () => void; onFinish: () => void }) {
+export function ReviewStep({ state, update, onBack, onFinish }: { state: WizardState; update: (next: WizardState) => void; onBack: () => void; onFinish: () => void }) {
   const content = state.connections.filter((connection) => connection.libraryKey !== undefined);
   const prowlarr = state.connections.filter((connection) => connection.app === "prowlarr");
   const nothing = state.libraries.length === 0 && state.connections.length === 0 && !state.languages;
@@ -45,7 +46,14 @@ export function ReviewStep({ state, onBack, onFinish }: { state: WizardState; on
           <Section key={library.key} title={library.libraryId !== undefined ? t("setup.review.useLibrary", { name: library.name }) : t("setup.review.makeLibrary", { name: library.name })}>
             <p className="font-mono text-xs text-ink-muted">{folders.join("  ") || t("setup.review.noFolders")}</p>
             <p>{t("setup.review.quality", { quality: library.libraryId !== undefined ? starterLabel("keep") : starterLabel(library.starter, connection?.app) })}</p>
-            {connection && <ImportFigures connection={connection} libraryId={libraryIdOf(library)} />}
+            {connection && (
+              <ImportFigures
+                connection={connection}
+                libraryId={libraryIdOf(library)}
+                takeNaming={library.libraryId === undefined ? library.takeNaming !== false : undefined}
+                onTakeNaming={(takeNaming) => update(replaceLibrary(state, library.key, { takeNaming }))}
+              />
+            )}
           </Section>
         );
       })}
@@ -68,7 +76,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function ImportFigures({ connection, libraryId }: { connection: WizardConnection; libraryId: number | undefined }) {
+function ImportFigures({
+  connection, libraryId, takeNaming, onTakeNaming,
+}: { connection: WizardConnection; libraryId: number | undefined; takeNaming: boolean | undefined; onTakeNaming: (take: boolean) => void }) {
   const options = syncOptions(connection, libraryId);
   const preview = useQuery({
     queryKey: ["setup-preview", connection.instanceId, options],
@@ -81,7 +91,18 @@ function ImportFigures({ connection, libraryId }: { connection: WizardConnection
   const chosen = roots.reduce((sum, root) => sum + root.chosen, 0);
   const added = roots.reduce((sum, root) => sum + root.new, 0);
   const setup = preview.data.setup;
+  const naming = (preview.data.settings.find((one) => one.library_id === libraryId)?.naming_changes ?? preview.data.naming_changes ?? []);
   return (
+    <>
+    {naming.length > 0 && takeNaming !== undefined && (
+      <div className="space-y-1 text-xs">
+        <label className="flex items-center gap-2 font-medium text-ink">
+          <input type="checkbox" checked={takeNaming} onChange={(event) => onTakeNaming(event.target.checked)} />
+          {t("setup.review.takeNaming", { app: appTitle(connection.app) })}
+        </label>
+        <NamingChanges changes={naming} />
+      </div>
+    )}
     <ul className="list-disc pl-5 text-xs text-ink-muted">
       {(connection.choices.monitored || connection.choices.unmonitored) && (
         <li>{t("setup.review.items", { chosen, added, folders: roots.length })}</li>
@@ -92,5 +113,6 @@ function ImportFigures({ connection, libraryId }: { connection: WizardConnection
       {setup?.problem && <li className="text-warn">{setup.problem}</li>}
       {connection.push && <li>{t("setup.review.push", { app: appTitle(connection.app) })}</li>}
     </ul>
+    </>
   );
 }

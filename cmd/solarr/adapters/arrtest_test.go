@@ -3,6 +3,7 @@ package adapters
 import (
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +54,7 @@ func TestArrTestConnectionNamesTheAppOrWhatToFix(t *testing.T) {
 		}}
 		got := sync.TestConnection(t.Context(), settings.ArrAppRadarr, "http://radarr.local:7878", "key")
 		got.Message = ""
-		if got != test.want {
+		if !reflect.DeepEqual(got, test.want) {
 			t.Errorf("%s: got %+v, want %+v", name, got, test.want)
 		}
 	}
@@ -86,5 +87,21 @@ func TestArrDiscoverKeepsOneAnswerPerAppAndSkipsWhatIsNotThere(t *testing.T) {
 		if got[index] != want[index] {
 			t.Errorf("found[%d] = %+v, want %+v", index, got[index], want[index])
 		}
+	}
+}
+
+func TestArrTestConnectionCarriesTheLanguagesOfRadarrsProfiles(t *testing.T) {
+	transport := answeringTransport(func(request *http.Request) answer {
+		if request.URL.Path == "/api/v3/qualityprofile" {
+			return answer{status: 200, body: `[{"id":1,"language":{"name":"Japanese"}},{"id":2,"language":{"name":"English"}},{"id":3,"language":{"name":"Any"}}]`}
+		}
+		return answer{status: 200, body: `{"appName":"Radarr","version":"5.2.1"}`}
+	})
+	sync := ArrSync{Lidarr: func(baseURL, apiKey string) arrimport.LidarrClient {
+		return arrimport.NewLidarrClient(answeringClient(transport), baseURL, apiKey)
+	}}
+	got := sync.TestConnection(t.Context(), settings.ArrAppRadarr, "http://radarr.local:7878", "key")
+	if want := (apiserver.ArrConnectionTest{OK: true, AppName: "Radarr", Version: "5.2.1", Languages: []string{"ja", "en"}}); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
 	}
 }

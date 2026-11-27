@@ -273,9 +273,6 @@ func (l LidarrImport) Preview(ctx context.Context, client arrimport.LidarrClient
 	if err != nil {
 		return arrmap.PreviewSource{}, err
 	}
-	if naming, namingErr := client.NamingConfig(ctx); namingErr == nil {
-		read.Naming = &naming
-	}
 	return read, nil
 }
 

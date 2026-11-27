@@ -60,6 +60,7 @@ export function ArrSyncOptions({
   const [preview, setPreview] = useState<Preview | null>(null);
   const [profiles, setProfiles] = useState<ProfileChoice>({});
   const [settingsInto, setSettingsInto] = useState<number[]>([]);
+  const [namingInto, setNamingInto] = useState<number[]>([]);
   // A preview answers the options it was asked with; any change asks again.
   useEffect(() => setPreview(null), [monitored, unmonitored, albums, rewrites, importFolders, libraryId, monitoringOnly]);
 
@@ -102,6 +103,7 @@ export function ArrSyncOptions({
       setProfiles(Object.fromEntries(data.profiles.map((profile) => [profile.arr_profile_id, profile.proposed_profile_id ?? null])));
       setSettingsInto(data.settings.filter((library) => library.changes.length > 0).map((library) => library.library_id));
       setPreview(data);
+      setNamingInto(data.settings.filter((library) => (library.naming_changes ?? []).length > 0).map((library) => library.library_id));
     },
   });
 
@@ -140,6 +142,7 @@ export function ArrSyncOptions({
           new_folders_library_id: libraryId,
           profile_map: Object.entries(profiles).map(([arr, profile]) => ({ arr_profile_id: Number(arr), profile_id: profile })),
           settings_into: settingsInto,
+          naming_into: namingInto,
         },
       });
       if (error) throw error;
@@ -260,6 +263,8 @@ export function ArrSyncOptions({
           onProfiles={setProfiles}
           settingsInto={settingsInto}
           onSettingsInto={setSettingsInto}
+          namingInto={namingInto}
+          onNamingInto={setNamingInto}
         />
       )}
       <div className="flex items-center gap-2">

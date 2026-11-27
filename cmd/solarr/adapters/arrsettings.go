@@ -151,47 +151,55 @@ func titleRequired(value settings.EpisodeTitleRequired) string {
 	return string(value)
 }
 
-// lidarrColonReplacements are Lidarr 3's colonReplacementFormat values by number.
-var lidarrColonReplacements = []naming.ColonReplacement{
+// arrColonReplacements are the *Arrs' colonReplacementFormat values by number; Lidarr, Sonarr, Radarr and Readarr share them.
+var arrColonReplacements = []naming.ColonReplacement{
 	naming.ColonDelete, naming.ColonDash, naming.ColonSpaceDash, naming.ColonSpaceDashSpace, naming.ColonSmart,
 }
 
-// arrNaming is a music library's naming with Lidarr's taken over, each change in words. A format holding a token
-// Solarr has no counterpart for stays as the library has it, and the token is named in the third answer.
+// arrNaming is a library's naming with an *Arr's taken over, each change in words. The *Arr's templates are translated into
+// Solarr's: a token with no counterpart is dropped and named in the third answer, never the whole format; a format that
+// still does not compile stays as the library has it.
 func arrNaming(
-	module media.Naming, current settings.NamingProfile, from arrimport.NamingConfig,
+	module media.Naming, current settings.NamingProfile, from arrimport.Naming,
 ) (settings.NamingProfile, []apiserver.ArrSettingChange, []string) {
 	next := current
 	next.Formats = maps.Clone(current.Formats)
 	if next.Formats == nil {
 		next.Formats = map[string]string{}
 	}
-	next.RenameFiles = from.RenameTracks
+	next.RenameFiles = from.RenameFiles
 	next.ReplaceIllegalCharacters = from.ReplaceIllegalCharacters
 
 	var unsupported []string
-	if from.ColonReplacementFormat >= 0 && from.ColonReplacementFormat < len(lidarrColonReplacements) {
-		next.ColonReplacement = string(lidarrColonReplacements[from.ColonReplacementFormat])
+	if from.ColonReplacement >= 0 && from.ColonReplacement < len(arrColonReplacements) {
+		next.ColonReplacement = string(arrColonReplacements[from.ColonReplacement])
 	} else {
-		unsupported = append(unsupported, fmt.Sprintf("colon replacement format %d", from.ColonReplacementFormat))
+		unsupported = append(unsupported, fmt.Sprintf("colon replacement format %d", from.ColonReplacement))
 	}
 	known := module.NamingScheme().Known()
 	changes := []apiserver.ArrSettingChange{}
-	for _, slot := range []struct{ key, format string }{
-		{"artist_folder", from.ArtistFolderFormat},
-		{"standard_track", from.StandardTrackFormat},
-		{"multi_disc_track", from.MultiDiscTrackFormat},
-	} {
-		segments, err := naming.Compile(slot.format)
-		if err != nil {
-			unsupported = append(unsupported, fmt.Sprintf("%s: %v", slot.key, err))
+	for _, slot := range module.NamingScheme().Slots {
+		format, offered := from.Formats[slot.Key]
+		if !offered || strings.TrimSpace(format) == "" {
 			continue
 		}
-		if unknown := naming.UnknownTokens(segments, known); len(unknown) > 0 {
-			unsupported = append(unsupported, fmt.Sprintf("%s: {%s}", slot.key, strings.Join(unknown, "}, {")))
+		translated := naming.TranslateArrTemplate(format, known)
+		segments, err := naming.Compile(translated.Template)
+		if err != nil || strings.TrimSpace(translated.Template) == "" {
+			unsupported = append(unsupported, fmt.Sprintf("%s: %s", slot.Key, format))
 			continue
 		}
-		next.Formats[slot.key] = slot.format
+		if len(naming.UnknownTokens(segments, known)) > 0 {
+			unsupported = append(unsupported, fmt.Sprintf("%s: %s", slot.Key, format))
+			continue
+		}
+		if len(translated.Dropped) > 0 {
+			unsupported = append(unsupported, fmt.Sprintf("%s: %s", slot.Key, strings.Join(translated.Dropped, ", ")))
+		}
+		for _, note := range translated.Notes {
+			unsupported = append(unsupported, fmt.Sprintf("%s: %s", slot.Key, note))
+		}
+		next.Formats[slot.Key] = translated.Template
 	}
 
 	add := func(key, label, was, now string) {
@@ -202,7 +210,7 @@ func arrNaming(
 	for _, slot := range module.NamingScheme().Slots {
 		add("naming_"+slot.Key, slot.Label, current.Formats[slot.Key], next.Formats[slot.Key])
 	}
-	add("rename_files", "Rename tracks", onOff(current.RenameFiles), onOff(next.RenameFiles))
+	add("rename_files", "Rename files", onOff(current.RenameFiles), onOff(next.RenameFiles))
 	add("replace_illegal_characters", "Replace illegal characters", onOff(current.ReplaceIllegalCharacters), onOff(next.ReplaceIllegalCharacters))
 	add("colon_replacement", "Colon replacement", current.ColonReplacement, next.ColonReplacement)
 	was, now := module.NamingExamples(current), module.NamingExamples(next)

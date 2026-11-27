@@ -28,6 +28,8 @@ type ArrSyncOptions struct {
 	ProfileMap map[int64]*int64
 	// SettingsInto are the libraries that take the *Arr's Media Management into their File Management first.
 	SettingsInto []int64
+	// NamingInto are the libraries that take the *Arr's naming formats, translated, before the import.
+	NamingInto []int64
 	// NewFoldersLibrary is where the *Arr's root folders unknown here are about to be added, for a preview.
 	NewFoldersLibrary *int64
 	// MonitoringOnly sets the monitored flag of what Solarr already holds, adds nothing and ignores the item choices.
@@ -47,6 +49,8 @@ type ArrImportPreview struct {
 	// Follows says which release types the followed items take, one entry per *Arr follow profile in use.
 	Follows  []ArrPreviewFollow
 	Settings []ArrPreviewSettings
+	// NamingChanges are what the *Arr's naming would change against a new library of the app's media type, for a library not made yet.
+	NamingChanges []ArrSettingChange
 	// Setup counts the indexers, download clients and import lists the options would bring; nil when none are asked for.
 	Setup *ArrPreviewSetup
 }
@@ -85,6 +89,8 @@ type ArrPreviewProfile struct {
 type ArrPreviewSettings struct {
 	LibraryID int64
 	Changes   []ArrSettingChange
+	// NamingChanges are what taking the *Arr's naming formats would change, and what it cannot take.
+	NamingChanges []ArrSettingChange
 }
 
 // ArrSettingChange is one setting, its value here and the *Arr's, in words.
@@ -189,6 +195,8 @@ type ArrConnectionTest struct {
 	OK               bool
 	AppName, Version string
 	Problem, Message string
+	// Languages are the ISO codes of the languages the app's profiles ask for; empty when it has none.
+	Languages []string
 }
 
 // DiscoveredService is an app that answered on its usual address.
@@ -274,6 +282,7 @@ func (s *Server) readArrSyncOptions(w http.ResponseWriter, r *http.Request) (Arr
 		}
 	}
 	options.SettingsInto = derefOr(body.SettingsInto, nil)
+	options.NamingInto = derefOr(body.NamingInto, nil)
 	options.NewFoldersLibrary = body.NewFoldersLibraryId
 	options.MonitoringOnly = body.Mode != nil && *body.Mode == gen.ArrSyncOptionsModeMonitoring
 	options.Indexers, options.DownloadClients = derefOr(body.Indexers, false), derefOr(body.DownloadClients, false)
@@ -347,6 +356,13 @@ func arrImportPreviewView(preview ArrImportPreview) gen.ArrImportPreview {
 			view.Setup.Problem = &preview.Setup.Problem
 		}
 	}
+	if len(preview.NamingChanges) > 0 {
+		naming := make([]gen.ArrSettingChange, len(preview.NamingChanges))
+		for j, change := range preview.NamingChanges {
+			naming[j] = gen.ArrSettingChange{Key: change.Key, Label: change.Label, Current: change.Current, Proposed: change.Proposed}
+		}
+		view.NamingChanges = &naming
+	}
 	for i, library := range preview.Settings {
 		changes := make([]struct {
 			Current  string `json:"current"`
@@ -357,7 +373,14 @@ func arrImportPreviewView(preview ArrImportPreview) gen.ArrImportPreview {
 		for j, change := range library.Changes {
 			changes[j].Key, changes[j].Label, changes[j].Current, changes[j].Proposed = change.Key, change.Label, change.Current, change.Proposed
 		}
+		naming := make([]gen.ArrSettingChange, len(library.NamingChanges))
+		for j, change := range library.NamingChanges {
+			naming[j] = gen.ArrSettingChange{Key: change.Key, Label: change.Label, Current: change.Current, Proposed: change.Proposed}
+		}
 		view.Settings[i] = gen.ArrPreviewSettings{LibraryId: library.LibraryID, Changes: changes}
+		if len(naming) > 0 {
+			view.Settings[i].NamingChanges = &naming
+		}
 	}
 	return view
 }
@@ -814,6 +837,9 @@ func (s *Server) TestArrConnection(w http.ResponseWriter, r *http.Request) {
 	view := gen.ArrConnectionTest{Ok: result.OK}
 	if result.OK {
 		view.AppName, view.Version = &result.AppName, &result.Version
+		if len(result.Languages) > 0 {
+			view.Languages = &result.Languages
+		}
 	} else {
 		problem := gen.ArrConnectionTestProblem(result.Problem)
 		view.Problem, view.Message = &problem, &result.Message

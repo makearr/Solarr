@@ -81,7 +81,7 @@ export function Setup({ onDone, rerun = false }: { onDone: () => void; rerun?: b
         {!needsAccount && state.step === "quality" && <QualityStep state={state} update={update} onBack={back} onNext={next} />}
         {!needsAccount && state.step === "tools" && <ToolsStep state={state} update={update} onBack={back} onNext={next} />}
         {!needsAccount && state.step === "features" && <FeaturesStep state={state} update={update} onBack={back} onNext={next} />}
-        {!needsAccount && state.step === "review" && <ReviewStep state={state} onBack={back} onFinish={next} />}
+        {!needsAccount && state.step === "review" && <ReviewStep state={state} update={update} onBack={back} onFinish={next} />}
         {!needsAccount && state.step === "finish" && <FinishStep state={state} update={update} onDone={onDone} />}
       </div>
     </Centered>
