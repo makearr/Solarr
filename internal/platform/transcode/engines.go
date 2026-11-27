@@ -2,8 +2,11 @@ package transcode
 
 import (
 	"context"
+	"path"
 	"regexp"
 	"strings"
+
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // EngineCounts is how many hardware encoder and decoder engines a device has; zero is not known.
@@ -44,4 +47,53 @@ func nvidiaModel(ctx context.Context, runner Runner) string {
 	}
 	line, _, _ := strings.Cut(strings.TrimSpace(string(output)), "\n")
 	return strings.TrimSpace(line)
+}
+
+// sysfsEngines counts the video engines the kernel lists for a render node: i915 names each one under the card's
+// engine directory (vcs0, vcs1: video decode and encode), amdgpu lists its VCN instances in the IP discovery tree. A
+// kernel that lists none (or a sysfs this process cannot read) is unknown, never guessed.
+func sysfsEngines(fsys fsx.FS, node string) EngineCounts {
+	device := path.Join(sysDRMDir, node, "device")
+	count := 0
+	if cards, err := fsys.ReadDir(path.Join(device, "drm")); err == nil {
+		for _, card := range cards {
+			if !strings.HasPrefix(card.Name, "card") || strings.Contains(card.Name, "-") {
+				continue
+			}
+			engines, err := fsys.ReadDir(path.Join(device, "drm", card.Name, "engine"))
+			if err != nil {
+				continue
+			}
+			for _, engine := range engines {
+				if strings.HasPrefix(engine.Name, "vcs") {
+					count++
+				}
+			}
+		}
+	}
+	if count == 0 {
+		count = vcnInstances(fsys, path.Join(device, "ip_discovery", "die"))
+	}
+	return EngineCounts{Encode: count, Decode: count}
+}
+
+// vcnInstances counts the video core instances amdgpu lists under each die.
+func vcnInstances(fsys fsx.FS, dies string) int {
+	entries, err := fsys.ReadDir(dies)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, die := range entries {
+		instances, err := fsys.ReadDir(path.Join(dies, die.Name, "VCN"))
+		if err != nil {
+			continue
+		}
+		for _, instance := range instances {
+			if instance.IsDir {
+				count++
+			}
+		}
+	}
+	return count
 }

@@ -126,24 +126,29 @@ func (s *Service) dispatchState(ctx context.Context, libraries []settings.Transc
 		if err != nil {
 			return state, err
 		}
-		queue.Candidates[kind] = candidatesOf(picks)
+		queue.Candidates[kind] = candidatesOf(kind, picks)
 		if state.Health[kind].Mode == ModeProbing {
 			avoidRoot, avoidPrefix := s.whereFailed(ctx, failedAt[kind])
 			far, err := s.Items.PickFarAway(ctx, one.CategoryID, kind, avoidRoot, avoidPrefix, pickWindow)
 			if err != nil {
 				return state, err
 			}
-			queue.FarAway[kind] = candidatesOf(far)
+			queue.FarAway[kind] = candidatesOf(kind, far)
 		}
 		state.Libraries = append(state.Libraries, queue)
 	}
 	return state, nil
 }
 
-func candidatesOf(picks []library.TranscodePick) []Candidate {
+// candidatesOf names each pick's lane: a comic is the comic lane's, whatever the item row stores.
+func candidatesOf(kind string, picks []library.TranscodePick) []Candidate {
 	out := make([]Candidate, len(picks))
 	for i, pick := range picks {
-		out[i] = Candidate{MediaObjectID: pick.MediaObjectID, Lane: Lane(pick.Lane), LastRunSeq: pick.LastRunSeq, RootFolderID: pick.RootFolderID, Interrupted: pick.Interrupted}
+		lane := Lane(pick.Lane)
+		if kind == "comic" {
+			lane = LaneComic
+		}
+		out[i] = Candidate{MediaObjectID: pick.MediaObjectID, Lane: lane, LastRunSeq: pick.LastRunSeq, RootFolderID: pick.RootFolderID, Interrupted: pick.Interrupted}
 	}
 	return out
 }

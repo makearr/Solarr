@@ -71,8 +71,13 @@ func (j discoverJudge) RatingLimit(category settings.Category) discover.RatingLi
 	return limit
 }
 
+// DefaultLanguages are the original languages a library recommends when none were chosen: manga is read as anime is
+// heard, and comics are translated into the reader's language, so their original one asks for nothing.
 func (j discoverJudge) DefaultLanguages(category settings.Category) []string {
-	return settings.LanguageProfileFor(j.process.cache.Snapshot().DefaultLanguages(), category.Kind == "anime").AudioPreferred
+	if category.MediaType == "comic" && category.Kind != "manga" {
+		return nil
+	}
+	return settings.LanguageProfileFor(j.process.cache.Snapshot().DefaultLanguages(), category.Kind == "anime" || category.Kind == "manga").AudioPreferred
 }
 
 func (j discoverJudge) FactsOf(ctx context.Context, category settings.Category, item media.Recommendation) (discover.Facts, int64, error) {

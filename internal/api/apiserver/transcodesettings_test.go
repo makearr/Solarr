@@ -54,7 +54,7 @@ func TestTranscodeSettings_GlobalAndLibraryRowsRoundTripAndAnUnsupportedLibraryI
 		return body
 	}
 	before := read()
-	if before.Global.Enabled || before.Global.Parallel != (gen.TranscodeLaneLimits{Cpu: 1, Gpu: 2, Audio: 4}) || before.Global.OriginalsRetainDays != 7 || before.Global.OriginalsCapGb != 100 {
+	if before.Global.Enabled || before.Global.Parallel != (gen.TranscodeLaneLimits{Cpu: 1, Gpu: 2, Audio: 4, Comic: 4, Ebook: 4}) || before.Global.OriginalsRetainDays != 7 || before.Global.OriginalsCapGb != 100 {
 		t.Fatalf("defaults = %+v", before.Global)
 	}
 	supported := map[string]bool{}
@@ -65,7 +65,7 @@ func TestTranscodeSettings_GlobalAndLibraryRowsRoundTripAndAnUnsupportedLibraryI
 		t.Errorf("supported = %v, want %v", supported, want)
 	}
 
-	put := `{"enabled":true,"parallel":{"cpu":2,"gpu":1,"audio":3},"playback_parallel":{"cpu":0,"gpu":0,"audio":1},"originals_retain_days":14,"originals_cap_gb":0}`
+	put := `{"enabled":true,"parallel":{"cpu":2,"gpu":2,"audio":3,"comic":3,"ebook":3},"playback_parallel":{"cpu":0,"gpu":0,"audio":1,"comic":1,"ebook":1},"originals_retain_days":14,"originals_cap_gb":0}`
 	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/settings/transcode", put)); recorder.Code != http.StatusOK {
 		t.Fatalf("put = %d, %s", recorder.Code, recorder.Body)
 	}

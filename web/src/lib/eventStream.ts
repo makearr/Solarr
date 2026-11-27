@@ -27,9 +27,99 @@ let openTopics: string | undefined;
 let connection: Connection = "connecting";
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-// Browsers allow six connections per origin over HTTP/1.1, and every image and API call shares them: one stream per tab.
+// Browsers allow six connections per origin over HTTP/1.1, and every image and API call shares them: one stream per
+// browser, not per tab. The tab holding the "leader" lock reads the stream and relays its frames to the other tabs of
+// the same origin over a BroadcastChannel; they tell it which topics they need. Without Web Locks every tab reads its own.
+const LEADER_LOCK = "solarr-event-stream-leader";
+const CHANNEL_NAME = "solarr-event-stream";
+const HEARTBEAT_MS = 10_000;
+const FOLLOWER_EXPIRES_MS = 30_000;
+const tabId = Math.random().toString(36).slice(2);
+
+type Relay =
+  | { kind: "frame"; events: StreamEvent[] }
+  | { kind: "resync" }
+  | { kind: "connection"; value: Connection }
+  | { kind: "topics"; tab: string; topics: string | null }
+  | { kind: "hello" };
+
+let channel: BroadcastChannel | undefined;
+let sharing = false;
+let leader = false;
+const followers = new Map<string, { topics: string; seen: number }>();
+
+function startSharing() {
+  if (sharing || typeof BroadcastChannel === "undefined" || typeof navigator === "undefined" || !navigator.locks) return;
+  sharing = true;
+  channel = new BroadcastChannel(CHANNEL_NAME);
+  channel.onmessage = (message: MessageEvent<Relay>) => onRelay(message.data);
+  setInterval(tick, HEARTBEAT_MS);
+  void navigator.locks.request(LEADER_LOCK, () => {
+    leader = true;
+    channel?.postMessage({ kind: "hello" } satisfies Relay);
+    schedule();
+    // Held until this tab closes, when the browser hands the lock to the next tab waiting for it.
+    return new Promise<void>(() => {});
+  });
+  window.addEventListener("pagehide", () => channel?.postMessage({ kind: "topics", tab: tabId, topics: null } satisfies Relay));
+}
+
+function onRelay(relay: Relay) {
+  switch (relay.kind) {
+    case "frame":
+      if (!leader) dispatch(relay.events);
+      break;
+    case "resync":
+      if (!leader) for (const subscriber of [...subscribers]) subscriber.onResync?.();
+      break;
+    case "connection":
+      if (!leader) setConnection(relay.value);
+      break;
+    case "hello":
+      announceTopics();
+      break;
+    case "topics":
+      if (!leader) break;
+      if (relay.topics === null) followers.delete(relay.tab);
+      else followers.set(relay.tab, { topics: relay.topics, seen: Date.now() });
+      schedule();
+      break;
+  }
+}
+
+/** A follower tells the leader what it needs; the leader prunes the tabs that went silent. */
+function announceTopics() {
+  if (leader || !channel) return;
+  const wanted = wantedTopics();
+  channel.postMessage({ kind: "topics", tab: tabId, topics: wanted ?? null } satisfies Relay);
+}
+
+function tick() {
+  if (leader) {
+    const now = Date.now();
+    let pruned = false;
+    for (const [tab, one] of followers) {
+      if (now - one.seen > FOLLOWER_EXPIRES_MS) {
+        followers.delete(tab);
+        pruned = true;
+      }
+    }
+    if (pruned) schedule();
+    return;
+  }
+  announceTopics();
+}
+
+function dispatch(events: readonly StreamEvent[]) {
+  for (const subscriber of [...subscribers]) {
+    const mine = subscriber.topics.length === 0 ? events : events.filter((event) => subscriber.topics.includes(event.topic));
+    if (mine.length > 0) subscriber.onEvents?.(mine);
+  }
+}
+
 export function subscribe<E extends StreamEvent>(subscriber: Subscriber<E>): () => void {
   const held = subscriber as unknown as Subscriber;
+  startSharing();
   subscribers.add(held);
   held.onConnection?.(connection);
   schedule();
@@ -39,18 +129,28 @@ export function subscribe<E extends StreamEvent>(subscriber: Subscriber<E>): () 
   };
 }
 
-/** The topics query the subscribers need: undefined for nobody, "" for everything. */
+/** The topics query the subscribers need: undefined for nobody, "" for everything. A leader answers for the other tabs too. */
 function wantedTopics(): string | undefined {
-  if (subscribers.size === 0) return undefined;
   const union = new Set<string>();
-  for (const subscriber of subscribers) {
-    if (subscriber.topics.length === 0) return "";
-    for (const topic of subscriber.topics) union.add(topic);
+  let anyone = subscribers.size > 0;
+  const take = (topics: readonly string[]) => {
+    if (topics.length === 0) return true;
+    for (const topic of topics) union.add(topic);
+    return false;
+  };
+  for (const subscriber of subscribers) if (take(subscriber.topics)) return "";
+  if (leader) {
+    for (const one of followers.values()) {
+      anyone = true;
+      if (one.topics === "") return "";
+      take(one.topics.split(","));
+    }
   }
-  return [...union].sort().join(",");
+  return anyone ? [...union].sort().join(",") : undefined;
 }
 
 function schedule() {
+  if (!leader) announceTopics();
   clearTimeout(timer);
   // The first stream waits only for the rest of the render's effects, so it opens with all their topics.
   timer = setTimeout(reconcile, source === undefined ? 0 : RECONCILE_DELAY_MS);
@@ -58,6 +158,7 @@ function schedule() {
 
 function reconcile() {
   timer = undefined;
+  if (sharing && !leader) return;
   const wanted = wantedTopics();
   if (wanted === openTopics) return;
   source?.close();
@@ -87,17 +188,17 @@ function open(topics: string) {
       // A frame we cannot read is not worth tearing the stream down for.
       return;
     }
-    for (const subscriber of [...subscribers]) {
-      const mine = subscriber.topics.length === 0 ? events : events.filter((event) => subscriber.topics.includes(event.topic));
-      if (mine.length > 0) subscriber.onEvents?.(mine);
-    }
+    dispatch(events);
+    if (leader) channel?.postMessage({ kind: "frame", events: [...events] } satisfies Relay);
   });
   opened.addEventListener("resync", () => {
     for (const subscriber of [...subscribers]) subscriber.onResync?.();
+    if (leader) channel?.postMessage({ kind: "resync" } satisfies Relay);
   });
 }
 
 function setConnection(next: Connection) {
   connection = next;
   for (const subscriber of [...subscribers]) subscriber.onConnection?.(next);
+  if (leader) channel?.postMessage({ kind: "connection", value: next } satisfies Relay);
 }

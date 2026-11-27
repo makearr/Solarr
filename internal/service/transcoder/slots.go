@@ -2,6 +2,7 @@ package transcoder
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -37,12 +38,40 @@ func NewSlots(limits func(playing bool) map[Lane]int, active func() int, cl cloc
 
 func (s *Slots) limitsNow() map[Lane]int { return s.limits(s.active() > 0) }
 
-// Acquire takes a place in the lane; false when the lane is full. The release gives it back.
+// ceilingsOk says whether one more conversion of the lane fits: it counts against its own lane's limit and every later
+// one, each of which counts every lane up to itself.
+func ceilingsOk(limits map[Lane]int, acquired map[Lane]int, lane Lane) bool {
+	return roomIn(limits, acquired, lane) > 0
+}
+
+// roomIn is how many more conversions of the lane fit under every ceiling that counts it.
+func roomIn(limits map[Lane]int, acquired map[Lane]int, lane Lane) int {
+	room, within, started, bounded := 0, 0, false, false
+	for _, tier := range LaneOrder {
+		within += acquired[tier]
+		if tier == lane {
+			started = true
+		}
+		if !started {
+			continue
+		}
+		limit, set := limits[tier]
+		if !set {
+			continue
+		}
+		if left := limit - within; !bounded || left < room {
+			room, bounded = left, true
+		}
+	}
+	return max(0, room)
+}
+
+// Acquire takes a place in the lane; false when it or a later ceiling is full. The release gives it back.
 func (s *Slots) Acquire(lane Lane) (release func(), ok bool) {
-	limit := s.limitsNow()[lane]
+	limits := s.limitsNow()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.acquired[lane] >= limit {
+	if !ceilingsOk(limits, s.acquired, lane) {
 		return nil, false
 	}
 	s.acquired[lane]++
@@ -62,8 +91,8 @@ func (s *Slots) Free() map[Lane]int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	free := map[Lane]int{}
-	for _, lane := range []Lane{LaneCPU, LaneGPU, LaneAudio} {
-		free[lane] = max(0, limits[lane]-s.acquired[lane])
+	for _, lane := range LaneOrder {
+		free[lane] = roomIn(limits, s.acquired, lane)
 	}
 	return free
 }
@@ -87,36 +116,66 @@ func (s *Slots) Track(lane Lane, process transcode.Process) (untrack func()) {
 	}
 }
 
-// Govern pauses the youngest processes of a lane that runs more than its limit and resumes the oldest paused ones when it runs fewer.
+// Govern pauses the youngest processes while a ceiling is exceeded and resumes the oldest paused ones that fit again.
 func (s *Slots) Govern() {
 	limits := s.limitsNow()
 	s.mu.Lock()
 	tracked := append([]*trackedProcess(nil), s.tracked...)
 	s.mu.Unlock()
-	for _, lane := range []Lane{LaneCPU, LaneGPU, LaneAudio} {
-		var running, paused []*trackedProcess
-		for _, entry := range tracked {
-			switch {
-			case entry.lane != lane:
-			case entry.process.Paused():
-				paused = append(paused, entry)
-			default:
-				running = append(running, entry)
-			}
+	var running, paused []*trackedProcess
+	for _, entry := range tracked {
+		if entry.process.Paused() {
+			paused = append(paused, entry)
+		} else {
+			running = append(running, entry)
 		}
-		limit := limits[lane]
-		for len(running) > limit {
-			youngest := running[len(running)-1]
+	}
+	slices.SortFunc(running, func(a, b *trackedProcess) int { return int(a.order - b.order) })
+	for _, tier := range LaneOrder {
+		limit, set := limits[tier]
+		for set && counted(running, tier) > limit {
+			youngest := youngestUpTo(running, tier)
 			_ = youngest.process.Pause() // a process that just ended cannot be paused, and needs no pause
-			running = running[:len(running)-1]
+			running = slices.DeleteFunc(running, func(entry *trackedProcess) bool { return entry == youngest })
+			paused = append(paused, youngest)
 		}
-		for len(running) < limit && len(paused) > 0 {
-			_ = paused[0].process.Resume()
-			running = append(running, paused[0])
-			paused = paused[1:]
+	}
+	slices.SortFunc(paused, func(a, b *trackedProcess) int { return int(a.order - b.order) })
+	for _, entry := range paused {
+		running2 := map[Lane]int{}
+		for _, other := range running {
+			running2[other.lane]++
+		}
+		if ceilingsOk(limits, running2, entry.lane) {
+			_ = entry.process.Resume()
+			running = append(running, entry)
 		}
 	}
 }
+
+// counted is how many of the processes run in the lane or an earlier one.
+func counted(processes []*trackedProcess, tier Lane) int {
+	count := 0
+	for _, entry := range processes {
+		if laneIndex(entry.lane) <= laneIndex(tier) {
+			count++
+		}
+	}
+	return count
+}
+
+// youngestUpTo is the newest process in the lane or an earlier one.
+func youngestUpTo(processes []*trackedProcess, tier Lane) *trackedProcess {
+	var youngest *trackedProcess
+	for _, entry := range processes {
+		if laneIndex(entry.lane) <= laneIndex(tier) && (youngest == nil || entry.order > youngest.order) {
+			youngest = entry
+		}
+	}
+	return youngest
+}
+
+func laneIndex(lane Lane) int { return slices.Index(LaneOrder, lane) }
 
 // Run governs until the context ends.
 func (s *Slots) Run(ctx context.Context) {

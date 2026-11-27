@@ -17134,11 +17134,16 @@ components:
 
     TranscodeLaneLimits:
       type: object
-      required: [cpu, gpu, audio]
+      description: >-
+        Ceilings down the order cpu, gpu, audio, comic, ebook: a conversion counts against its own lane's limit and
+        every later one, so each limit is at least the one before it.
+      required: [cpu, gpu, audio, comic, ebook]
       properties:
         cpu: { type: integer, minimum: 0, maximum: 16 }
         gpu: { type: integer, minimum: 0, maximum: 16 }
         audio: { type: integer, minimum: 0, maximum: 16 }
+        comic: { type: integer, minimum: 0, maximum: 16 }
+        ebook: { type: integer, minimum: 0, maximum: 16 }
 
     TranscodeGlobalSettings:
       type: object

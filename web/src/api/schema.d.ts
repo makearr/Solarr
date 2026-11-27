@@ -12814,10 +12814,13 @@ export interface components {
             /** @description The instance runs in safe mode (safe_mode in config.yml, SOLARR_SAFE_MODE): transcoding, the automatic search, the RSS sync, the cutoff check and sending monitoring to an *Arr are off, whatever their settings say. Not changeable here. */
             readonly safe_mode?: boolean;
         };
+        /** @description Ceilings down the order cpu, gpu, audio, comic, ebook: a conversion counts against its own lane's limit and every later one, so each limit is at least the one before it. */
         TranscodeLaneLimits: {
             cpu: number;
             gpu: number;
             audio: number;
+            comic: number;
+            ebook: number;
         };
         TranscodeGlobalSettings: {
             /** @description Master switch (transcode.enabled). Default off. */

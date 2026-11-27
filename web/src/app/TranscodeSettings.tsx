@@ -19,7 +19,8 @@ type Counts = components["schemas"]["TranscodeCounts"];
 type Savings = components["schemas"]["TranscodeSavings"];
 
 const ORDERS = ["found", "alphabetical", "largest", "smallest", "oldest", "newest"] as const;
-const LANES = ["cpu", "gpu", "audio"] as const;
+/** The lanes in ceiling order: each limit counts the lanes before it, so it is at least the one before. */
+const LANES = ["cpu", "gpu", "audio", "comic", "ebook"] as const;
 const CODECS = ["h264", "hevc", "av1", "vp9"] as const;
 const ENGINES = ["software", "qsv", "vaapi", "nvenc"] as const;
 const STATES = [
@@ -64,7 +65,6 @@ export function TranscodeSettings() {
       </p>
       {sum && <Statistics summary={sum} />}
       <LibrariesCard libraries={settings.data?.libraries ?? []} />
-      {sum && <TargetsCard summary={sum} libraries={settings.data?.libraries ?? []} />}
       {global && <ParallelCard global={global} onSave={(next) => saveGlobal.mutate(next)} busy={saveGlobal.isPending} />}
       {global && <OriginalsCard global={global} held={sum?.originals_bytes ?? 0} count={sum?.originals_count ?? 0} nextExpiry={sum?.originals_next_expiry} onSave={(next) => saveGlobal.mutate(next)} busy={saveGlobal.isPending} />}
       <HardwareCard />
@@ -265,7 +265,7 @@ function LibraryRow({ library }: { library: Library }) {
           ) : library.supported && library.target_id != null ? (
             <>
               {t("transcode.target")}:{" "}
-              <Link to="/settings/transcode/targets/$targetId" params={{ targetId: String(library.target_id) }} className="text-accent hover:underline">
+              <Link to="/quality-profiles" className="text-accent hover:underline" title={t("transcode.setupLives")}>
                 {library.target_name ?? ""}
               </Link>
             </>
@@ -312,7 +312,7 @@ function LaneInputs({ label, value, onChange }: { label: string; value: LaneLimi
     <div className="flex flex-wrap items-end gap-4">
       <span className="w-48 text-sm">{label}</span>
       {LANES.map((lane) => (
-        <label key={lane} className={labelStyle}>
+        <label key={lane} className={labelStyle} title={t(`transcode.lane.${lane}.help`)}>
           {t(`transcode.lane.${lane}`)}
           <input
             type="number"
@@ -343,32 +343,6 @@ function ParallelCard({ global, onSave, busy }: { global: Global; onSave: (next:
         <Button variant="primary" busy={busy} onClick={() => onSave({ ...global, parallel, playback_parallel: playing })}>
           {t("transcode.save")}
         </Button>
-      </div>
-    </Card>
-  );
-}
-
-function TargetsCard({ summary, libraries }: { summary: components["schemas"]["TranscodeSummary"]; libraries: Library[] }) {
-  const targets = new Map<number, { name: string; warnings: number }>();
-  for (const library of summary.libraries) {
-    if (library.target_id == null) continue;
-    const name = libraries.find((row) => row.target_id === library.target_id)?.target_name ?? library.name;
-    const known = targets.get(library.target_id) ?? { name, warnings: 0 };
-    known.warnings = Math.max(known.warnings, (library.warnings ?? []).length);
-    targets.set(library.target_id, known);
-  }
-  if (targets.size === 0) return null;
-  return (
-    <Card title={t("transcode.targets")} help={t("transcode.targetsHelp")}>
-      <div className="flex flex-col divide-y divide-border-subtle text-sm">
-        {[...targets].map(([id, one]) => (
-          <div key={id} className="flex flex-wrap items-center justify-between gap-3 py-1.5">
-            <Link to="/settings/transcode/targets/$targetId" params={{ targetId: String(id) }} className="text-accent hover:underline">
-              {one.name}
-            </Link>
-            <span className={one.warnings > 0 ? "text-danger" : "text-ink-muted"}>{one.warnings > 0 ? t("transcode.targetWarnings", { count: one.warnings }) : t("transcode.targetDefault")}</span>
-          </div>
-        ))}
       </div>
     </Card>
   );

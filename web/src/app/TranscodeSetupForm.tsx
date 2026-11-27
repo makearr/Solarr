@@ -91,10 +91,10 @@ export function SetupWarnings({ warnings }: { warnings: components["schemas"]["T
   );
 }
 
-/** Settings > Transcode > one target: how files are converted to it. */
-export function TranscodeSetupForm() {
-  const { targetId } = useParams({ strict: false }) as { targetId: string };
-  const id = Number(targetId);
+/** How files are converted to one quality target: inside the target's editor, or on its own page where the route names it. */
+export function TranscodeSetupForm({ targetId: given }: { targetId?: number }) {
+  const { targetId } = useParams({ strict: false }) as { targetId?: string };
+  const id = given ?? Number(targetId);
   const queryClient = useQueryClient();
   const expert = isTierVisible(useTier(), "expert");
   const state = useQuery({ queryKey: ["transcode-setup", id], queryFn: () => ok(api.GET("/settings/transcode/targets/{target_id}", { params: { path: { target_id: id } } })) });
@@ -134,10 +134,12 @@ export function TranscodeSetupForm() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-baseline gap-3">
-        <Link to="/settings/transcode" className="text-xs text-ink-muted hover:text-ink">
-          {t("transcode.setup.back")}
-        </Link>
-        <h2 className="text-sm font-medium">{target ? targetTitle(target) : `#${id}`}</h2>
+        {given === undefined && (
+          <Link to="/settings/transcode" className="text-xs text-ink-muted hover:text-ink">
+            {t("transcode.setup.back")}
+          </Link>
+        )}
+        <h2 className="text-sm font-medium">{given === undefined ? (target ? targetTitle(target) : `#${id}`) : t("transcode.setup.heading")}</h2>
         <span className="text-xs text-ink-muted">
           {[target?.container, target?.video_codec, target?.resolution, target?.audio_codec].filter(Boolean).join(" · ")}
         </span>

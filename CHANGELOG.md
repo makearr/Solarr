@@ -4,6 +4,10 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- The web interface opens one live-update stream per browser, not one per tab: with many tabs of the same instance open, the first tab reads the stream and passes it to the others, so the page no longer freezes behind the browser's six-connection limit.
+- Transcode: the parallel limits are ceilings down the lanes CPU, GPU, audio, comics, ebooks (CPU 1, GPU 2, audio 4 allows one CPU and one GPU job beside two audio ones), comics and ebooks have a lane of their own, and a limit under an earlier lane's is refused.
+- Transcode: the way files are converted to a quality target is set in that target's editor (Quality profiles, Target qualities); Settings, Transcode keeps the libraries, hardware, lanes and originals. The hardware card counts the video engines of Intel and AMD GPUs from the kernel instead of saying "engine count unknown".
+- Discover: manga libraries are recommended from AniList again (the English-only original-language default rejected every title), and Western comic libraries apply no original-language rule.
 - *Arr companion: a film added from a collection (or any list that names it as a TMDB film) now reaches Radarr like one added from Discover, a series is found by the TheTVDB id the work holds, and a Whisparr scene is sent whichever stash-box it came from (taken by its exact title when Whisparr has no id for it).
 - Import lists now exist for movies (TMDB lists, MDBList lists with their IMDb imports), music (a ListenBrainz user's top albums) and books and audiobooks (a public Open Library list).
 - Backups: Backup now, Download backup (the newest bundle) and Delete old backups (after checking the newest) are buttons at the top of the page.

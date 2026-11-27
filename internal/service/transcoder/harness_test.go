@@ -493,7 +493,7 @@ func newPipeline(t *testing.T, target settings.QualityTarget, hardware fakeHW) *
 	p.svc = &transcoder.Service{
 		Items: p.items, Settings: p.settings, Hardware: hardware, Prober: p.prober, Bin: p.bin, Reporter: p.reported, Starter: p.starter,
 		Slots: transcoder.NewSlots(func(bool) map[transcoder.Lane]int {
-			return map[transcoder.Lane]int{transcoder.LaneCPU: 1, transcoder.LaneGPU: 2, transcoder.LaneAudio: 4}
+			return map[transcoder.Lane]int{transcoder.LaneCPU: 1, transcoder.LaneGPU: 2, transcoder.LaneAudio: 4, transcoder.LaneComic: 4, transcoder.LaneEbook: 4}
 		}, func() int { return 0 }, cl),
 		Queue: p.queue, FS: mem, Clock: cl, Logger: discardLogger(),
 	}

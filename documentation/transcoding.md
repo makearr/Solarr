@@ -67,7 +67,7 @@ names are deleted. The library ends with the original or the result known and pr
 
 ## Comics
 
-A library whose media type is comics converts as kind `comic` through the same items, dispatcher, lanes (`audio`, as the
+A library whose media type is comics converts as kind `comic` through the same items, dispatcher, lanes (the `comic` lane, as the
 work is light), replace, recycle bin and restore. There is no ffmpeg run: `internal/platform/comicrepack` unpacks the
 archive (cbz, cbr, cb7, cbt) into the work folder and writes a store-only cbz with the pages in natural order and
 `ComicInfo.xml` kept; macOS and desktop litter is left out. What changes follows the target alone: a non-cbz container

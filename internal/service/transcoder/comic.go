@@ -75,7 +75,7 @@ func AnalyzeComic(facts ComicFacts, target settings.QualityTarget) Plan {
 	if len(reasons) == 0 {
 		return Plan{Verdict: NotNeeded, Reasons: []Reason{{Code: ReasonNothingToDo, Stream: -1}}}
 	}
-	return Plan{Verdict: Needed, Reasons: reasons, Container: "cbz"}
+	return Plan{Verdict: Needed, Reasons: reasons, Container: "cbz", Fixed: LaneComic}
 }
 
 // over says a measured page edge is clearly above the aim; an edge nobody measured or aimed at never is.

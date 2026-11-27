@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -20,16 +21,33 @@ const (
 	KeyTranscodeParallelCPU                 = "transcode.parallel_cpu"
 	KeyTranscodeParallelGPU                 = "transcode.parallel_gpu"
 	KeyTranscodeParallelAudio               = "transcode.parallel_audio"
+	KeyTranscodeParallelComic               = "transcode.parallel_comic"
+	KeyTranscodeParallelEbook               = "transcode.parallel_ebook"
 	KeyTranscodePlaybackParallelCPU         = "transcode.playback_parallel_cpu"
 	KeyTranscodePlaybackParallelGPU         = "transcode.playback_parallel_gpu"
 	KeyTranscodePlaybackParallelAudio       = "transcode.playback_parallel_audio"
+	KeyTranscodePlaybackParallelComic       = "transcode.playback_parallel_comic"
+	KeyTranscodePlaybackParallelEbook       = "transcode.playback_parallel_ebook"
 	KeyTranscodeOriginalsRetainDays         = "transcode.originals_retain_days"
 	KeyTranscodeOriginalsCapGB              = "transcode.originals_cap_gb"
 	maxTranscodeParallel              int64 = 16
 )
 
-// LaneLimits are how many conversions run at once on each kind of work.
-type LaneLimits struct{ CPU, GPU, Audio int64 }
+// LaneLimits are how many conversions run at once on each kind of work. The limits are ceilings down the order CPU, GPU,
+// audio, comics, ebooks: a conversion counts against its own lane's ceiling and every later one, so each limit is at
+// least the one before it (CPU 1, GPU 2, audio 4 allows one CPU and one GPU job beside two audio ones).
+type LaneLimits struct{ CPU, GPU, Audio, Comic, Ebook int64 }
+
+// InOrder lists the limits in ceiling order with the settings path of each, for validation.
+func (l LaneLimits) InOrder(prefix string) []NamedLimit {
+	return []NamedLimit{{prefix + ".cpu", l.CPU}, {prefix + ".gpu", l.GPU}, {prefix + ".audio", l.Audio}, {prefix + ".comic", l.Comic}, {prefix + ".ebook", l.Ebook}}
+}
+
+// NamedLimit is one lane's limit with its settings path.
+type NamedLimit struct {
+	Path  string
+	Value int64
+}
 
 // OriginalsPolicy is how long a replaced original stays in the recycle bin (0 days: the bin's own rule) and the most
 // space they may take together (0 GB: no cap).
@@ -69,13 +87,16 @@ type CategoryTranscode struct {
 
 // TranscodeGlobal answers the instance-wide policy.
 func (s *Snapshot) TranscodeGlobal() TranscodeGlobal {
-	lanes := func(cpu, gpu, audio string, defaults LaneLimits) LaneLimits {
-		return LaneLimits{CPU: s.policyInt(cpu, defaults.CPU), GPU: s.policyInt(gpu, defaults.GPU), Audio: s.policyInt(audio, defaults.Audio)}
+	lanes := func(cpu, gpu, audio, comic, ebook string, defaults LaneLimits) LaneLimits {
+		return LaneLimits{
+			CPU: s.policyInt(cpu, defaults.CPU), GPU: s.policyInt(gpu, defaults.GPU), Audio: s.policyInt(audio, defaults.Audio),
+			Comic: s.policyInt(comic, defaults.Comic), Ebook: s.policyInt(ebook, defaults.Ebook),
+		}
 	}
 	return TranscodeGlobal{
 		Enabled:          s.policyBool(KeyTranscodeEnabled, false),
-		Parallel:         lanes(KeyTranscodeParallelCPU, KeyTranscodeParallelGPU, KeyTranscodeParallelAudio, LaneLimits{CPU: 1, GPU: 2, Audio: 4}),
-		PlaybackParallel: lanes(KeyTranscodePlaybackParallelCPU, KeyTranscodePlaybackParallelGPU, KeyTranscodePlaybackParallelAudio, LaneLimits{GPU: 1, Audio: 1}),
+		Parallel:         lanes(KeyTranscodeParallelCPU, KeyTranscodeParallelGPU, KeyTranscodeParallelAudio, KeyTranscodeParallelComic, KeyTranscodeParallelEbook, LaneLimits{CPU: 1, GPU: 2, Audio: 4, Comic: 4, Ebook: 4}),
+		PlaybackParallel: lanes(KeyTranscodePlaybackParallelCPU, KeyTranscodePlaybackParallelGPU, KeyTranscodePlaybackParallelAudio, KeyTranscodePlaybackParallelComic, KeyTranscodePlaybackParallelEbook, LaneLimits{GPU: 1, Audio: 1, Comic: 1, Ebook: 1}),
 		Originals: OriginalsPolicy{
 			RetainDays: s.policyInt(KeyTranscodeOriginalsRetainDays, 7), CapGB: s.policyInt(KeyTranscodeOriginalsCapGB, 100),
 		},
@@ -88,12 +109,14 @@ func (s *Snapshot) TranscodeEnabled() bool { return s.TranscodeGlobal().Enabled 
 // SetTranscodeGlobal validates and writes the whole instance-wide policy.
 func (c *Cache) SetTranscodeGlobal(ctx context.Context, cl clock.Clock, global TranscodeGlobal) error {
 	var problems config.Problems
-	for path, value := range map[string]int64{
-		"parallel.cpu": global.Parallel.CPU, "parallel.gpu": global.Parallel.GPU, "parallel.audio": global.Parallel.Audio,
-		"playback_parallel.cpu": global.PlaybackParallel.CPU, "playback_parallel.gpu": global.PlaybackParallel.GPU, "playback_parallel.audio": global.PlaybackParallel.Audio,
-	} {
-		if value < 0 || value > maxTranscodeParallel {
-			problems = append(problems, config.Problem{Path: path, Value: strconv.FormatInt(value, 10), Expectation: "0 to 16"})
+	for _, row := range [][]NamedLimit{global.Parallel.InOrder("parallel"), global.PlaybackParallel.InOrder("playback_parallel")} {
+		for index, limit := range row {
+			if limit.Value < 0 || limit.Value > maxTranscodeParallel {
+				problems = append(problems, config.Problem{Path: limit.Path, Value: strconv.FormatInt(limit.Value, 10), Expectation: "0 to 16"})
+			}
+			if index > 0 && limit.Value < row[index-1].Value {
+				problems = append(problems, config.Problem{Path: limit.Path, Value: strconv.FormatInt(limit.Value, 10), Expectation: "at least " + row[index-1].Path[strings.LastIndex(row[index-1].Path, ".")+1:] + "'s: each limit counts the lanes before it"})
+			}
 		}
 	}
 	if global.Originals.RetainDays < 0 || global.Originals.RetainDays > 3650 {
@@ -111,9 +134,13 @@ func (c *Cache) SetTranscodeGlobal(ctx context.Context, cl clock.Clock, global T
 		KeyTranscodeParallelCPU:           number(global.Parallel.CPU),
 		KeyTranscodeParallelGPU:           number(global.Parallel.GPU),
 		KeyTranscodeParallelAudio:         number(global.Parallel.Audio),
+		KeyTranscodeParallelComic:         number(global.Parallel.Comic),
+		KeyTranscodeParallelEbook:         number(global.Parallel.Ebook),
 		KeyTranscodePlaybackParallelCPU:   number(global.PlaybackParallel.CPU),
 		KeyTranscodePlaybackParallelGPU:   number(global.PlaybackParallel.GPU),
 		KeyTranscodePlaybackParallelAudio: number(global.PlaybackParallel.Audio),
+		KeyTranscodePlaybackParallelComic: number(global.PlaybackParallel.Comic),
+		KeyTranscodePlaybackParallelEbook: number(global.PlaybackParallel.Ebook),
 		KeyTranscodeOriginalsRetainDays:   number(global.Originals.RetainDays),
 		KeyTranscodeOriginalsCapGB:        number(global.Originals.CapGB),
 	})

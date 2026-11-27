@@ -14,6 +14,7 @@ import { inputStyle } from "@/ui/form";
 import { applyProfile } from "@/lib/targetProfile";
 
 import { LanguagePicker } from "./LanguagePicker";
+import { TranscodeSetupForm } from "./TranscodeSetupForm";
 import { Card } from "./SettingsCard";
 
 type QualityTarget = components["schemas"]["QualityTarget"];
@@ -324,6 +325,14 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
   });
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-canvas p-3">
+      {initial?.id !== undefined && initial.media_type !== undefined && !["comic"].includes(initial.media_type) && (
+        <details className="rounded-md border border-border-subtle p-2">
+          <summary className="cursor-pointer text-sm font-medium">{t("transcode.setup.heading")}</summary>
+          <div className="pt-3">
+            <TranscodeSetupForm targetId={initial.id} />
+          </div>
+        </details>
+      )}
       <div className="flex flex-wrap items-end gap-3 text-xs">
         <label className="flex flex-col gap-1 text-ink-muted">
           Specification name

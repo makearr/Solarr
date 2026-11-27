@@ -94,3 +94,52 @@ test("a late subscriber is told the connection is already live", async () => {
 
   expect(connection.mock.calls).toEqual([["live"]]);
 });
+
+/** The posts of the fake channel, and a way to deliver one to the tab under test. */
+const posted: unknown[] = [];
+let deliver: (data: unknown) => void = () => {};
+
+class FakeChannel {
+  onmessage: ((message: { data: unknown }) => void) | null = null;
+  constructor() {
+    deliver = (data) => this.onmessage?.({ data });
+  }
+  postMessage(data: unknown) {
+    posted.push(data);
+  }
+}
+
+// Many tabs of one browser must not each hold a stream: only the tab holding the leader lock reads it.
+test("a tab that does not hold the leader lock opens no stream and takes the leader's frames", async () => {
+  posted.length = 0;
+  vi.stubGlobal("BroadcastChannel", FakeChannel);
+  vi.stubGlobal("navigator", { locks: { request: () => new Promise(() => {}) } });
+  const { subscribe } = await import("./eventStream");
+  const received: unknown[] = [];
+  const connections: string[] = [];
+  subscribe({ topics: ["job"], onEvents: (events) => received.push(...events), onConnection: (value) => connections.push(value) });
+  vi.advanceTimersByTime(250);
+
+  expect(opened).toHaveLength(0);
+  expect(posted).toContainEqual(expect.objectContaining({ kind: "topics", topics: "job" }));
+
+  deliver({ kind: "frame", events: [{ topic: "job", entity: "j:1" }, { topic: "other", entity: "o:1" }] });
+  deliver({ kind: "connection", value: "live" });
+  expect(received).toEqual([{ topic: "job", entity: "j:1" }]);
+  expect(connections.at(-1)).toBe("live");
+});
+
+test("the leader reads one stream for every tab's topics and relays what it reads", async () => {
+  posted.length = 0;
+  vi.stubGlobal("BroadcastChannel", FakeChannel);
+  vi.stubGlobal("navigator", { locks: { request: (_name: string, grant: () => Promise<void>) => void grant() } });
+  const { subscribe } = await import("./eventStream");
+  subscribe({ topics: ["job"] });
+  await vi.advanceTimersByTimeAsync(250);
+  deliver({ kind: "topics", tab: "other-tab", topics: "queue" });
+  await vi.advanceTimersByTimeAsync(250);
+
+  expect(opened.at(-1)?.url).toBe("/api/v1/events?topics=job,queue");
+  opened.at(-1)?.emit("update", frame("queue"));
+  expect(posted).toContainEqual({ kind: "frame", events: [{ topic: "queue", entity: "e:0" }] });
+});

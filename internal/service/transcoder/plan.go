@@ -59,21 +59,31 @@ type Plan struct {
 	Dropped      []StreamPlan `json:"dropped,omitempty"`
 	EncodesVideo bool         `json:"encodes_video,omitempty"`
 	EncodesAudio bool         `json:"encodes_audio,omitempty"`
+	// Fixed is the lane a kind of file always takes, whatever the engine (comics and ebooks).
+	Fixed Lane `json:"lane,omitempty"`
 }
 
 // Lane is the pool of workers a conversion takes a place in.
 type Lane string
 
-// The lanes: audio is every conversion that encodes no video.
+// The lanes: audio is every conversion that encodes no video; comics and ebooks are the repacks and conversions of those files.
 const (
 	LaneAudio Lane = "audio"
 	LaneGPU   Lane = "gpu"
 	LaneCPU   Lane = "cpu"
+	LaneComic Lane = "comic"
+	LaneEbook Lane = "ebook"
 )
+
+// LaneOrder is the one registry of lanes, in ceiling order: a conversion counts against its own lane's limit and every
+// later one (Settings, Transcode lists them in this order).
+var LaneOrder = []Lane{LaneCPU, LaneGPU, LaneAudio, LaneComic, LaneEbook}
 
 // Lane is the lane of the plan when the video, if any, is encoded by the engine.
 func (p Plan) Lane(engine transcode.Accel) Lane {
 	switch {
+	case p.Fixed != "":
+		return p.Fixed
 	case !p.EncodesVideo:
 		return LaneAudio
 	case engine == transcode.Software:

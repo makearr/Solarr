@@ -85,10 +85,10 @@ func Detect(ctx context.Context, runner Runner, fsys fsx.FS) []Capability {
 		}
 		unreadable := openError(fsys, device)
 		found = append(found,
-			try(ctx, runner, withAccess(unreadable, lacking(methods, "vaapi", Capability{Accel: VAAPI, Device: device, Name: name}))),
+			try(ctx, runner, withAccess(unreadable, lacking(methods, "vaapi", Capability{Accel: VAAPI, Device: device, Name: name, Engines: sysfsEngines(fsys, node)}))),
 		)
 		if name == "Intel" || name == "GPU" {
-			found = append(found, try(ctx, runner, withAccess(unreadable, lacking(methods, "qsv", Capability{Accel: QSV, Device: device, Name: name}))))
+			found = append(found, try(ctx, runner, withAccess(unreadable, lacking(methods, "qsv", Capability{Accel: QSV, Device: device, Name: name, Engines: sysfsEngines(fsys, node)}))))
 		}
 	}
 	return found

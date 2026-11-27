@@ -25,6 +25,8 @@ type LaneLimitsEntry struct {
 	CPU   int64 `yaml:"cpu"`
 	GPU   int64 `yaml:"gpu"`
 	Audio int64 `yaml:"audio"`
+	Comic int64 `yaml:"comic"`
+	Ebook int64 `yaml:"ebook"`
 }
 
 // TranscodeLibraryEntry is one library's transcode row in the export.

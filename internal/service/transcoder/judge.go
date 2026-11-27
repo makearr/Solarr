@@ -18,8 +18,12 @@ type Judgement struct {
 // Judge flattens a plan for storage; engine is the one the file would be encoded with, which decides the lane.
 func Judge(plan Plan, engine transcode.Accel) (Judgement, error) {
 	judgement := Judgement{State: string(plan.Verdict)}
+	// The item row's lane column holds only cpu, gpu or audio; a comic's or an ebook's own lane follows from its kind.
 	if plan.Verdict == Needed {
 		judgement.Lane = string(plan.Lane(engine))
+		if plan.Fixed != "" {
+			judgement.Lane = string(LaneAudio)
+		}
 	}
 	for _, field := range []struct {
 		into  *string
