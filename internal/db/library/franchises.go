@@ -955,3 +955,65 @@ func (f Franchises) MergeDuplicates(ctx context.Context, merges []CollectionMerg
 	}
 	return nil
 }
+
+// MergeOverlapping folds every library's franchise collections that hold nearly the same works into one, keeping every
+// provider id on it; it answers how many collections it removed.
+func (f Franchises) MergeOverlapping(ctx context.Context) (int, error) {
+	byPlace, err := f.membersByPlace(ctx)
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for _, candidates := range byPlace {
+		var list []MergeCandidate
+		for _, candidate := range candidates {
+			list = append(list, *candidate)
+		}
+		for _, merge := range PlanOverlapMerges(list) {
+			if err := ctx.Err(); err != nil {
+				return removed, err
+			}
+			if err := f.MergeFranchises(ctx, merge.Keep, merge.Drop); err != nil {
+				return removed, err
+			}
+			removed += len(merge.Drop)
+		}
+	}
+	return removed, nil
+}
+
+// collectionPlace is where a collection lives: its media type and library (0 for every library of the type).
+type collectionPlace struct {
+	mediaType  string
+	categoryID int64
+}
+
+// membersByPlace lists each franchise collection's works, grouped by place and collection id.
+func (f Franchises) membersByPlace(ctx context.Context) (map[collectionPlace]map[int64]*MergeCandidate, error) {
+	rows, err := f.store.Read().QueryContext(ctx, `SELECT c.media_type, c.category_id, c.id, m.work_id
+FROM collection c JOIN collection_member m ON m.collection_id = c.id
+WHERE c.kind = ?
+ORDER BY c.media_type, c.category_id, c.id`, FranchiseKind)
+	if err != nil {
+		return nil, fmt.Errorf("library: list collection members: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	byPlace := map[collectionPlace]map[int64]*MergeCandidate{}
+	for rows.Next() {
+		var at collectionPlace
+		var id, work int64
+		if err := rows.Scan(&at.mediaType, &at.categoryID, &id, &work); err != nil {
+			return nil, err
+		}
+		if byPlace[at] == nil {
+			byPlace[at] = map[int64]*MergeCandidate{}
+		}
+		candidate := byPlace[at][id]
+		if candidate == nil {
+			candidate = &MergeCandidate{ID: id}
+			byPlace[at][id] = candidate
+		}
+		candidate.Works = append(candidate.Works, work)
+	}
+	return byPlace, rows.Err()
+}

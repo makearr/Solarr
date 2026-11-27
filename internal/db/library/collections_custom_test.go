@@ -270,3 +270,36 @@ func TestMergeFranchisesCarriesDeclaredKeysAndRefusesACrossover(t *testing.T) {
 		t.Error("merging a crossover collection succeeded, want a refusal")
 	}
 }
+
+func TestMergeOverlappingFoldsTwoCollectionsOfOneFranchiseKeepingBothProviderIDs(t *testing.T) {
+	opened, _ := newLibrary(t)
+	franchises := library.NewFranchises(opened)
+	result, err := library.NewSeries(opened).Upsert(t.Context(), seriesAt, sampleSeries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _ := franchises.CreateAuto(t.Context(), "tv", "Space")
+	second, _ := franchises.CreateAuto(t.Context(), "tv", "Space series")
+	lone, _ := franchises.CreateAuto(t.Context(), "tv", "Elsewhere")
+	for _, id := range []int64{first, second} {
+		if err := franchises.AddMember(t.Context(), id, result.WorkID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for id, provider := range map[int64]string{first: "alpha", second: "beta"} {
+		if _, err := opened.Read().ExecContext(t.Context(), `INSERT INTO collection_external_id (provider, external_id, collection_id) VALUES (?, 'x', ?)`, provider, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err := franchises.MergeOverlapping(t.Context())
+	if err != nil || removed != 1 {
+		t.Fatalf("MergeOverlapping = %d, %v; want 1", removed, err)
+	}
+	var providers int
+	if err := opened.Read().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM collection_external_id WHERE collection_id = ? AND provider IN ('alpha', 'beta')`, first).Scan(&providers); err != nil || providers != 2 {
+		t.Errorf("kept collection holds %d provider ids, %v; want 2", providers, err)
+	}
+	if _, err := franchises.Get(t.Context(), lone); err != nil {
+		t.Errorf("the collection with no members was touched: %v", err)
+	}
+}

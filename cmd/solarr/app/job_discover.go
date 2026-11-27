@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -27,7 +28,7 @@ func (p *process) discoverService() discover.Service {
 		},
 		Config: discoverConfiguration{cache: p.cache}, Pool: library.NewRecommendations(p.library), Sources: discoverSources{registry: p.media},
 		Judge:       discoverJudge{process: p, pool: library.NewRecommendations(p.library), exclusions: library.NewExclusions(p.library)},
-		Collections: discoverCollections{pool: pool},
+		Collections: discoverCollections{pool: pool, franchises: library.NewFranchises(p.library), registry: p.media, logger: p.logger},
 		Clock:       clock.NewSystem(), Logger: p.logger,
 	}
 }
@@ -128,8 +129,18 @@ func (r discoverRefresher) MoreDiscover(ctx context.Context, categoryID int64, l
 	return result.Added, result.Exhausted, err
 }
 
-type discoverCollections struct{ pool library.Recommendations }
+// maxCollectionsRead bounds the provider reads of one refresh; the collections the library holds most of come first.
+const maxCollectionsRead = 30
 
+type discoverCollections struct {
+	pool       library.Recommendations
+	franchises library.Franchises
+	registry   *media.Registry
+	logger     *slog.Logger
+}
+
+// Candidates names the known works of held collections the library does not want, then what the provider lists in
+// those collections that the library lacks altogether (an unfinished collection).
 func (c discoverCollections) Candidates(ctx context.Context, category settings.Category, limit int64) ([]media.Recommendation, error) {
 	rows, err := c.pool.CollectionCandidates(ctx, category.ID, category.MediaType, limit)
 	if err != nil {
@@ -139,7 +150,56 @@ func (c discoverCollections) Candidates(ctx context.Context, category settings.C
 	for _, row := range rows {
 		out = append(out, media.Recommendation{Provider: row.Provider, ExternalID: row.ExternalID, Title: row.Title, Subtitle: row.Collection, Overview: row.Overview, Year: row.Year, Traits: media.Traits{OriginalLanguage: row.OriginalLanguage}})
 	}
-	return out, nil
+	return append(out, c.unfinished(ctx, category, limit-int64(len(out)))...), nil
+}
+
+func (c discoverCollections) unfinished(ctx context.Context, category settings.Category, limit int64) []media.Recommendation {
+	franchising, ok := media.Capability[media.Franchising](c.registry, media.Key(category.MediaType))
+	if !ok || limit <= 0 {
+		return nil
+	}
+	held, err := c.franchises.InCategory(ctx, category.MediaType, category.ID)
+	if err != nil {
+		c.logger.Warn("collection recommendations: list collections", slog.Int64("category_id", category.ID), slog.Any("error", err))
+		return nil
+	}
+	type heldCollection struct {
+		row   library.FranchiseRow
+		files int
+	}
+	var collections []heldCollection
+	for _, row := range held {
+		files := 0
+		for _, member := range row.Members {
+			if member.Files > 0 {
+				files++
+			}
+		}
+		if row.Kind == library.FranchiseKind && files > 0 {
+			collections = append(collections, heldCollection{row: row, files: files})
+		}
+	}
+	slices.SortStableFunc(collections, func(a, b heldCollection) int { return b.files - a.files })
+	var out []media.Recommendation
+	for index, collection := range collections {
+		if index >= maxCollectionsRead || int64(len(out)) >= limit || ctx.Err() != nil {
+			break
+		}
+		missing, err := franchising.MissingFranchiseMembers(ctx, category.ID, collection.row.ID)
+		if err != nil {
+			if !errors.Is(err, media.ErrNotWired) && !errors.Is(err, media.ErrNoFranchise) {
+				c.logger.Warn("collection recommendations: read collection", slog.Int64("collection_id", collection.row.ID), slog.Any("error", err))
+			}
+			continue
+		}
+		for _, member := range missing {
+			if member.WorkID != 0 || member.ExternalID == "" {
+				continue
+			}
+			out = append(out, media.Recommendation{Provider: member.Provider, ExternalID: member.ExternalID, Title: member.Title, Subtitle: collection.row.Name, PosterURL: member.PosterURL, Year: int64(member.Year)})
+		}
+	}
+	return out
 }
 
 // seriesFeeds reads TMDB's charts for a series library, and AniList's with TMDB's anime charts for an anime one.

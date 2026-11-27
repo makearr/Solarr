@@ -54,3 +54,35 @@ func TestPlanCollectionMerges(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanOverlapMerges(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []library.MergeCandidate
+		want []library.CollectionMerge
+	}{
+		{"none", nil, nil},
+		{"the same single work said twice merges, the lower id kept",
+			[]library.MergeCandidate{cand(2, "Zela Saga", []int64{7}), cand(1, "Zela", []int64{7})},
+			[]library.CollectionMerge{{Keep: 1, Drop: []int64{2}}}},
+		{"nearly the same members merge into the larger",
+			[]library.MergeCandidate{cand(1, "A", []int64{1, 2, 3, 4, 5}), cand(2, "B", []int64{1, 2, 3, 4, 5, 6})},
+			[]library.CollectionMerge{{Keep: 2, Drop: []int64{1}}}},
+		{"a small collection inside a large one stays apart",
+			[]library.MergeCandidate{cand(1, "Large", []int64{1, 2, 3, 4, 5, 6, 7, 8}), cand(2, "Small", []int64{1, 2})},
+			nil},
+		{"one shared work out of three each stays apart",
+			[]library.MergeCandidate{cand(1, "A", []int64{1, 2, 3}), cand(2, "B", []int64{3, 4, 5})},
+			nil},
+		{"empty collections are left alone",
+			[]library.MergeCandidate{cand(1, "A", nil), cand(2, "B", nil)},
+			nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := library.PlanOverlapMerges(tc.in); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("PlanOverlapMerges = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}

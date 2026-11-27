@@ -36,6 +36,11 @@ type ShowFilmStore interface {
 	MakeShowLink(ctx context.Context, plan library.PlannedShowLink, filmType, seriesType string, seriesCollectionID int64) (bool, error)
 }
 
+// DuplicateStore folds the collections that hold nearly the same works into one.
+type DuplicateStore interface {
+	MergeOverlapping(ctx context.Context) (int, error)
+}
+
 // Service is the pass's handler.
 type Service struct {
 	Store Store
@@ -44,11 +49,20 @@ type Service struct {
 	FilmType, SeriesType string
 	// Keywords declares the keyword and official list keys before the links are made; nil declares none.
 	Keywords KeywordStore
-	Logger   *slog.Logger
+	// Duplicates folds collections two providers made of one franchise before the pass links; nil folds none.
+	Duplicates DuplicateStore
+	Logger     *slog.Logger
 }
 
 // Run implements jobs.Handler.
 func (s Service) Run(ctx context.Context, _ jobs.Job) error {
+	merged := 0
+	if s.Duplicates != nil {
+		var err error
+		if merged, err = s.Duplicates.MergeOverlapping(ctx); err != nil {
+			return err
+		}
+	}
 	linked, err := s.Link(ctx)
 	if err != nil {
 		return err
@@ -57,7 +71,7 @@ func (s Service) Run(ctx context.Context, _ jobs.Job) error {
 	if err != nil {
 		return err
 	}
-	s.Logger.Info("collection link pass finished", slog.Int("linked", linked), slog.Int("shows", shows))
+	s.Logger.Info("collection link pass finished", slog.Int("linked", linked), slog.Int("shows", shows), slog.Int("merged", merged))
 	return nil
 }
 

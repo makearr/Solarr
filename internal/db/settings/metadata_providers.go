@@ -91,8 +91,9 @@ const (
 // KeyMetadataDisabledProviders lists the providers switched off for every library.
 const KeyMetadataDisabledProviders = "metadata.disabled_providers"
 
-// DefaultDisabledProviders start off: Google Books answers 429 without a key of the owner's own, and the comic providers are new.
-var DefaultDisabledProviders = []string{BookSourceGoogleBooks, MovieSourceIMDb, ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, ComicSourceMangaUpdates, ComicSourceMangaDex}
+// DefaultDisabledProviders start off: Google Books answers 429 without a key of the owner's own, and ComicVine and Metron
+// need one; the keyless comic providers are on, since a comic library with none identifies nothing.
+var DefaultDisabledProviders = []string{BookSourceGoogleBooks, MovieSourceIMDb, ComicSourceComicVine, ComicSourceMetron}
 
 // KeyMetadataMovieSources orders the movie providers: the first to hold a field supplies it, the others fill what is missing.
 const KeyMetadataMovieSources = "metadata.movie_sources"

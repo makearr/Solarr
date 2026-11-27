@@ -39,7 +39,7 @@ func (p *process) registerFranchiseExpandJob(registry *jobs.Registry, executor *
 		return err
 	}
 	executor.Handle(franchiselink.JobType, franchiselink.Service{
-		Store: library.NewFranchises(p.library), Keywords: library.NewFranchises(p.library), Logger: p.logger,
+		Store: library.NewFranchises(p.library), Keywords: library.NewFranchises(p.library), Duplicates: library.NewFranchises(p.library), Logger: p.logger,
 		Shows: library.NewFranchises(p.library), FilmType: "movie", SeriesType: "tv",
 	})
 	return nil

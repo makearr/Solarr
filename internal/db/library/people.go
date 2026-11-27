@@ -183,6 +183,9 @@ func findOrCreatePerson(
 	return person.ID, nil
 }
 
+// isAdultProvider is true for the adult libraries' performer ids; a name alone never joins them to anyone else.
+func isAdultProvider(provider string) bool { return strings.HasSuffix(provider, ":performer") }
+
 // joinSameNamed links the id to the one identified person it names: by name, else by alias, whose birth does not
 // contradict the new person's and who holds no id of the link's provider; several candidates stay apart.
 func joinSameNamed(ctx context.Context, tx librarydb.DBTX, queries *librarydb.Queries, link PersonLink) (int64, bool, error) {
@@ -221,8 +224,12 @@ func joinSameNamed(ctx context.Context, tx librarydb.DBTX, queries *librarydb.Qu
 // identifiedMatches runs a person lookup and keeps who is identified by a provider, holds no id of the link's and was
 // not born at another time.
 func identifiedMatches(ctx context.Context, tx librarydb.DBTX, lookup, arg string, link PersonLink) ([]int64, error) {
+	sameDomain := `AND y.provider NOT LIKE '%:performer'`
+	if isAdultProvider(link.Provider) {
+		sameDomain = `AND y.provider LIKE '%:performer'`
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT found.id, found.born FROM (`+lookup+`) found
-WHERE EXISTS (SELECT 1 FROM person_external_id y WHERE y.person_id = found.id AND y.provider NOT LIKE 'local:%')
+WHERE EXISTS (SELECT 1 FROM person_external_id y WHERE y.person_id = found.id AND y.provider NOT LIKE 'local:%' `+sameDomain+`)
   AND NOT EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = found.id AND x.provider = ?)
 ORDER BY found.id LIMIT 3`, arg, link.Provider)
 	if err != nil {

@@ -125,3 +125,53 @@ func similarNames(a, b string) bool {
 	}
 	return common == len(left) || float64(common) >= float64(len(left))/2 && common >= 1
 }
+
+// overlapShare is the Jaccard share of members (shared over either's) at which two collections are one said twice.
+const overlapShare = 0.8
+
+// PlanOverlapMerges folds collections whose members are nearly the same: the share of works they hold in common over
+// the works either holds is at least overlapShare. Stricter than PlanCollectionMerges, which a person confirms; this
+// one runs on its own, so a small collection inside a large one is never folded into it.
+func PlanOverlapMerges(collections []MergeCandidate) []CollectionMerge {
+	ordered := slices.Clone(collections)
+	slices.SortStableFunc(ordered, func(a, b MergeCandidate) int {
+		if len(a.Works) != len(b.Works) {
+			return len(b.Works) - len(a.Works)
+		}
+		return int(a.ID - b.ID)
+	})
+	held := make([]map[int64]bool, len(ordered))
+	for index, collection := range ordered {
+		held[index] = make(map[int64]bool, len(collection.Works))
+		for _, work := range collection.Works {
+			held[index][work] = true
+		}
+	}
+	dropped := make([]bool, len(ordered))
+	var merges []CollectionMerge
+	for keep := range ordered {
+		if dropped[keep] || len(held[keep]) == 0 {
+			continue
+		}
+		merge := CollectionMerge{Keep: ordered[keep].ID}
+		for other := keep + 1; other < len(ordered); other++ {
+			if dropped[other] || len(held[other]) == 0 {
+				continue
+			}
+			shared := 0
+			for work := range held[other] {
+				if held[keep][work] {
+					shared++
+				}
+			}
+			if float64(shared)/float64(len(held[keep])+len(held[other])-shared) >= overlapShare {
+				dropped[other] = true
+				merge.Drop = append(merge.Drop, ordered[other].ID)
+			}
+		}
+		if len(merge.Drop) > 0 {
+			merges = append(merges, merge)
+		}
+	}
+	return merges
+}

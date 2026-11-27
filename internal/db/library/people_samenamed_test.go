@@ -1,9 +1,12 @@
 package library_test
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 func resolveNamed(t *testing.T, people library.People, provider, id, name, born string) int64 {
@@ -99,5 +102,58 @@ func TestConvergePeople_MergesTheUncontestedAndSplitsTheContestedByBirth(t *test
 	}
 	if got := survivors(aliased, named); got != 1 {
 		t.Fatalf("%d of the alias pair remain, want 1", got)
+	}
+}
+
+func TestResolvePerson_NeverJoinsAnAdultPerformerToAnotherDomainByName(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+
+	artist := resolveNamed(t, people, "alpha:person", "a1", "Zela Moru", "")
+	performer := resolveNamed(t, people, "gamma:performer", "p1", "Zela Moru", "")
+	if performer == artist {
+		t.Fatal("an adult performer joined the same-named person of another domain")
+	}
+	if other := resolveNamed(t, people, "delta:performer", "p2", "Zela Moru", ""); other != performer {
+		t.Fatalf("a second performer id made person %d, want %d", other, performer)
+	}
+}
+
+func TestSplitAdultPeople_GivesTheJoinedPerformerAPersonOfItsOwn(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+
+	artist := resolveNamed(t, people, "alpha:person", "a1", "Zela Moru", "")
+	err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO person_external_id (provider, external_id, person_id) VALUES ('gamma:performer', 'p1', ?)`, artist)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	if err := people.SplitAdultPeople(t.Context()); err != nil {
+		t.Fatalf("SplitAdultPeople: %v", err)
+	}
+	performer, found, err := people.FindByExternalID(t.Context(), "gamma:performer", "p1")
+	if err != nil || !found || performer == artist {
+		t.Fatalf("performer person = %d, %v, %v; want one apart from %d", performer, found, err, artist)
+	}
+	if kept, found, _ := people.FindByExternalID(t.Context(), "alpha:person", "a1"); !found || kept != artist {
+		t.Fatalf("the artist moved to %d", kept)
+	}
+}
+
+func TestConvergePeople_KeepsAdultPerformersApartFromOtherDomains(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+
+	artist := renamed(t, people, "alpha:person", "a1", "Zela Moru", "")
+	performer := renamed(t, people, "gamma:performer", "p1", "Zela Moru", "")
+	merged, err := people.ConvergePeople(t.Context())
+	if err != nil {
+		t.Fatalf("ConvergePeople: %v", err)
+	}
+	if merged != 0 || !exists(t, people, artist) || !exists(t, people, performer) {
+		t.Fatalf("merged %d; artist kept %v, performer kept %v", merged, exists(t, people, artist), exists(t, people, performer))
 	}
 }

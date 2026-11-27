@@ -4,6 +4,10 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- People: an adult performer is never joined to a same-named music artist or actor any more, and persons already joined wrongly (an artist carrying a performer's id, picture and credits) are split apart by the "Match people" background task.
+- Collections: collections two providers made of one franchise (nearly the same members) are folded into one by the collection linking task, keeping every provider id on it.
+- Comics and manga: the keyless providers (Grand Comics Database, MangaUpdates, MangaDex) are on from the start, so a new comic library identifies its files without any setup; ComicVine and Metron stay off until you give a key.
+- Discover, Collections: unfinished collections now recommend the parts a library lacks altogether (as the collection page lists them), not only works already known.
 - Settings, General: Run now buttons for collection matching, recommendations and broken-file detection (the "Files" card is now "Detect broken files"); Hash videos is greyed out, ticked and explained while preview pictures are on (also on the Duplicates page).
 - Dashboard shows Discover above the newly added items (five instead of ten); each library lists Discover (was Recommended) above Collections.
 - Discover: the first time Discover is switched on (Settings, General or Settings, Discover) it is enabled for every library at once; a library you switch off afterwards stays off, and later switch-ons do not turn it back on.

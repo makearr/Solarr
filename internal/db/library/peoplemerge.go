@@ -378,6 +378,16 @@ type duplicate struct {
 	providers   map[string]bool
 }
 
+// adult is true when the person holds an adult library's performer id.
+func (d *duplicate) adult() bool {
+	for provider := range d.providers {
+		if isAdultProvider(provider) {
+			return true
+		}
+	}
+	return false
+}
+
 // maxConvergePasses bounds the rounds of one run; a merge can make another one uncontested.
 const maxConvergePasses = 3
 
@@ -385,6 +395,9 @@ const maxConvergePasses = 3
 // alias being the other's name) all merge when they hold no provider twice and no two births differ; where that does
 // not hold, only those of one known birth merge, and the rest stay apart. It answers how many people were merged.
 func (p People) ConvergePeople(ctx context.Context) (int, error) {
+	if err := p.SplitAdultPeople(ctx); err != nil {
+		return 0, err
+	}
 	total := 0
 	for range maxConvergePasses {
 		merged, err := p.convergeOnce(ctx)
@@ -471,6 +484,9 @@ func uncontested(group []*duplicate) [][]*duplicate {
 func compatibleAll(people []*duplicate) bool {
 	seen := map[string]bool{}
 	for index, person := range people {
+		if person.adult() != people[0].adult() {
+			return false
+		}
 		for provider := range person.providers {
 			if seen[provider] {
 				return false
@@ -536,4 +552,75 @@ ORDER BY p.id`)
 		groups[alias] = append(groups[alias], person)
 	}
 	return groups, aliases.Err()
+}
+
+// SplitAdultPeople undoes name-only joins of an adult performer with a person of another domain (a music artist, an
+// actor): the performer ids and the credits on adult works move to a person of their own.
+func (p People) SplitAdultPeople(ctx context.Context) error {
+	mixed, err := p.mixedPeople(ctx)
+	if err != nil {
+		return err
+	}
+	for chunk := range slices.Chunk(mixed, 50) {
+		err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			for _, id := range chunk {
+				if err := splitAdultPerson(ctx, tx, id); err != nil {
+					return fmt.Errorf("split person %d: %w", id, err)
+				}
+			}
+			return refreshPeople(ctx, librarydb.New(tx), chunk)
+		})
+		if err != nil {
+			return fmt.Errorf("library: %w", err)
+		}
+	}
+	return nil
+}
+
+func splitAdultPerson(ctx context.Context, tx *sql.Tx, id int64) error {
+	created, err := tx.ExecContext(ctx, `INSERT INTO person (name, sort_name, disambiguation, kind, gender, country, born, died, fields_json, monitored, added_at, name_locked)
+SELECT name, sort_name, disambiguation, kind, gender, country, born, died, fields_json, 0, added_at, name_locked FROM person WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	adultID, err := created.LastInsertId()
+	if err != nil {
+		return err
+	}
+	moves := []struct {
+		statement string
+		args      []any
+	}{
+		{`UPDATE person_external_id SET person_id = ? WHERE person_id = ? AND provider LIKE '%:performer'`, []any{adultID, id}},
+		{`UPDATE credit SET person_id = ? WHERE person_id = ? AND work_id IN (SELECT id FROM work WHERE media_type = 'adult')`, []any{adultID, id}},
+		{`UPDATE person SET fields_json = json_remove(fields_json, '$.image_url')
+WHERE id = ? AND (json_extract(fields_json, '$.image_url') LIKE '%stashdb%' OR json_extract(fields_json, '$.image_url') LIKE '%porndb%' OR json_extract(fields_json, '$.image_url') LIKE '%fansdb%')`, []any{id}},
+	}
+	for _, move := range moves {
+		if _, err := tx.ExecContext(ctx, move.statement, move.args...); err != nil {
+			return err
+		}
+	}
+	return refreshPeople(ctx, librarydb.New(tx), []int64{adultID})
+}
+
+// mixedPeople lists the people who hold an adult performer id and an id of another domain.
+func (p People) mixedPeople(ctx context.Context) ([]int64, error) {
+	rows, err := p.store.Read().QueryContext(ctx, `SELECT p.id FROM person p
+WHERE EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider LIKE '%:performer')
+  AND EXISTS (SELECT 1 FROM person_external_id y WHERE y.person_id = p.id AND y.provider NOT LIKE '%:performer' AND y.provider NOT LIKE 'local:%')
+ORDER BY p.id`)
+	if err != nil {
+		return nil, fmt.Errorf("library: list mixed people: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var mixed []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		mixed = append(mixed, id)
+	}
+	return mixed, rows.Err()
 }
