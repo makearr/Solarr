@@ -39,13 +39,15 @@ type DiscoverPreviewRejection struct{ Reason, Value string }
 
 func (s *Server) discoverGlobal() gen.DiscoverGlobalSettings {
 	global := s.auth.Settings.Snapshot().DiscoverGlobal()
-	return gen.DiscoverGlobalSettings{Enabled: global.Enabled, ExcludeGenres: nonNil(global.ExcludeGenres), ExcludeNetworks: nonNil(global.ExcludeNetworks)}
+	return gen.DiscoverGlobalSettings{
+		Enabled: global.Enabled, ExcludeGenres: nonNil(global.ExcludeGenres), ExcludeNetworks: nonNil(global.ExcludeNetworks),
+		ClassicAgeYears: int(global.ClassicAgeYears), MinRating: global.MinRating, MinVotes: global.MinVotes, AutoAddPerDay: int(global.AutoAddPerDay), AutoAddSearch: global.AutoAddSearch,
+	}
 }
 
 func (s *Server) discoverLibrary(one settings.LibraryDiscover) gen.LibraryDiscoverSettings {
 	out := gen.LibraryDiscoverSettings{
-		CategoryId: one.CategoryID, Enabled: one.Enabled, TotalAmount: int(one.TotalAmount), ClassicAgeYears: int(one.ClassicAgeYears), MinRating: one.MinRating,
-		MinVotes: one.MinVotes, AutoAddPerDay: int(one.AutoAddPerDay), AutoAddSearch: one.AutoAddSearch, OriginalLanguages: nonNil(one.OriginalLanguages),
+		CategoryId: one.CategoryID, Enabled: one.Enabled, TotalAmount: int(one.TotalAmount), OriginalLanguages: nonNil(one.OriginalLanguages),
 		LanguagesSet: one.LanguagesSet, ExcludeGenres: nonNil(one.ExcludeGenres), ExcludeNetworks: nonNil(one.ExcludeNetworks), DisabledKinds: nonNil(one.DisabledKinds),
 	}
 	name, mediaType := one.Name, one.MediaType
@@ -90,12 +92,21 @@ func (s *Server) SetDiscoverSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.decodeBody(w, r, maxUserBody, &body, "expected a JSON object") {
 		return
 	}
-	if err := s.auth.Registry.LookupAll(settings.KeyDiscoverEnabled, settings.KeyDiscoverExcludeGenres, settings.KeyDiscoverExcludeNetworks); err != nil {
+	if err := s.auth.Registry.LookupAll(settings.KeyDiscoverEnabled, settings.KeyDiscoverExcludeGenres, settings.KeyDiscoverExcludeNetworks,
+		settings.KeyDiscoverClassicYears, settings.KeyDiscoverMinRating, settings.KeyDiscoverMinVotes, settings.KeyDiscoverAutoAddPerDay, settings.KeyDiscoverAutoAddSearch); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	global := settings.DiscoverGlobal{Enabled: body.Enabled, ExcludeGenres: body.ExcludeGenres, ExcludeNetworks: body.ExcludeNetworks}
+	global := settings.DiscoverGlobal{
+		Enabled: body.Enabled, ExcludeGenres: body.ExcludeGenres, ExcludeNetworks: body.ExcludeNetworks,
+		ClassicAgeYears: int64(body.ClassicAgeYears), MinRating: body.MinRating, MinVotes: body.MinVotes, AutoAddPerDay: int64(body.AutoAddPerDay), AutoAddSearch: body.AutoAddSearch,
+	}
 	if err := s.auth.Settings.SetDiscoverGlobal(r.Context(), s.auth.Clock, global); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problems.Report("the Discover settings", "Nothing was changed."))
+			return
+		}
 		writeError(w, s.logger, err)
 		return
 	}
@@ -121,7 +132,7 @@ func (s *Server) SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Reque
 	if !s.decodeBody(w, r, maxUserBody, &body, "expected a JSON object") {
 		return
 	}
-	one := libraryDiscoverOf(categoryID, body)
+	one := libraryDiscoverOf(categoryID, body, s.auth.Settings.Snapshot().DiscoverGlobal())
 	err := s.auth.Settings.SetLibraryDiscover(r.Context(), one)
 	var problems config.Problems
 	if errors.As(err, &problems) {
@@ -149,10 +160,11 @@ func (s *Server) SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, s.logger, http.StatusOK, s.discoverLibrary(saved))
 }
 
-func libraryDiscoverOf(categoryID int64, body gen.LibraryDiscoverSettings) settings.LibraryDiscover {
+// libraryDiscoverOf reads a library body; classic age and the auto-add gates are the instance-wide ones.
+func libraryDiscoverOf(categoryID int64, body gen.LibraryDiscoverSettings, global settings.DiscoverGlobal) settings.LibraryDiscover {
 	one := settings.LibraryDiscover{
-		CategoryID: categoryID, Enabled: body.Enabled, TotalAmount: int64(body.TotalAmount), ClassicAgeYears: int64(body.ClassicAgeYears), MinRating: body.MinRating,
-		MinVotes: body.MinVotes, AutoAddPerDay: int64(body.AutoAddPerDay), AutoAddSearch: body.AutoAddSearch, OriginalLanguages: body.OriginalLanguages,
+		CategoryID: categoryID, Enabled: body.Enabled, TotalAmount: int64(body.TotalAmount), ClassicAgeYears: global.ClassicAgeYears, MinRating: global.MinRating,
+		MinVotes: global.MinVotes, AutoAddPerDay: global.AutoAddPerDay, AutoAddSearch: global.AutoAddSearch, OriginalLanguages: body.OriginalLanguages,
 		LanguagesSet: body.LanguagesSet, ExcludeGenres: body.ExcludeGenres, ExcludeNetworks: body.ExcludeNetworks, DisabledKinds: body.DisabledKinds,
 	}
 	for _, setting := range body.Types {
@@ -177,7 +189,7 @@ func (s *Server) PreviewLibraryDiscoverAutoAdd(w http.ResponseWriter, r *http.Re
 		writeError(w, s.logger, err)
 		return
 	}
-	one := libraryDiscoverOf(categoryID, body)
+	one := libraryDiscoverOf(categoryID, body, s.auth.Settings.Snapshot().DiscoverGlobal())
 	if problems := settings.ValidateLibraryDiscover(one); len(problems) > 0 {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problems.Report("the Discover settings", "Nothing was changed."))
 		return

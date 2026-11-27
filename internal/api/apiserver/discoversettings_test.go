@@ -54,7 +54,7 @@ func TestDiscoverSettings_SwitchLibraryAndGeneralShareOneState(t *testing.T) {
 	if !read().Global.Enabled {
 		t.Error("the General switch did not reach Discover")
 	}
-	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/settings/discover", `{"enabled":true,"exclude_genres":["Reality"],"exclude_networks":[]}`)); recorder.Code != http.StatusOK {
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/settings/discover", `{"enabled":true,"exclude_genres":["Reality"],"exclude_networks":[],"classic_age_years":30,"min_rating":7.5,"min_votes":500,"auto_add_per_day":3,"auto_add_search":false}`)); recorder.Code != http.StatusOK {
 		t.Fatalf("put = %d, %s", recorder.Code, recorder.Body)
 	}
 

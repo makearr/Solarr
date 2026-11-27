@@ -130,6 +130,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyTranscodeEnabled, settings.KeyTranscodeParallelCPU, settings.KeyTranscodeParallelGPU, settings.KeyTranscodeParallelAudio, settings.KeyTranscodeParallelComic, settings.KeyTranscodeParallelEbook,
 		settings.KeyTranscodePlaybackParallelCPU, settings.KeyTranscodePlaybackParallelGPU, settings.KeyTranscodePlaybackParallelAudio, settings.KeyTranscodePlaybackParallelComic, settings.KeyTranscodePlaybackParallelEbook,
 		settings.KeyTranscodeOriginalsRetainDays, settings.KeyTranscodeOriginalsCapGB,
+		settings.KeyDiscoverClassicYears, settings.KeyDiscoverMinRating, settings.KeyDiscoverMinVotes, settings.KeyDiscoverAutoAddPerDay, settings.KeyDiscoverAutoAddSearch,
 	}
 	for _, key := range known {
 		if _, found := registry.Lookup(key); !found {

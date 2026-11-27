@@ -928,7 +928,7 @@ func (p *process) comicService() comic.Service {
 		Sources: comic.Sources{
 			ComicVine:    comicvine.New(client(settings.ComicSourceComicVine), p.providerKey(settings.ComicSourceComicVine)),
 			Metron:       metron.New(client(settings.ComicSourceMetron), func() (string, string) { user, password, _ := strings.Cut(metronKey(), ":"); return user, password }),
-			GCD:          gcd.New(client(settings.ComicSourceGCD)),
+			GCD:          gcd.New(p.providerClient(settings.ComicSourceGCD, nil, httpx.ClientConfig{Timeout: 120 * time.Second})), // comics.org answers a title search in up to a minute
 			AniList:      anilist.New(client(providerAniList)),
 			MangaUpdates: mangaupdates.New(client(settings.ComicSourceMangaUpdates)),
 			MangaDex:     mangadex.New(client(settings.ComicSourceMangaDex)),

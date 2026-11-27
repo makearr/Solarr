@@ -11,7 +11,7 @@ import (
 func TestDiscoverIsOffWithDefaultsUntilSaved(t *testing.T) {
 	cache, _ := newCache(t)
 	movies, _ := cache.CreateCategory(t.Context(), "movie", "Movies", 10)
-	if got := cache.Snapshot().DiscoverGlobal(); !reflect.DeepEqual(got, settings.DiscoverGlobal{}) {
+	if got := cache.Snapshot().DiscoverGlobal(); !reflect.DeepEqual(got, settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5}) {
 		t.Errorf("global = %+v", got)
 	}
 	got, err := cache.LibraryDiscover(t.Context(), movies.ID)
@@ -33,11 +33,11 @@ func TestDiscoverIsOffWithDefaultsUntilSaved(t *testing.T) {
 func TestDiscoverRoundTripsAndFollowsTheCategoryOnDelete(t *testing.T) {
 	cache, cl := newCache(t)
 	series, _ := cache.CreateCategory(t.Context(), "tv", "Series", 10)
-	global := settings.DiscoverGlobal{Enabled: true, ExcludeGenres: []string{"Reality", "Reality", " "}, ExcludeNetworks: []string{"Example Network"}}
+	global := settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5, Enabled: true, ExcludeGenres: []string{"Reality", "Reality", " "}, ExcludeNetworks: []string{"Example Network"}}
 	if err := cache.SetDiscoverGlobal(t.Context(), cl, global); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := cache.Snapshot().DiscoverGlobal(), (settings.DiscoverGlobal{Enabled: true, ExcludeGenres: []string{"Reality"}, ExcludeNetworks: []string{"Example Network"}}); !reflect.DeepEqual(got, want) {
+	if got, want := cache.Snapshot().DiscoverGlobal(), (settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5, Enabled: true, ExcludeGenres: []string{"Reality"}, ExcludeNetworks: []string{"Example Network"}}); !reflect.DeepEqual(got, want) {
 		t.Errorf("global = %+v, want %+v", got, want)
 	}
 	want := settings.LibraryDiscover{
@@ -52,6 +52,8 @@ func TestDiscoverRoundTripsAndFollowsTheCategoryOnDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := cache.LibraryDiscover(t.Context(), series.ID)
+	// Classic age and the auto-add gates are the instance-wide ones, whatever the library row holds.
+	want.ClassicAgeYears, want.MinRating, want.MinVotes, want.AutoAddPerDay, want.AutoAddSearch = 25, 7, 1000, 5, false
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("library = %+v, %v\nwant %+v", got, err, want)
 	}
@@ -96,7 +98,7 @@ func TestDiscoverRefusesValuesOutsideTheirBounds(t *testing.T) {
 func TestDiscoverTravelsThroughTheConfigurationExport(t *testing.T) {
 	source, cl := newCache(t)
 	series, _ := source.CreateCategory(t.Context(), "tv", "Series", 10)
-	if err := source.SetDiscoverGlobal(t.Context(), cl, settings.DiscoverGlobal{Enabled: true, ExcludeGenres: []string{"Reality"}}); err != nil {
+	if err := source.SetDiscoverGlobal(t.Context(), cl, settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5, Enabled: true, ExcludeGenres: []string{"Reality"}}); err != nil {
 		t.Fatal(err)
 	}
 	saved, _ := source.LibraryDiscover(t.Context(), series.ID)
@@ -119,7 +121,7 @@ func TestDiscoverTravelsThroughTheConfigurationExport(t *testing.T) {
 	if !reflect.DeepEqual(got, saved) {
 		t.Errorf("library = %+v\nwant %+v", got, saved)
 	}
-	if got, want := target.Snapshot().DiscoverGlobal(), (settings.DiscoverGlobal{Enabled: true, ExcludeGenres: []string{"Reality"}, ExcludeNetworks: []string{}}); !reflect.DeepEqual(got, want) {
+	if got, want := target.Snapshot().DiscoverGlobal(), (settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5, Enabled: true, ExcludeGenres: []string{"Reality"}, ExcludeNetworks: []string{}}); !reflect.DeepEqual(got, want) {
 		t.Errorf("global = %+v, want %+v", got, want)
 	}
 }
@@ -138,7 +140,7 @@ func TestFirstSwitchOnEnablesEveryLibraryOnlyOnce(t *testing.T) {
 	if enabled(movies.ID) || enabled(series.ID) {
 		t.Fatal("a library starts with Discover off")
 	}
-	if err := cache.SetDiscoverGlobal(t.Context(), cl, settings.DiscoverGlobal{Enabled: true}); err != nil {
+	if err := cache.SetDiscoverGlobal(t.Context(), cl, settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5, Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
 	if !enabled(movies.ID) || !enabled(series.ID) {
@@ -155,7 +157,7 @@ func TestFirstSwitchOnEnablesEveryLibraryOnlyOnce(t *testing.T) {
 	if err := cache.SetDiscoverEnabled(t.Context(), cl, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := cache.SetDiscoverGlobal(t.Context(), cl, settings.DiscoverGlobal{Enabled: true}); err != nil {
+	if err := cache.SetDiscoverGlobal(t.Context(), cl, settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5, Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
 	if !enabled(movies.ID) || enabled(series.ID) {

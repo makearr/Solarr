@@ -11,6 +11,9 @@ type MergeCandidate struct {
 	ID    int64
 	Name  string
 	Works []int64
+	// Weight is how many ids the provider names the collection by; of equal size the more general one (the franchise that
+	// declares more keys) keeps its name.
+	Weight int
 }
 
 // CollectionMerge says the Drop collections are the Keep collection said twice.
@@ -137,6 +140,9 @@ func PlanOverlapMerges(collections []MergeCandidate) []CollectionMerge {
 	slices.SortStableFunc(ordered, func(a, b MergeCandidate) int {
 		if len(a.Works) != len(b.Works) {
 			return len(b.Works) - len(a.Works)
+		}
+		if a.Weight != b.Weight {
+			return b.Weight - a.Weight
 		}
 		return int(a.ID - b.ID)
 	})

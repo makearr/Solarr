@@ -14,6 +14,7 @@ import { TermChips } from "./TermChips";
 import { Card } from "./SettingsCard";
 
 type Library = components["schemas"]["LibraryDiscoverSettings"];
+type Global = components["schemas"]["DiscoverGlobalSettings"];
 
 /** Genres to suggest before a library has any recommendations of its own to count. */
 const COMMON_GENRES = ["Action", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Family", "Fantasy", "Horror", "Mystery", "Reality", "Romance", "Science Fiction", "Talk", "Thriller", "War"];
@@ -26,6 +27,15 @@ const LIST_LABELS: Record<string, MessageKey> = {
   collections: "discover.list.collections",
 };
 
+
+function GlobalNumber({ label, help, value, onChange }: { label: MessageKey; help: MessageKey; value: number; onChange: (value: number) => void }) {
+  return (
+    <label className={labelStyle} title={t(help)}>
+      <span>{t(label)}</span>
+      <input type="number" className={inputStyle} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
+  );
+}
 
 /** Settings > Discover: the switch, what is never recommended and each library's lists and auto-add gates. */
 export function DiscoverSettings() {
@@ -49,6 +59,11 @@ export function DiscoverSettings() {
     },
   });
   const global = settings.data?.global;
+  const [draftGlobalOrNull, setDraftGlobal] = useState<Global | null>(null);
+  useEffect(() => {
+    if (settings.data) setDraftGlobal(settings.data.global);
+  }, [settings.data]);
+  const draftGlobal = draftGlobalOrNull ?? { enabled: false, exclude_genres: [], exclude_networks: [], classic_age_years: 25, min_rating: 7, min_votes: 1000, auto_add_per_day: 5, auto_add_search: false };
   return (
     <div className="flex flex-col gap-6">
       <Card title={t("discover.title")} help={t("discover.help")}>
@@ -62,6 +77,16 @@ export function DiscoverSettings() {
           {t("discover.switch")}
         </label>
         <p className="text-xs text-ink-muted">{t("discover.switchHelp")}</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <GlobalNumber label="discover.classicYears" help="discover.classicYearsHelp" value={draftGlobal.classic_age_years} onChange={(value) => setDraftGlobal({ ...draftGlobal, classic_age_years: value })} />
+          <GlobalNumber label="discover.minRating" help="discover.minRatingHelp" value={draftGlobal.min_rating} onChange={(value) => setDraftGlobal({ ...draftGlobal, min_rating: value })} />
+          <GlobalNumber label="discover.minVotes" help="discover.minVotesHelp" value={draftGlobal.min_votes} onChange={(value) => setDraftGlobal({ ...draftGlobal, min_votes: value })} />
+          <GlobalNumber label="discover.autoAddPerDay" help="discover.autoAddPerDayHelp" value={draftGlobal.auto_add_per_day} onChange={(value) => setDraftGlobal({ ...draftGlobal, auto_add_per_day: value })} />
+        </div>
+        <label className="flex items-center gap-2 text-sm" title={t("discover.autoAddSearchHelp")}>
+          <input type="checkbox" checked={draftGlobal.auto_add_search} onChange={(event) => setDraftGlobal({ ...draftGlobal, auto_add_search: event.target.checked })} />
+          {t("discover.autoAddSearch")}
+        </label>
         <TermChips label={t("discover.neverGenres")} value={genres} onChange={setGenres} suggestions={COMMON_GENRES} />
         <TermChips label={t("discover.neverNetworks")} value={networks} onChange={setNetworks} />
         <div>
@@ -69,7 +94,7 @@ export function DiscoverSettings() {
             variant="primary"
             disabled={!global}
             busy={saveGlobal.isPending}
-            onClick={() => global && saveGlobal.mutate({ ...global, exclude_genres: genres, exclude_networks: networks })}
+            onClick={() => global && saveGlobal.mutate({ ...draftGlobal, enabled: global.enabled, exclude_genres: genres, exclude_networks: networks })}
           >
             {t("discover.save")}
           </Button>
@@ -116,17 +141,6 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
   const feedKinds = useDiscoverLibraries().data?.find((one) => one.category_id === library.category_id)?.feeds.map((feed) => feed.kind) ?? [];
   const kinds = [...new Set([...feedKinds, ...draft.disabled_kinds].filter((kind) => kind !== ""))].sort();
   const [previewing, setPreviewing] = useState<number | null>(null);
-  const number = (key: "classic_age_years" | "min_votes" | "auto_add_per_day" | "min_rating", label: MessageKey, help: MessageKey) => (
-    <label className={labelStyle} title={t(help)}>
-      <span>{t(label)}</span>
-      <input
-        type="number"
-        className={inputStyle}
-        value={draft[key]}
-        onChange={(event) => setDraft({ ...draft, [key]: Number(event.target.value) })}
-      />
-    </label>
-  );
   return (
     <Card
       title={library.name ?? String(library.category_id)}
@@ -138,23 +152,6 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
         </label>
       }
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {number("classic_age_years", "discover.classicYears", "discover.classicYearsHelp")}
-      </div>
-      {draft.types.some((row) => row.auto_add) && (
-        <fieldset className="flex flex-col gap-2 rounded-md border border-border-subtle p-3">
-          <legend className="px-1 text-xs text-ink-muted">{t("discover.autoAddGroup")}</legend>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {number("min_rating", "discover.minRating", "discover.minRatingHelp")}
-            {number("min_votes", "discover.minVotes", "discover.minVotesHelp")}
-            {number("auto_add_per_day", "discover.autoAddPerDay", "discover.autoAddPerDayHelp")}
-          </div>
-          <label className="flex items-center gap-2 text-sm" title={t("discover.autoAddSearchHelp")}>
-            <input type="checkbox" checked={draft.auto_add_search} onChange={(event) => setDraft({ ...draft, auto_add_search: event.target.checked })} />
-            {t("discover.autoAddSearch")}
-          </label>
-        </fieldset>
-      )}
       <LanguagePicker
         label={t("discover.languages")}
         help={draft.languages_set ? undefined : t("discover.languagesFromProfile")}

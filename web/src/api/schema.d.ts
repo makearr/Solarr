@@ -13202,6 +13202,22 @@ export interface components {
             };
         };
         DiscoverGlobalSettings: {
+            /** @description The most auto-add adds to a library a day */
+            auto_add_per_day: number;
+            /** @description A classic was released at least this many years ago. */
+            classic_age_years: number;
+            /**
+             * Format: double
+             * @description Auto-add's least rating
+             */
+            min_rating: number;
+            /**
+             * Format: int64
+             * @description Auto-add's least number of votes.
+             */
+            min_votes: number;
+            /** @description Search for what auto-add adds. */
+            auto_add_search: boolean;
             /** @description Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off. */
             enabled: boolean;
             /** @description Genres no library recommends from */
@@ -13228,22 +13244,6 @@ export interface components {
             enabled: boolean;
             /** @description The most the page shows before Load more. */
             total_amount: number;
-            /** @description A classic was released at least this many years ago. */
-            classic_age_years: number;
-            /**
-             * Format: double
-             * @description Auto-add's least rating
-             */
-            min_rating: number;
-            /**
-             * Format: int64
-             * @description Auto-add's least number of votes.
-             */
-            min_votes: number;
-            /** @description The most auto-add adds to the library a day */
-            auto_add_per_day: number;
-            /** @description Search for what auto-add adds. */
-            auto_add_search: boolean;
             /** @description Original languages recommended; empty is any. Only read when languages_set. */
             original_languages: string[];
             /** @description False takes the library's language profile (plus Japanese for an anime library) as the list. */

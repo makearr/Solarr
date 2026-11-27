@@ -604,6 +604,26 @@ func NewDefaultRegistry() *Registry {
 		Default:  `[]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyDiscoverClassicYears, Kind: KindInt, Tier: TierNormal,
+		Name: "Discover: a classic is older than (years)", HelpText: "How old a title must be to appear in the Classics list.", Default: "25",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyDiscoverMinRating, Kind: KindFloat, Tier: TierNormal,
+		Name: "Discover: auto-add minimum rating", HelpText: "Auto-add only takes what its source rates at least this, 0 to 10.", Default: "7",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyDiscoverMinVotes, Kind: KindInt, Tier: TierNormal,
+		Name: "Discover: auto-add minimum votes", HelpText: "Auto-add only takes what at least this many people rated.", Default: "1000",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyDiscoverAutoAddPerDay, Kind: KindInt, Tier: TierNormal,
+		Name: "Discover: auto-add at most per day", HelpText: "The most auto-add adds to one library in a day.", Default: "5",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyDiscoverAutoAddSearch, Kind: KindBool, Tier: TierNormal,
+		Name: "Discover: search for what auto-add adds", HelpText: "Start looking for each title as soon as auto-add has added it.", Default: "false",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyMetadataLanguage, Kind: KindString, Tier: TierNormal,
 		Name:     "Metadata language",
 		HelpText: "The language titles and overviews are asked in by every provider that takes one; English is used where a provider has nothing in it.",

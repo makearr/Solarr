@@ -2836,6 +2836,15 @@ type DiscoverFeed struct {
 
 // DiscoverGlobalSettings defines model for DiscoverGlobalSettings.
 type DiscoverGlobalSettings struct {
+	// AutoAddPerDay The most auto-add adds to a library a day
+	AutoAddPerDay int `json:"auto_add_per_day"`
+
+	// AutoAddSearch Search for what auto-add adds.
+	AutoAddSearch bool `json:"auto_add_search"`
+
+	// ClassicAgeYears A classic was released at least this many years ago.
+	ClassicAgeYears int `json:"classic_age_years"`
+
 	// Enabled Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off.
 	Enabled bool `json:"enabled"`
 
@@ -2844,6 +2853,12 @@ type DiscoverGlobalSettings struct {
 
 	// ExcludeNetworks Networks and studios no library recommends from
 	ExcludeNetworks []string `json:"exclude_networks"`
+
+	// MinRating Auto-add's least rating
+	MinRating float64 `json:"min_rating"`
+
+	// MinVotes Auto-add's least number of votes.
+	MinVotes int64 `json:"min_votes"`
 }
 
 // DiscoverLibrary defines model for DiscoverLibrary.
@@ -4650,15 +4665,7 @@ type LibraryCounts struct {
 
 // LibraryDiscoverSettings defines model for LibraryDiscoverSettings.
 type LibraryDiscoverSettings struct {
-	// AutoAddPerDay The most auto-add adds to the library a day
-	AutoAddPerDay int `json:"auto_add_per_day"`
-
-	// AutoAddSearch Search for what auto-add adds.
-	AutoAddSearch bool  `json:"auto_add_search"`
-	CategoryId    int64 `json:"category_id"`
-
-	// ClassicAgeYears A classic was released at least this many years ago.
-	ClassicAgeYears int `json:"classic_age_years"`
+	CategoryId int64 `json:"category_id"`
 
 	// DisabledKinds Add kinds the library does not recommend (an album, a performer).
 	DisabledKinds   []string `json:"disabled_kinds"`
@@ -4671,12 +4678,6 @@ type LibraryDiscoverSettings struct {
 
 	// MediaType The library's media type; ignored on a save.
 	MediaType *string `json:"media_type,omitempty"`
-
-	// MinRating Auto-add's least rating
-	MinRating float64 `json:"min_rating"`
-
-	// MinVotes Auto-add's least number of votes.
-	MinVotes int64 `json:"min_votes"`
 
 	// Name The library's name; ignored on a save.
 	Name *string `json:"name,omitempty"`

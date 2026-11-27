@@ -990,7 +990,8 @@ type collectionPlace struct {
 
 // membersByPlace lists each franchise collection's works, grouped by place and collection id.
 func (f Franchises) membersByPlace(ctx context.Context) (map[collectionPlace]map[int64]*MergeCandidate, error) {
-	rows, err := f.store.Read().QueryContext(ctx, `SELECT c.media_type, c.category_id, c.id, m.work_id
+	rows, err := f.store.Read().QueryContext(ctx, `SELECT c.media_type, c.category_id, c.id, m.work_id,
+       (SELECT COUNT(*) FROM collection_external_id e WHERE e.collection_id = c.id) + (SELECT COUNT(*) FROM collection_declared_key d WHERE d.collection_id = c.id)
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
 WHERE c.kind = ?
 ORDER BY c.media_type, c.category_id, c.id`, FranchiseKind)
@@ -1001,8 +1002,8 @@ ORDER BY c.media_type, c.category_id, c.id`, FranchiseKind)
 	byPlace := map[collectionPlace]map[int64]*MergeCandidate{}
 	for rows.Next() {
 		var at collectionPlace
-		var id, work int64
-		if err := rows.Scan(&at.mediaType, &at.categoryID, &id, &work); err != nil {
+		var id, work, weight int64
+		if err := rows.Scan(&at.mediaType, &at.categoryID, &id, &work, &weight); err != nil {
 			return nil, err
 		}
 		if byPlace[at] == nil {
@@ -1010,7 +1011,7 @@ ORDER BY c.media_type, c.category_id, c.id`, FranchiseKind)
 		}
 		candidate := byPlace[at][id]
 		if candidate == nil {
-			candidate = &MergeCandidate{ID: id}
+			candidate = &MergeCandidate{ID: id, Weight: int(weight)}
 			byPlace[at][id] = candidate
 		}
 		candidate.Works = append(candidate.Works, work)

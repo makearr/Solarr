@@ -14,6 +14,11 @@ type DiscoverEntry struct {
 	Enabled         bool                   `yaml:"enabled"`
 	ExcludeGenres   []string               `yaml:"exclude_genres,omitempty"`
 	ExcludeNetworks []string               `yaml:"exclude_networks,omitempty"`
+	ClassicAgeYears int64                  `yaml:"classic_age_years,omitempty"`
+	MinRating       float64                `yaml:"min_rating,omitempty"`
+	MinVotes        int64                  `yaml:"min_votes,omitempty"`
+	AutoAddPerDay   int64                  `yaml:"auto_add_per_day,omitempty"`
+	AutoAddSearch   bool                   `yaml:"auto_add_search,omitempty"`
 	Libraries       []LibraryDiscoverEntry `yaml:"libraries,omitempty"`
 }
 
@@ -53,7 +58,10 @@ func (c *Cache) ExportDiscover(ctx context.Context, document *Document) error {
 	}
 	snapshot := c.Snapshot()
 	global := snapshot.DiscoverGlobal()
-	entry := &DiscoverEntry{Enabled: global.Enabled, ExcludeGenres: global.ExcludeGenres, ExcludeNetworks: global.ExcludeNetworks}
+	entry := &DiscoverEntry{
+		Enabled: global.Enabled, ExcludeGenres: global.ExcludeGenres, ExcludeNetworks: global.ExcludeNetworks, ClassicAgeYears: global.ClassicAgeYears,
+		MinRating: global.MinRating, MinVotes: global.MinVotes, AutoAddPerDay: global.AutoAddPerDay, AutoAddSearch: global.AutoAddSearch,
+	}
 	for _, one := range libraries {
 		category, found := snapshot.Category(one.CategoryID)
 		if !found {
@@ -99,8 +107,14 @@ func (c *Cache) ImportDiscover(ctx context.Context, cl clock.Clock, document Doc
 		idByKey[category.MediaType+"/"+category.Name] = category.ID
 	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		imported := document.Discover
+		if imported.ClassicAgeYears == 0 { // a document written before these were instance-wide
+			imported.ClassicAgeYears, imported.MinRating, imported.MinVotes, imported.AutoAddPerDay = DefaultDiscoverClassicYears, DefaultDiscoverMinRating, DefaultDiscoverMinVotes, DefaultDiscoverAutoAddPerDay
+		}
 		if err := setDiscoverGlobal(ctx, queries, cl, DiscoverGlobal{
 			Enabled: document.Discover.Enabled, ExcludeGenres: document.Discover.ExcludeGenres, ExcludeNetworks: document.Discover.ExcludeNetworks,
+			ClassicAgeYears: imported.ClassicAgeYears, MinRating: imported.MinRating, MinVotes: imported.MinVotes,
+			AutoAddPerDay: imported.AutoAddPerDay, AutoAddSearch: imported.AutoAddSearch,
 		}); err != nil {
 			return err
 		}

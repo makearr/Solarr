@@ -4,6 +4,11 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Settings, Discover: the classic age, auto-add's minimum rating and votes, its daily ceiling and the search-after-add switch are one setting for the whole instance (in the first card) instead of one per library.
+- Collections folded into one keep the name of the one with the most works, then the one with more provider ids, the lowest id only last.
+- The old per-target transcode setup page is gone; the setup lives in the quality target's editor.
+- Ebooks: an epub-writing and repacking library in pure Go is in, and pandoc is used for other formats when it is on PATH; the `-full` image variant (docker build --build-arg WITH_PANDOC=1) carries it. Converting ebooks from Settings, Transcode is not wired yet.
+- Comics: the Grand Comics Database gets two minutes per request, since a title search there can take almost a minute.
 - Comics: a series is found whatever the accents (a folder without them matches the catalogue's accented title), so a folder of comics whose name lacks the accent is identified instead of waiting in Review.
 - The web interface opens one live-update stream per browser, not one per tab: with many tabs of the same instance open, the first tab reads the stream and passes it to the others, so the page no longer freezes behind the browser's six-connection limit.
 - Transcode: the parallel limits are ceilings down the lanes CPU, GPU, audio, comics, ebooks (CPU 1, GPU 2, audio 4 allows one CPU and one GPU job beside two audio ones), comics and ebooks have a lane of their own, and a limit under an earlier lane's is refused.

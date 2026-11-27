@@ -63,6 +63,9 @@ COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 # player's transcode; they cost nothing without a device passed in (documentation/media-player.md).
 RUN apk add --no-cache ffmpeg chromaprint py3-mutagen mesa-va-gallium libva-utils \
  && if [ "$(uname -m)" = x86_64 ]; then apk add --no-cache intel-media-driver onevpl-intel-gpu; fi
+# The -full image variant (--build-arg WITH_PANDOC=1) adds pandoc for ebook conversions beyond epub; Solarr probes PATH for it.
+ARG WITH_PANDOC=
+RUN if [ -n "$WITH_PANDOC" ]; then apk add --no-cache pandoc-cli; fi
 COPY --chmod=0755 internal/platform/mediatool/solarr-tag /usr/local/bin/solarr-tag
 
 COPY --from=build /out/solarr /usr/local/bin/solarr

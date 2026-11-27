@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
@@ -17,6 +18,11 @@ const (
 	KeyDiscoverEnabled         = "discover.enabled"
 	KeyDiscoverExcludeGenres   = "discover.exclude_genres"
 	KeyDiscoverExcludeNetworks = "discover.exclude_networks"
+	KeyDiscoverClassicYears    = "discover.classic_age_years"
+	KeyDiscoverMinRating       = "discover.min_rating"
+	KeyDiscoverMinVotes        = "discover.min_votes"
+	KeyDiscoverAutoAddPerDay   = "discover.auto_add_per_day"
+	KeyDiscoverAutoAddSearch   = "discover.auto_add_search"
 )
 
 // DiscoverTypes are the recommendation lists a library can enable, in the order the interface shows them.
@@ -37,6 +43,12 @@ type DiscoverGlobal struct {
 	Enabled         bool
 	ExcludeGenres   []string
 	ExcludeNetworks []string
+	// ClassicAgeYears is how old a title must be to count as a classic; the rest are auto-add's gates and daily ceiling.
+	ClassicAgeYears int64
+	MinRating       float64
+	MinVotes        int64
+	AutoAddPerDay   int64
+	AutoAddSearch   bool
 }
 
 // DiscoverTypeSetting is one recommendation list of one library.
@@ -76,7 +88,41 @@ func (s *Snapshot) DiscoverGlobal() DiscoverGlobal {
 		Enabled:         s.policyBool(KeyDiscoverEnabled, false),
 		ExcludeGenres:   s.policyStringList(KeyDiscoverExcludeGenres),
 		ExcludeNetworks: s.policyStringList(KeyDiscoverExcludeNetworks),
+		ClassicAgeYears: s.policyInt(KeyDiscoverClassicYears, DefaultDiscoverClassicYears),
+		MinRating:       s.policyFloat(KeyDiscoverMinRating, DefaultDiscoverMinRating),
+		MinVotes:        s.policyInt(KeyDiscoverMinVotes, DefaultDiscoverMinVotes),
+		AutoAddPerDay:   s.policyInt(KeyDiscoverAutoAddPerDay, DefaultDiscoverAutoAddPerDay),
+		AutoAddSearch:   s.policyBool(KeyDiscoverAutoAddSearch, false),
 	}
+}
+
+func (s *Snapshot) policyFloat(key string, fallback float64) float64 {
+	parsed, err := strconv.ParseFloat(s.policy[key], 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+// validateDiscoverGlobal checks the values that apply to every library.
+func validateDiscoverGlobal(global DiscoverGlobal) config.Problems {
+	var problems config.Problems
+	problem := func(path string, value any, expectation string) {
+		problems = append(problems, config.Problem{Path: path, Value: fmt.Sprint(value), Expectation: expectation})
+	}
+	if global.ClassicAgeYears < 1 || global.ClassicAgeYears > 150 {
+		problem("classic_age_years", global.ClassicAgeYears, "1 to 150 years")
+	}
+	if global.MinRating < 0 || global.MinRating > 10 {
+		problem("min_rating", global.MinRating, "0 to 10")
+	}
+	if global.MinVotes < 0 {
+		problem("min_votes", global.MinVotes, "0 or more")
+	}
+	if global.AutoAddPerDay < 0 || global.AutoAddPerDay > 100 {
+		problem("auto_add_per_day", global.AutoAddPerDay, "0 to 100")
+	}
+	return problems
 }
 
 // discoverEnabledAllRepair records that the first global switch-on already enabled every library.
@@ -126,6 +172,9 @@ func enableLibrariesOnce(ctx context.Context, queries *settingsdb.Queries, cl cl
 
 // SetDiscoverGlobal writes the switch and both exclusion lists together; the first switch-on enables every library.
 func (c *Cache) SetDiscoverGlobal(ctx context.Context, cl clock.Clock, global DiscoverGlobal) error {
+	if problems := validateDiscoverGlobal(global); len(problems) > 0 {
+		return problems
+	}
 	libraries, err := c.librariesToEnableOnce(ctx, global.Enabled)
 	if err != nil {
 		return err
@@ -149,6 +198,9 @@ func setDiscoverGlobal(ctx context.Context, queries *settingsdb.Queries, cl cloc
 	}
 	return setInstanceSettings(ctx, queries, cl, map[string]string{
 		KeyDiscoverEnabled: boolPolicy(global.Enabled), KeyDiscoverExcludeGenres: string(genres), KeyDiscoverExcludeNetworks: string(networks),
+		KeyDiscoverClassicYears: strconv.FormatInt(global.ClassicAgeYears, 10), KeyDiscoverMinRating: strconv.FormatFloat(global.MinRating, 'f', -1, 64),
+		KeyDiscoverMinVotes: strconv.FormatInt(global.MinVotes, 10), KeyDiscoverAutoAddPerDay: strconv.FormatInt(global.AutoAddPerDay, 10),
+		KeyDiscoverAutoAddSearch: boolPolicy(global.AutoAddSearch),
 	})
 }
 
@@ -173,9 +225,12 @@ func (c *Cache) LibraryDiscovers(ctx context.Context) ([]LibraryDiscover, error)
 		}
 		typesOf[row.CategoryID][row.Type] = row
 	}
+	global := c.Snapshot().DiscoverGlobal()
 	var out []LibraryDiscover
 	for _, category := range c.Snapshot().Categories() {
-		out = append(out, resolveLibraryDiscover(category, saved, typesOf[category.ID]))
+		one := resolveLibraryDiscover(category, saved, typesOf[category.ID])
+		one.ClassicAgeYears, one.MinRating, one.MinVotes, one.AutoAddPerDay, one.AutoAddSearch = global.ClassicAgeYears, global.MinRating, global.MinVotes, global.AutoAddPerDay, global.AutoAddSearch
+		out = append(out, one)
 	}
 	return out, nil
 }

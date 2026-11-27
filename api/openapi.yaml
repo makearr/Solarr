@@ -17493,8 +17493,13 @@ components:
 
     DiscoverGlobalSettings:
       type: object
-      required: [enabled, exclude_genres, exclude_networks]
+      required: [enabled, exclude_genres, exclude_networks, classic_age_years, min_rating, min_votes, auto_add_per_day, auto_add_search]
       properties:
+        auto_add_per_day: { type: integer, minimum: 0, maximum: 100, description: The most auto-add adds to a library a day, 0 for no ceiling. }
+        classic_age_years: { type: integer, minimum: 1, maximum: 150, description: A classic was released at least this many years ago. }
+        min_rating: { type: number, format: double, minimum: 0, maximum: 10, description: Auto-add's least rating, 0 to 10. }
+        min_votes: { type: integer, format: int64, minimum: 0, description: Auto-add's least number of votes. }
+        auto_add_search: { type: boolean, description: Search for what auto-add adds. }
         enabled: { type: boolean, description: "Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off." }
         exclude_genres: { type: array, items: { type: string }, description: Genres no library recommends from, on top of each library's own. }
         exclude_networks: { type: array, items: { type: string }, description: Networks and studios no library recommends from, on top of each library's own. }
@@ -17510,18 +17515,13 @@ components:
 
     LibraryDiscoverSettings:
       type: object
-      required: [category_id, enabled, total_amount, classic_age_years, min_rating, min_votes, auto_add_per_day, auto_add_search, original_languages, languages_set, exclude_genres, exclude_networks, disabled_kinds, types]
+      required: [category_id, enabled, total_amount, original_languages, languages_set, exclude_genres, exclude_networks, disabled_kinds, types]
       properties:
         category_id: { type: integer, format: int64 }
         name: { type: string, description: The library's name; ignored on a save. }
         media_type: { type: string, description: The library's media type; ignored on a save. }
         enabled: { type: boolean }
         total_amount: { type: integer, minimum: 1, maximum: 500, description: The most the page shows before Load more. }
-        classic_age_years: { type: integer, minimum: 1, maximum: 150, description: A classic was released at least this many years ago. }
-        min_rating: { type: number, format: double, minimum: 0, maximum: 10, description: Auto-add's least rating, 0 to 10. }
-        min_votes: { type: integer, format: int64, minimum: 0, description: Auto-add's least number of votes. }
-        auto_add_per_day: { type: integer, minimum: 0, maximum: 100, description: The most auto-add adds to the library a day, 0 for no ceiling. }
-        auto_add_search: { type: boolean, description: Search for what auto-add adds. }
         original_languages: { type: array, items: { type: string }, description: "Original languages recommended; empty is any. Only read when languages_set." }
         languages_set: { type: boolean, description: "False takes the library's language profile (plus Japanese for an anime library) as the list." }
         exclude_genres: { type: array, items: { type: string } }

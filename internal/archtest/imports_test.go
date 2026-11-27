@@ -272,6 +272,7 @@ var allowedInternalImports = map[string][]string{
 	// already have -- rar/7z multi-volume support needs real sibling
 	// files next to the path given, not an abstraction over them.
 	"internal/platform/archive":     {"internal/platform/fsx"},
+	"internal/platform/ebookconv":   {},
 	"internal/platform/comicrepack": {"internal/platform/archive", "internal/platform/artwork", "internal/platform/fsx"},
 	// Section 11.7's capacity-polling job: probes every configured root via
 	// fsx and writes what it found back to settings.db.

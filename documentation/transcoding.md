@@ -81,3 +81,11 @@ blocked.
 ## Not built yet
 
 The statistics page, file lists, retry and restore actions, and the settings pages come with the API and web steps.
+
+## Ebook conversion
+
+`internal/platform/ebookconv` converts ebooks without a heavy tool: plain text and html are written as epub and an epub
+is repacked (mimetype first and stored, desktop litter dropped) in pure Go. Every other format goes through pandoc when
+`pandoc` is on PATH, which only the `-full` image variant carries (`docker build --build-arg WITH_PANDOC=1`); without it
+those conversions are not offered and `ebookconv.ErrNeedsPandoc` says why. Calibre is not used. The `ebook` lane exists in
+Settings, Transcode; the transcode item kind, judgement and run for ebooks are not wired yet.

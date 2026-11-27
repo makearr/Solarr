@@ -43,7 +43,7 @@ function renderForm(rateMode: string) {
     Promise.resolve(new Response(JSON.stringify(request.url.endsWith("/qualitytargets") ? [{ id: 7, name: "Films", media_type: "video", audio_codec: "aac", container: "mkv", tolerance_pct: 20 }] : state), { status: 200, headers: { "Content-Type": "application/json" } })),
   );
   const root = createRootRoute();
-  const route = createRoute({ getParentRoute: () => root, path: "/settings/transcode/targets/$targetId", component: TranscodeSetupForm });
+  const route = createRoute({ getParentRoute: () => root, path: "/settings/transcode/targets/$targetId", component: () => <TranscodeSetupForm targetId={7} /> });
   const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: ["/settings/transcode/targets/7"] }) });
   render(
     <QueryClientProvider client={new QueryClient()}>
