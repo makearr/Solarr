@@ -74,7 +74,9 @@ export function FolderCheck({ path }: { path: string }) {
   });
   if (!trimmed.startsWith("/")) return trimmed === "" ? null : <Verdict ok={false}>{t("setup.folder.absolute")}</Verdict>;
   if (listing.isPending) return null;
-  return listing.isError ? <Verdict ok={false}>{t("setup.folder.missing")}</Verdict> : <Verdict ok>{t("setup.folder.found")}</Verdict>;
+  // Browse is a typeahead: a missing folder answers with its parent's listing, so only an exact path match means found.
+  const found = !listing.isError && listing.data.path === (trimmed.replace(/\/+$/, "") || "/");
+  return found ? <Verdict ok>{t("setup.folder.found")}</Verdict> : <Verdict ok={false}>{t("setup.folder.missing")}</Verdict>;
 }
 
 /** One folder as the container sees it: typed or browsed, with its check. */
