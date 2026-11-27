@@ -2973,10 +2973,7 @@ type DiscoverSettings struct {
 // DiscoverTypeSettings defines model for DiscoverTypeSettings.
 type DiscoverTypeSettings struct {
 	// Amount How many items of this list the library keeps.
-	Amount int `json:"amount"`
-
-	// AutoAdd Add what passes the gates without being asked.
-	AutoAdd bool                     `json:"auto_add"`
+	Amount  int                      `json:"amount"`
 	Enabled bool                     `json:"enabled"`
 	Type    DiscoverTypeSettingsType `json:"type"`
 }
@@ -4756,6 +4753,8 @@ type LibraryCounts struct {
 
 // LibraryDiscoverSettings defines model for LibraryDiscoverSettings.
 type LibraryDiscoverSettings struct {
+	// AutoAdd Add recommendations by itself: the best rated of every enabled list, up to the daily ceiling, once they pass the gates.
+	AutoAdd    bool  `json:"auto_add"`
 	CategoryId int64 `json:"category_id"`
 
 	// DisabledKinds Add kinds the library does not recommend (an album, a performer).

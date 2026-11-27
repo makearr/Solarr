@@ -47,13 +47,13 @@ func (s *Server) discoverGlobal() gen.DiscoverGlobalSettings {
 
 func (s *Server) discoverLibrary(one settings.LibraryDiscover) gen.LibraryDiscoverSettings {
 	out := gen.LibraryDiscoverSettings{
-		CategoryId: one.CategoryID, Enabled: one.Enabled, TotalAmount: int(one.TotalAmount), OriginalLanguages: nonNil(one.OriginalLanguages),
+		CategoryId: one.CategoryID, Enabled: one.Enabled, AutoAdd: one.AutoAdd, TotalAmount: int(one.TotalAmount), OriginalLanguages: nonNil(one.OriginalLanguages),
 		LanguagesSet: one.LanguagesSet, ExcludeGenres: nonNil(one.ExcludeGenres), ExcludeNetworks: nonNil(one.ExcludeNetworks), DisabledKinds: nonNil(one.DisabledKinds),
 	}
 	name, mediaType := one.Name, one.MediaType
 	out.Name, out.MediaType = &name, &mediaType
 	for _, setting := range one.Types {
-		out.Types = append(out.Types, gen.DiscoverTypeSettings{Type: gen.DiscoverTypeSettingsType(setting.Type), Enabled: setting.Enabled, Amount: int(setting.Amount), AutoAdd: setting.AutoAdd})
+		out.Types = append(out.Types, gen.DiscoverTypeSettings{Type: gen.DiscoverTypeSettingsType(setting.Type), Enabled: setting.Enabled, Amount: int(setting.Amount)})
 	}
 	return out
 }
@@ -164,11 +164,11 @@ func (s *Server) SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Reque
 func libraryDiscoverOf(categoryID int64, body gen.LibraryDiscoverSettings, global settings.DiscoverGlobal) settings.LibraryDiscover {
 	one := settings.LibraryDiscover{
 		CategoryID: categoryID, Enabled: body.Enabled, TotalAmount: int64(body.TotalAmount), ClassicAgeYears: global.ClassicAgeYears, MinRating: global.MinRating,
-		MinVotes: global.MinVotes, AutoAddPerDay: global.AutoAddPerDay, AutoAddSearch: global.AutoAddSearch, OriginalLanguages: body.OriginalLanguages,
+		MinVotes: global.MinVotes, AutoAddPerDay: global.AutoAddPerDay, AutoAdd: body.AutoAdd, AutoAddSearch: global.AutoAddSearch, OriginalLanguages: body.OriginalLanguages,
 		LanguagesSet: body.LanguagesSet, ExcludeGenres: body.ExcludeGenres, ExcludeNetworks: body.ExcludeNetworks, DisabledKinds: body.DisabledKinds,
 	}
 	for _, setting := range body.Types {
-		one.Types = append(one.Types, settings.DiscoverTypeSetting{Type: string(setting.Type), Enabled: setting.Enabled, Amount: int64(setting.Amount), AutoAdd: setting.AutoAdd})
+		one.Types = append(one.Types, settings.DiscoverTypeSetting{Type: string(setting.Type), Enabled: setting.Enabled, Amount: int64(setting.Amount)})
 	}
 	return one
 }

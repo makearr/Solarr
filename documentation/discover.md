@@ -47,7 +47,7 @@ appears for a few seconds after hiding. Load more reads the next page from the s
 
 ## Automatic adding
 
-Per list and library, **Add automatically** adds what passes both gates after every refresh, most popular first:
+Per library, **Add automatically** pools the items of every enabled list and adds what passes both gates after every refresh, best rated first (more votes, then the pool's popularity order, break ties):
 
 - the source's rating is at least *minimum rating* (skipped for a source with no ratings: Last.fm, ListenBrainz, Deezer, stash-box; an unrated item of a list that also has an unrated source is taken to be that source's);
 - it has at least *minimum votes* (Last.fm gives albums no vote count, so albums need the floor at 0);

@@ -10,7 +10,7 @@ import (
 )
 
 const addCategoryDiscoverType = `-- name: AddCategoryDiscoverType :exec
-INSERT INTO category_discover_type (category_id, type, enabled, amount, auto_add) VALUES (?, ?, ?, ?, ?)
+INSERT INTO category_discover_type (category_id, type, enabled, amount) VALUES (?, ?, ?, ?)
 `
 
 type AddCategoryDiscoverTypeParams struct {
@@ -18,7 +18,6 @@ type AddCategoryDiscoverTypeParams struct {
 	Type       string
 	Enabled    int64
 	Amount     int64
-	AutoAdd    int64
 }
 
 func (q *Queries) AddCategoryDiscoverType(ctx context.Context, arg AddCategoryDiscoverTypeParams) error {
@@ -27,7 +26,6 @@ func (q *Queries) AddCategoryDiscoverType(ctx context.Context, arg AddCategoryDi
 		arg.Type,
 		arg.Enabled,
 		arg.Amount,
-		arg.AutoAdd,
 	)
 	return err
 }
@@ -43,7 +41,7 @@ func (q *Queries) DeleteCategoryDiscoverTypes(ctx context.Context, categoryID in
 
 const listCategoryDiscover = `-- name: ListCategoryDiscover :many
 
-SELECT category_id, enabled, total_amount, classic_age_years, min_rating, min_votes, auto_add_per_day, auto_add_search,
+SELECT category_id, enabled, total_amount, classic_age_years, min_rating, min_votes, auto_add_per_day, auto_add, auto_add_search,
        original_languages, languages_set, exclude_genres, exclude_networks, disabled_kinds
 FROM category_discover ORDER BY category_id
 `
@@ -66,6 +64,7 @@ func (q *Queries) ListCategoryDiscover(ctx context.Context) ([]CategoryDiscover,
 			&i.MinRating,
 			&i.MinVotes,
 			&i.AutoAddPerDay,
+			&i.AutoAdd,
 			&i.AutoAddSearch,
 			&i.OriginalLanguages,
 			&i.LanguagesSet,
@@ -87,7 +86,7 @@ func (q *Queries) ListCategoryDiscover(ctx context.Context) ([]CategoryDiscover,
 }
 
 const listCategoryDiscoverTypes = `-- name: ListCategoryDiscoverTypes :many
-SELECT category_id, type, enabled, amount, auto_add FROM category_discover_type ORDER BY category_id, type
+SELECT category_id, type, enabled, amount FROM category_discover_type ORDER BY category_id, type
 `
 
 func (q *Queries) ListCategoryDiscoverTypes(ctx context.Context) ([]CategoryDiscoverType, error) {
@@ -104,7 +103,6 @@ func (q *Queries) ListCategoryDiscoverTypes(ctx context.Context) ([]CategoryDisc
 			&i.Type,
 			&i.Enabled,
 			&i.Amount,
-			&i.AutoAdd,
 		); err != nil {
 			return nil, err
 		}
@@ -120,13 +118,13 @@ func (q *Queries) ListCategoryDiscoverTypes(ctx context.Context) ([]CategoryDisc
 }
 
 const upsertCategoryDiscover = `-- name: UpsertCategoryDiscover :exec
-INSERT INTO category_discover (category_id, enabled, total_amount, classic_age_years, min_rating, min_votes, auto_add_per_day, auto_add_search,
+INSERT INTO category_discover (category_id, enabled, total_amount, classic_age_years, min_rating, min_votes, auto_add_per_day, auto_add, auto_add_search,
                                original_languages, languages_set, exclude_genres, exclude_networks, disabled_kinds)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (category_id) DO UPDATE SET
   enabled = excluded.enabled, total_amount = excluded.total_amount, classic_age_years = excluded.classic_age_years,
   min_rating = excluded.min_rating, min_votes = excluded.min_votes, auto_add_per_day = excluded.auto_add_per_day,
-  auto_add_search = excluded.auto_add_search, original_languages = excluded.original_languages, languages_set = excluded.languages_set,
+  auto_add = excluded.auto_add, auto_add_search = excluded.auto_add_search, original_languages = excluded.original_languages, languages_set = excluded.languages_set,
   exclude_genres = excluded.exclude_genres, exclude_networks = excluded.exclude_networks, disabled_kinds = excluded.disabled_kinds
 `
 
@@ -138,6 +136,7 @@ type UpsertCategoryDiscoverParams struct {
 	MinRating         float64
 	MinVotes          int64
 	AutoAddPerDay     int64
+	AutoAdd           int64
 	AutoAddSearch     int64
 	OriginalLanguages string
 	LanguagesSet      int64
@@ -155,6 +154,7 @@ func (q *Queries) UpsertCategoryDiscover(ctx context.Context, arg UpsertCategory
 		arg.MinRating,
 		arg.MinVotes,
 		arg.AutoAddPerDay,
+		arg.AutoAdd,
 		arg.AutoAddSearch,
 		arg.OriginalLanguages,
 		arg.LanguagesSet,

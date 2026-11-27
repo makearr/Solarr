@@ -56,7 +56,6 @@ type DiscoverTypeSetting struct {
 	Type    string `yaml:"type"`
 	Enabled bool   `yaml:"enabled"`
 	Amount  int64  `yaml:"amount"`
-	AutoAdd bool   `yaml:"auto_add,omitempty"`
 }
 
 // LibraryDiscover is one library's Discover settings, defaults resolved.
@@ -70,7 +69,9 @@ type LibraryDiscover struct {
 	MinRating       float64
 	MinVotes        int64
 	AutoAddPerDay   int64
-	AutoAddSearch   bool
+	// AutoAdd adds recommendations of the library's enabled lists by itself, best rated first.
+	AutoAdd       bool
+	AutoAddSearch bool
 	// OriginalLanguages is only meaningful when LanguagesSet; otherwise the caller prefills from the language profile.
 	OriginalLanguages []string
 	LanguagesSet      bool
@@ -256,14 +257,14 @@ func resolveLibraryDiscover(category Category, saved map[int64]settingsdb.Catego
 	}
 	if row, found := saved[category.ID]; found {
 		out.Enabled, out.TotalAmount, out.ClassicAgeYears = row.Enabled == 1, row.TotalAmount, row.ClassicAgeYears
-		out.MinRating, out.MinVotes, out.AutoAddPerDay, out.AutoAddSearch = row.MinRating, row.MinVotes, row.AutoAddPerDay, row.AutoAddSearch == 1
+		out.MinRating, out.MinVotes, out.AutoAddPerDay, out.AutoAdd, out.AutoAddSearch = row.MinRating, row.MinVotes, row.AutoAddPerDay, row.AutoAdd == 1, row.AutoAddSearch == 1
 		out.OriginalLanguages, out.LanguagesSet = decodeList(row.OriginalLanguages), row.LanguagesSet == 1
 		out.ExcludeGenres, out.ExcludeNetworks, out.DisabledKinds = decodeList(row.ExcludeGenres), decodeList(row.ExcludeNetworks), decodeList(row.DisabledKinds)
 	}
 	for _, name := range DiscoverTypes {
 		setting := DiscoverTypeSetting{Type: name, Enabled: true, Amount: DefaultDiscoverTypeAmount}
 		if row, found := typeRows[name]; found {
-			setting.Enabled, setting.Amount, setting.AutoAdd = row.Enabled == 1, row.Amount, row.AutoAdd == 1
+			setting.Enabled, setting.Amount = row.Enabled == 1, row.Amount
 		}
 		out.Types = append(out.Types, setting)
 	}
@@ -370,7 +371,7 @@ func writeLibraryDiscover(ctx context.Context, queries *settingsdb.Queries, sett
 	}
 	if err := queries.UpsertCategoryDiscover(ctx, settingsdb.UpsertCategoryDiscoverParams{
 		CategoryID: setting.CategoryID, Enabled: boolToInt(setting.Enabled), TotalAmount: setting.TotalAmount, ClassicAgeYears: setting.ClassicAgeYears,
-		MinRating: setting.MinRating, MinVotes: setting.MinVotes, AutoAddPerDay: setting.AutoAddPerDay, AutoAddSearch: boolToInt(setting.AutoAddSearch),
+		MinRating: setting.MinRating, MinVotes: setting.MinVotes, AutoAddPerDay: setting.AutoAddPerDay, AutoAdd: boolToInt(setting.AutoAdd), AutoAddSearch: boolToInt(setting.AutoAddSearch),
 		OriginalLanguages: languages, LanguagesSet: boolToInt(setting.LanguagesSet), ExcludeGenres: genres, ExcludeNetworks: networks, DisabledKinds: kinds,
 	}); err != nil {
 		return err
@@ -380,7 +381,7 @@ func writeLibraryDiscover(ctx context.Context, queries *settingsdb.Queries, sett
 	}
 	for _, one := range setting.Types {
 		if err := queries.AddCategoryDiscoverType(ctx, settingsdb.AddCategoryDiscoverTypeParams{
-			CategoryID: setting.CategoryID, Type: one.Type, Enabled: boolToInt(one.Enabled), Amount: one.Amount, AutoAdd: boolToInt(one.AutoAdd),
+			CategoryID: setting.CategoryID, Type: one.Type, Enabled: boolToInt(one.Enabled), Amount: one.Amount,
 		}); err != nil {
 			return err
 		}

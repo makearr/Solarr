@@ -138,6 +138,7 @@ CREATE TABLE category_discover (
   min_rating         REAL    NOT NULL DEFAULT 7.0 CHECK (min_rating BETWEEN 0 AND 10),
   min_votes          INTEGER NOT NULL DEFAULT 1000 CHECK (min_votes >= 0),
   auto_add_per_day   INTEGER NOT NULL DEFAULT 5 CHECK (auto_add_per_day BETWEEN 0 AND 100),
+  auto_add           INTEGER NOT NULL DEFAULT 0 CHECK (auto_add IN (0, 1)),
   auto_add_search    INTEGER NOT NULL DEFAULT 0 CHECK (auto_add_search IN (0, 1)),
   original_languages TEXT    NOT NULL DEFAULT '',
   languages_set      INTEGER NOT NULL DEFAULT 0 CHECK (languages_set IN (0, 1)),
@@ -151,16 +152,15 @@ CREATE TABLE category_discover_type (
   type        TEXT    NOT NULL CHECK (type IN ('highest_rated', 'trending', 'upcoming', 'classics', 'collections')),
   enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
   amount      INTEGER NOT NULL DEFAULT 20 CHECK (amount BETWEEN 1 AND 200),
-  auto_add    INTEGER NOT NULL DEFAULT 0 CHECK (auto_add IN (0, 1)),
   PRIMARY KEY (category_id, type)
 ) WITHOUT ROWID;
 
 -- Discover took over the TMDB chart import lists: a library that had one gets Discover on with trending auto-adding when the list
 -- was enabled (popular becomes trending too), then the lists and the unused discovery jobs go. One way.
-INSERT INTO category_discover (category_id, enabled, auto_add_search)
-SELECT category_id, 1, MAX(search_on_add) FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv') GROUP BY category_id;
-INSERT INTO category_discover_type (category_id, type, enabled, amount, auto_add)
-SELECT category_id, 'trending', 1, 20, MAX(enabled) FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv') GROUP BY category_id;
+INSERT INTO category_discover (category_id, enabled, auto_add, auto_add_search)
+SELECT category_id, 1, MAX(enabled), MAX(search_on_add) FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv') GROUP BY category_id;
+INSERT INTO category_discover_type (category_id, type, enabled, amount)
+SELECT category_id, 'trending', 1, 20 FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv') GROUP BY category_id;
 INSERT OR REPLACE INTO instance_setting (key, value_json, updated_at)
 SELECT 'discover.enabled', 'true', CAST(strftime('%s', 'now') AS INTEGER) WHERE EXISTS (SELECT 1 FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv'));
 DELETE FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv');

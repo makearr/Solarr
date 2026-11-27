@@ -13337,8 +13337,6 @@ export interface components {
             enabled: boolean;
             /** @description How many items of this list the library keeps. */
             amount: number;
-            /** @description Add what passes the gates without being asked. */
-            auto_add: boolean;
         };
         LibraryDiscoverSettings: {
             /** Format: int64 */
@@ -13348,6 +13346,8 @@ export interface components {
             /** @description The library's media type; ignored on a save. */
             media_type?: string;
             enabled: boolean;
+            /** @description Add recommendations by itself: the best rated of every enabled list, up to the daily ceiling, once they pass the gates. */
+            auto_add: boolean;
             /** @description The most the page shows before Load more. */
             total_amount: number;
             /** @description Original languages recommended; empty is any. Only read when languages_set. */

@@ -41,10 +41,10 @@ func TestDiscoverRoundTripsAndFollowsTheCategoryOnDelete(t *testing.T) {
 		t.Errorf("global = %+v, want %+v", got, want)
 	}
 	want := settings.LibraryDiscover{
-		CategoryID: series.ID, Name: "Series", MediaType: "tv", Enabled: true, TotalAmount: 40, ClassicAgeYears: 30, MinRating: 7.5, MinVotes: 500, AutoAddPerDay: 2, AutoAddSearch: true,
+		CategoryID: series.ID, Name: "Series", MediaType: "tv", Enabled: true, TotalAmount: 40, ClassicAgeYears: 30, MinRating: 7.5, MinVotes: 500, AutoAddPerDay: 2, AutoAdd: true, AutoAddSearch: true,
 		OriginalLanguages: []string{"en", "ja"}, LanguagesSet: true, ExcludeGenres: []string{"Talk"}, ExcludeNetworks: []string{"Example Cable"}, DisabledKinds: []string{"performer"},
 		Types: []settings.DiscoverTypeSetting{
-			{Type: "highest_rated", Enabled: true, Amount: 30, AutoAdd: true}, {Type: "trending", Enabled: false, Amount: 20}, {Type: "upcoming", Enabled: true, Amount: 20},
+			{Type: "highest_rated", Enabled: true, Amount: 30}, {Type: "trending", Enabled: false, Amount: 20}, {Type: "upcoming", Enabled: true, Amount: 20},
 			{Type: "classics", Enabled: true, Amount: 20}, {Type: "collections", Enabled: true, Amount: 20},
 		},
 	}
@@ -102,7 +102,7 @@ func TestDiscoverTravelsThroughTheConfigurationExport(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved, _ := source.LibraryDiscover(t.Context(), series.ID)
-	saved.Enabled, saved.TotalAmount, saved.Types[0].AutoAdd = true, 33, true
+	saved.Enabled, saved.TotalAmount, saved.AutoAdd = true, 33, true
 	if err := source.SetLibraryDiscover(t.Context(), saved); err != nil {
 		t.Fatal(err)
 	}

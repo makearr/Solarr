@@ -17618,21 +17618,21 @@ components:
 
     DiscoverTypeSettings:
       type: object
-      required: [type, enabled, amount, auto_add]
+      required: [type, enabled, amount]
       properties:
         type: { type: string, enum: [highest_rated, trending, upcoming, classics, collections] }
         enabled: { type: boolean }
         amount: { type: integer, minimum: 1, maximum: 200, description: How many items of this list the library keeps. }
-        auto_add: { type: boolean, description: Add what passes the gates without being asked. }
 
     LibraryDiscoverSettings:
       type: object
-      required: [category_id, enabled, total_amount, original_languages, languages_set, exclude_genres, exclude_networks, disabled_kinds, types]
+      required: [category_id, enabled, auto_add, total_amount, original_languages, languages_set, exclude_genres, exclude_networks, disabled_kinds, types]
       properties:
         category_id: { type: integer, format: int64 }
         name: { type: string, description: The library's name; ignored on a save. }
         media_type: { type: string, description: The library's media type; ignored on a save. }
         enabled: { type: boolean }
+        auto_add: { type: boolean, description: "Add recommendations by itself: the best rated of every enabled list, up to the daily ceiling, once they pass the gates." }
         total_amount: { type: integer, minimum: 1, maximum: 500, description: The most the page shows before Load more. }
         original_languages: { type: array, items: { type: string }, description: "Original languages recommended; empty is any. Only read when languages_set." }
         languages_set: { type: boolean, description: "False takes the library's language profile (plus Japanese for an anime library) as the list." }

@@ -6,19 +6,25 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/service/discover"
 )
 
 type autoPool struct {
-	items    []library.PoolRecommendation
+	items []library.PoolRecommendation
+	// byList, when set, answers each list its own items instead of `items`.
+	byList   map[string][]library.PoolRecommendation
 	recorded []library.AutoAddRecord
 	today    int64
 	before   map[string]bool
 }
 
-func (p *autoPool) List(context.Context, library.RecommendationQuery) ([]library.PoolRecommendation, error) {
+func (p *autoPool) List(_ context.Context, query library.RecommendationQuery) ([]library.PoolRecommendation, error) {
+	if p.byList != nil {
+		return p.byList[query.Type], nil
+	}
 	return p.items, nil
 }
 func (p *autoPool) RecordAutoAdd(_ context.Context, record library.AutoAddRecord) error {
@@ -50,11 +56,7 @@ func autoFixture(items ...library.PoolRecommendation) (discover.Service, *autoPo
 	store, add := &autoPool{items: items, before: map[string]bool{}}, &adder{}
 	c := enabledLibrary(10, "trending")
 	c.libraries[0].MinRating, c.libraries[0].MinVotes, c.libraries[0].AutoAddPerDay = 7, 100, 2
-	for index := range c.libraries[0].Types {
-		if c.libraries[0].Types[index].Type == "trending" {
-			c.libraries[0].Types[index].AutoAdd = true
-		}
-	}
+	c.libraries[0].AutoAdd = true
 	m := &module{feeds: []media.RecommendationFeed{{Type: media.RecommendTrending, Kind: "movie", Source: "Example", HasRating: true}}}
 	svc := service(c, &pool{}, m, judge{})
 	svc.AutoAdd = &discover.AutoAdd{Pool: store, Adders: func(string) (media.Adding, bool) { return add, true }}
@@ -76,10 +78,10 @@ func TestAutoAddNeedsBothGatesAndStopsAtTheDailyCeiling(t *testing.T) {
 	if err := svc.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"a", "b"}; !reflect.DeepEqual(ids(add.requests), want) {
+	if want := []string{"c", "a"}; !reflect.DeepEqual(ids(add.requests), want) {
 		t.Errorf("added %v, want %v", ids(add.requests), want)
 	}
-	if len(pool.recorded) != 2 || pool.recorded[0].ExternalID != "a" || pool.recorded[0].WorkID != 1 {
+	if len(pool.recorded) != 2 || pool.recorded[0].ExternalID != "c" || pool.recorded[0].WorkID != 1 {
 		t.Errorf("recorded %+v", pool.recorded)
 	}
 	if !add.requests[0].Monitored || add.requests[0].Search {
@@ -158,5 +160,37 @@ func TestAutoAddPreviewNamesEveryReasonAndAddsNothing(t *testing.T) {
 	want := []discover.Rejection{{Reason: discover.ReasonBelowRating, Value: "5.0"}, {Reason: discover.ReasonBelowVotes, Value: "10"}}
 	if len(preview) != 2 || !preview[0].Decision.Admitted || !reflect.DeepEqual(preview[1].Decision.Rejections, want) {
 		t.Errorf("preview = %+v", preview)
+	}
+}
+
+func TestAutoAddMergesEveryEnabledListAndTakesTheBestRatedFirst(t *testing.T) {
+	svc, pool, add, c := autoFixture()
+	c.libraries[0].Types = []settings.DiscoverTypeSetting{
+		{Type: "trending", Enabled: true, Amount: 20}, {Type: "classics", Enabled: true, Amount: 20}, {Type: "upcoming", Enabled: false, Amount: 20},
+	}
+	svc.Config = c
+	pool.byList = map[string][]library.PoolRecommendation{
+		"trending": {pooled("popular", 7.2, 8000), pooled("shared", 8.1, 400)},
+		"classics": {pooled("best", 9.1, 700), pooled("shared", 8.1, 400), pooled("tie", 8.1, 900)},
+		"upcoming": {pooled("hidden", 9.9, 9000)},
+	}
+	if err := svc.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"best", "tie"}; !reflect.DeepEqual(ids(add.requests), want) {
+		t.Errorf("added %v, want %v: best rated first, votes breaking the tie, the disabled list left out", ids(add.requests), want)
+	}
+	preview, err := svc.AutoAddPreview(t.Context(), c.libraries[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var previewed []string
+	for _, item := range preview {
+		if item.Decision.Admitted {
+			previewed = append(previewed, item.Item.ExternalID)
+		}
+	}
+	if want := []string{"best", "tie"}; !reflect.DeepEqual(previewed, want) {
+		t.Errorf("preview admits %v, want %v", previewed, want)
 	}
 }

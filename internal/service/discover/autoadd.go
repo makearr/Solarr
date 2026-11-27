@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -54,9 +55,9 @@ func (s Service) AutoAddPreview(ctx context.Context, lib settings.LibraryDiscove
 	return s.autoAddVerdicts(ctx, s.Config.Global(), lib, category)
 }
 
-// runAutoAdd adds what the gates admit, most popular first, up to the daily ceiling.
+// runAutoAdd adds what the gates admit, best rated first, up to the daily ceiling.
 func (s Service) runAutoAdd(ctx context.Context, global settings.DiscoverGlobal, lib settings.LibraryDiscover, category settings.Category) {
-	if s.AutoAdd == nil || !slices.ContainsFunc(lib.Types, func(setting settings.DiscoverTypeSetting) bool { return setting.Enabled && setting.AutoAdd }) {
+	if s.AutoAdd == nil || !lib.AutoAdd {
 		return
 	}
 	adder, ok := s.AutoAdd.Adders(category.MediaType)
@@ -102,8 +103,8 @@ func (s Service) runAutoAdd(ctx context.Context, global settings.DiscoverGlobal,
 	}
 }
 
-// autoAddVerdicts judges the pool items of every list with auto-add on, list by list, most popular first; the daily ceiling
-// counts the items this pass would add, so a preview and a run agree.
+// autoAddVerdicts judges the pool items of every enabled list as one pool, best rated first (votes, then the pool's own
+// popularity order, break ties); the daily ceiling counts the items this pass would add, so a preview and a run agree.
 func (s Service) autoAddVerdicts(ctx context.Context, global settings.DiscoverGlobal, lib settings.LibraryDiscover, category settings.Category) ([]PreviewItem, error) {
 	module, ok := s.Sources.Feeds(category.MediaType)
 	if !ok {
@@ -116,10 +117,14 @@ func (s Service) autoAddVerdicts(ctx context.Context, global settings.DiscoverGl
 	if err != nil {
 		return nil, err
 	}
-	var out []PreviewItem
+	type candidate struct {
+		item     library.PoolRecommendation
+		listType string
+	}
+	var pool []candidate
 	seen := map[string]bool{}
 	for _, setting := range lib.Types {
-		if !setting.Enabled || !setting.AutoAdd {
+		if !setting.Enabled {
 			continue
 		}
 		items, err := s.AutoAdd.Pool.List(ctx, library.RecommendationQuery{CategoryIDs: []int64{category.ID}, Type: setting.Type, Limit: autoAddCandidates})
@@ -128,19 +133,25 @@ func (s Service) autoAddVerdicts(ctx context.Context, global settings.DiscoverGl
 		}
 		for _, item := range items {
 			key := item.Kind + "\x00" + item.Provider + "\x00" + item.ExternalID
-			if seen[key] {
-				continue
+			if !seen[key] {
+				seen[key] = true
+				pool = append(pool, candidate{item: item, listType: setting.Type})
 			}
-			seen[key] = true
-			verdict, err := s.judgeAutoAdd(ctx, category, rules, gates, usable, item, setting.Type, addedToday)
-			if err != nil {
-				return nil, err
-			}
-			if verdict.Decision.Admitted {
-				addedToday++
-			}
-			out = append(out, verdict)
 		}
+	}
+	slices.SortStableFunc(pool, func(a, b candidate) int {
+		return cmp.Or(cmp.Compare(b.item.Rating, a.item.Rating), cmp.Compare(b.item.Votes, a.item.Votes), cmp.Compare(b.item.Popularity, a.item.Popularity))
+	})
+	var out []PreviewItem
+	for _, one := range pool {
+		verdict, err := s.judgeAutoAdd(ctx, category, rules, gates, usable, one.item, one.listType, addedToday)
+		if err != nil {
+			return nil, err
+		}
+		if verdict.Decision.Admitted {
+			addedToday++
+		}
+		out = append(out, verdict)
 	}
 	return out, nil
 }

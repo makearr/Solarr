@@ -161,10 +161,10 @@ func TestSettingsMigration_FoldsChartListsIntoDiscover(t *testing.T) {
 		t.Fatal(err)
 	}
 	read := func(query string) []string { return queryStrings(ctx, t, opened.Read(), query) }
-	if got, want := read(`SELECT category_id || ':' || enabled || ':' || auto_add_search FROM category_discover ORDER BY category_id`), []string{"1:1:1", "2:1:0"}; !slices.Equal(got, want) {
+	if got, want := read(`SELECT category_id || ':' || enabled || ':' || auto_add || ':' || auto_add_search FROM category_discover ORDER BY category_id`), []string{"1:1:1:1", "2:1:0:0"}; !slices.Equal(got, want) {
 		t.Errorf("category_discover = %v, want %v", got, want)
 	}
-	if got, want := read(`SELECT category_id || ':' || type || ':' || auto_add FROM category_discover_type ORDER BY category_id`), []string{"1:trending:1", "2:trending:0"}; !slices.Equal(got, want) {
+	if got, want := read(`SELECT category_id || ':' || type FROM category_discover_type ORDER BY category_id`), []string{"1:trending", "2:trending"}; !slices.Equal(got, want) {
 		t.Errorf("category_discover_type = %v, want %v", got, want)
 	}
 	if got := read(`SELECT value_json FROM instance_setting WHERE key = 'discover.enabled'`); !slices.Equal(got, []string{"true"}) {

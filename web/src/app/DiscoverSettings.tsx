@@ -178,13 +178,27 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
         </fieldset>
       )}
       <FeedProblems category={library.category_id} />
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={draft.auto_add}
+          onChange={(event) => {
+            setDraft({ ...draft, auto_add: event.target.checked });
+            if (event.target.checked) setPreviewing(0);
+          }}
+        />
+        <span>
+          {t("discover.addAutomatically")}
+          <span className="block text-xs text-ink-muted">{t("discover.addAutomaticallyHelp")}</span>
+        </span>
+      </label>
       <table className="text-sm">
         <thead>
           <tr className="text-left text-xs text-ink-muted">
             <th>{t("discover.listName")}</th>
             <th>{t("discover.enabled")}</th>
             <th>{t("discover.amount")}</th>
-            <th>{t("discover.addAutomatically")}</th>
           </tr>
         </thead>
         <tbody>
@@ -195,17 +209,6 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
                 <td>{t(LIST_LABELS[row.type] ?? "discover.list.highest_rated")}</td>
                 <td><input type="checkbox" aria-label={t(LIST_LABELS[row.type] ?? "discover.list.highest_rated")} checked={row.enabled} onChange={(event) => change({ enabled: event.target.checked })} /></td>
                 <td><input type="number" className={inputStyle} value={row.amount} onChange={(event) => change({ amount: Number(event.target.value) })} /></td>
-                <td>
-                  <input
-                    type="checkbox"
-                    aria-label={`${t("discover.addAutomatically")}: ${t(LIST_LABELS[row.type] ?? "discover.list.highest_rated")}`}
-                    checked={row.auto_add}
-                    onChange={(event) => {
-                      change({ auto_add: event.target.checked });
-                      if (event.target.checked) setPreviewing(index);
-                    }}
-                  />
-                </td>
               </tr>
             );
           })}
@@ -222,7 +225,7 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
           library={{ ...draft, exclude_genres: genres, exclude_networks: networks }}
           onConfirm={() => setPreviewing(null)}
           onCancel={() => {
-            setDraft({ ...draft, types: draft.types.map((other, at) => (at === previewing ? { ...other, auto_add: false } : other)) });
+            setDraft({ ...draft, auto_add: false });
             setPreviewing(null);
           }}
         />

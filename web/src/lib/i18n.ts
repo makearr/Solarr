@@ -1255,6 +1255,7 @@ const catalogue = {
   "discover.listName": "List",
   "discover.amount": "Amount",
   "discover.addAutomatically": "Add automatically",
+  "discover.addAutomaticallyHelp": "Adds the best rated recommendations of the lists below, up to the daily limit, once they pass the rating and votes gates.",
   "discover.refused": "That change was refused.",
   "discover.addTerm": "Add to {label}",
   "discover.removeTerm": "Remove {term} from {label}",

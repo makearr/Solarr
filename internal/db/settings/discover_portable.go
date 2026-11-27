@@ -31,6 +31,7 @@ type LibraryDiscoverEntry struct {
 	MinRating         float64               `yaml:"min_rating"`
 	MinVotes          int64                 `yaml:"min_votes"`
 	AutoAddPerDay     int64                 `yaml:"auto_add_per_day"`
+	AutoAdd           bool                  `yaml:"auto_add,omitempty"`
 	AutoAddSearch     bool                  `yaml:"auto_add_search,omitempty"`
 	OriginalLanguages []string              `yaml:"original_languages,omitempty"`
 	LanguagesSet      bool                  `yaml:"languages_set,omitempty"`
@@ -43,7 +44,7 @@ type LibraryDiscoverEntry struct {
 func (e LibraryDiscoverEntry) setting(categoryID int64) LibraryDiscover {
 	out := LibraryDiscover{
 		CategoryID: categoryID, Enabled: e.Enabled, TotalAmount: e.TotalAmount, ClassicAgeYears: e.ClassicAgeYears, MinRating: e.MinRating,
-		MinVotes: e.MinVotes, AutoAddPerDay: e.AutoAddPerDay, AutoAddSearch: e.AutoAddSearch, OriginalLanguages: e.OriginalLanguages,
+		MinVotes: e.MinVotes, AutoAddPerDay: e.AutoAddPerDay, AutoAdd: e.AutoAdd, AutoAddSearch: e.AutoAddSearch, OriginalLanguages: e.OriginalLanguages,
 		LanguagesSet: e.LanguagesSet, ExcludeGenres: e.ExcludeGenres, ExcludeNetworks: e.ExcludeNetworks, DisabledKinds: e.DisabledKinds,
 	}
 	out.Types = append(out.Types, e.Types...)
@@ -69,7 +70,7 @@ func (c *Cache) ExportDiscover(ctx context.Context, document *Document) error {
 		}
 		library := LibraryDiscoverEntry{
 			Library: category.MediaType + "/" + category.Name, Enabled: one.Enabled, TotalAmount: one.TotalAmount, ClassicAgeYears: one.ClassicAgeYears,
-			MinRating: one.MinRating, MinVotes: one.MinVotes, AutoAddPerDay: one.AutoAddPerDay, AutoAddSearch: one.AutoAddSearch,
+			MinRating: one.MinRating, MinVotes: one.MinVotes, AutoAddPerDay: one.AutoAddPerDay, AutoAdd: one.AutoAdd, AutoAddSearch: one.AutoAddSearch,
 			OriginalLanguages: one.OriginalLanguages, LanguagesSet: one.LanguagesSet, ExcludeGenres: one.ExcludeGenres,
 			ExcludeNetworks: one.ExcludeNetworks, DisabledKinds: one.DisabledKinds,
 		}

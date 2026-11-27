@@ -90,6 +90,7 @@ type CategoryDiscover struct {
 	MinRating         float64
 	MinVotes          int64
 	AutoAddPerDay     int64
+	AutoAdd           int64
 	AutoAddSearch     int64
 	OriginalLanguages string
 	LanguagesSet      int64
@@ -103,7 +104,6 @@ type CategoryDiscoverType struct {
 	Type       string
 	Enabled    int64
 	Amount     int64
-	AutoAdd    int64
 }
 
 type CategoryFileManagement struct {

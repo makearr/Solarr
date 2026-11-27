@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Discover: Add automatically is one switch per library; it takes the best rated of all the library's enabled lists up to the daily limit, and the preview shows the same order. Schema: the per-list switch is gone.
 - Libraries: a Status filter in the toolbar (Any, Present, Wanted, Downloading, Not yet released) next to the Status sort; the Watched filter moved into the Filter menu.
 - Setup assistant: the step names in the stepper jump to that step, imports bring unmonitored items by default, a new app gets its own name (numbered when taken), a choice to run beside the *Arr apps (chosen) or replace them, and an Extras step to switch on Discover, duplicate-video hashing, collections, broken-file detection and transcoding with what each costs.
 - Fresh installs: the Nord colour scheme, RSS sync on, "Search for what is added" in Discover on, import history kept 30 days, and the optional features (duplicate-video hashing, broken-file detection, collections) off until you switch them on.
