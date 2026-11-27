@@ -59,22 +59,35 @@ services:
 
 Open `http://<your-host>:5454`.
 
-## 2. The setup wizard
+## 2. The setup assistant
 
-The wizard asks for two things:
+The assistant starts with an **administrator** (user name and password), then asks how you start:
 
-1. **An administrator**: a user name and password.
-2. **Your first library**: a name (say "Music"), a type (music, TV, movies...) and the root folder it lives in
-   (`/music`).
+- **I already use Radarr, Sonarr, Lidarr or similar**: Solarr looks for them on their usual addresses, you paste each
+  one's API key and press **Test** (it says the app and version, or whether the key, the port or the address is wrong).
+  Each connected app gets a library, a mapping of its folders to the same folders inside Solarr's container, and
+  a choice of what comes over: monitored and unmonitored items, indexers, download clients, import lists. Prowlarr can
+  be connected too; its key covers the indexers your other apps reach through it.
+- **Fresh start**: add a library per kind of media and the folder it lives in (as the container sees it: with
+  the volume `/srv/media/movies:/movies` the library folder is `/movies`), then optionally Prowlarr or one indexer and SABnzbd or qBittorrent,
+  each tested before it is kept.
 
-Solarr scans the folder straight away. Files whose tags carry MusicBrainz ids are recognised at once, the rest by
+Languages (one-click presets) and a starting quality per library (Best available, Balanced, Space saver, or taken from the *Arr)
+are asked on the way. A **Review** page then lists everything that will happen, with counts read from your *Arrs;
+nothing is changed until you press **Finish setup**. The finish screen shows each import's progress and what is left for you:
+indexer keys the *Arr hides, imported download clients to give their password and a category of their own, and Solarr's own health warnings.
+
+Where you stopped is remembered on the server, so a reload or another browser carries on. Run the assistant again any time from
+**Settings → General → Run setup assistant**; it only adds and never changes what you already have.
+
+Solarr scans the folders straight away. Files whose tags carry MusicBrainz ids are recognised at once, the rest by
 their track lists and names. Covers, posters and photos arrive over the next few minutes; you can already browse.
 
 A root folder keeps **8 GB free** by default: automatic downloads stop before they would eat into it.
 
-## 3. Starting from Lidarr, Sonarr or Radarr? (optional)
+## 3. Starting from Lidarr, Sonarr or Radarr later? (optional)
 
-In the wizard, or later under **Connections → Arr**, connect each one in turn:
+Under **Connections → Arr**, connect each one in turn:
 
 1. Enter its address and API key.
 2. Press **Preview**. This reads the *Arr and changes nothing. It shows what is new, what is already here, and

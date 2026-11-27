@@ -111,6 +111,11 @@ export function GeneralSettings() {
           ))}
         </fieldset>
       </Card>
+      <Card title={t("settings.assistant")} help={t("settings.assistantHelp")}>
+        <a href="/setup" className="inline-block rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink hover:border-accent">
+          {t("settings.assistantRun")}
+        </a>
+      </Card>
       <Card title={t("discover.title")} help={t("settings.recommendationsHelp")}>
         <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm">

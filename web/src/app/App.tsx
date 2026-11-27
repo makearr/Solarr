@@ -9,6 +9,7 @@ import { About } from "./About";
 import { Login } from "./Login";
 import { router } from "./router";
 import { Setup } from "./Setup";
+import { WIZARD_KEY, type WizardState } from "./setup/wizardState";
 
 /** The setup gate, outside the router: an install with no administrator has
  *  nothing to route to, because every other endpoint answers 401. */
@@ -28,6 +29,22 @@ export function App() {
     queryFn: () => ok(api.GET("/me")),
     retry: false,
   });
+
+  // Where the setup assistant stopped, kept on the server: an unfinished one reopens in this tab and in any other browser.
+  const preferences = useQuery({
+    queryKey: ["me", "preferences"],
+    enabled: me.isSuccess,
+    queryFn: () => ok(api.GET("/me/preferences")),
+  });
+  const unfinishedAssistant = (() => {
+    try {
+      const stored = preferences.data?.[WIZARD_KEY];
+      const state = stored === undefined ? null : (JSON.parse(stored) as WizardState);
+      return state !== null && state.v === 1 && !state.finished && state.step !== "start";
+    } catch {
+      return false;
+    }
+  })();
 
   // Reachable before setup, before login, or fully logged in -- AGPL section
   // 13's "all users interacting with it remotely" is not limited to those who
@@ -58,7 +75,8 @@ export function App() {
 
   // Skippable: without a root folder the library stays empty, but everything
   // else works and the dashboard says what is missing.
-  if (!skipped && !setup.data.has_root_folder) {
+  if (window.location.pathname === "/setup") return <Setup rerun onDone={() => window.location.assign("/")} />;
+  if (!skipped && (!setup.data.has_root_folder || unfinishedAssistant)) {
     return <Setup onDone={() => setSkipped(true)} />;
   }
 

@@ -1,679 +1,110 @@
-import { t } from "@/lib/i18n";
-import { RepeatPassword, passwordReady } from "./NewPassword";
-import { DefaultLanguagesEditor } from "./DefaultLanguages";
-import { TargetChoiceField, useTargetChoice } from "./LibraryTargetChoice";
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
-import { useCategories } from "@/lib/resources";
-import { useLibraryLabel } from "@/lib/libraryLabel";
-import type { components } from "@/api/schema";
-import { useMediaTypes } from "@/lib/useMediaTypes";
+import { t, type MessageKey } from "@/lib/i18n";
 
-import { ArrRunStatus } from "./ArrImport";
-import { ArrSyncOptions } from "./ArrSyncOptions";
-import { KindSelect } from "./LibraryKindSelect";
-import { useNewLibrary } from "./NewLibrary";
+import { AccountStep } from "./setup/AccountStep";
+import { ConnectStep } from "./setup/ConnectStep";
+import { FinishStep } from "./setup/FinishStep";
+import { LanguagesStep } from "./setup/LanguagesStep";
+import { LibrariesStep } from "./setup/LibrariesStep";
+import { QualityStep } from "./setup/QualityStep";
+import { ReviewStep } from "./setup/ReviewStep";
+import { StartStep } from "./setup/StartStep";
+import { ToolsStep } from "./setup/ToolsStep";
+import { Centered } from "./setup/ui";
+import { stepsOf, useWizardState, type StepId, type WizardPath } from "./setup/wizardState";
 
-// The wizard connects an app to make a library from it; Prowlarr has none, so it is added under Connections.
-type ArrApp = Exclude<components["schemas"]["ArrApp"], "prowlarr">;
-type MediaType = components["schemas"]["MediaType"];
-type ArrInstance = components["schemas"]["ArrInstance"];
+const STEP_NAMES: Record<StepId, MessageKey> = {
+  start: "setup.step.start",
+  languages: "setup.step.languages",
+  connect: "setup.step.connect",
+  libraries: "setup.step.libraries",
+  quality: "setup.step.quality",
+  tools: "setup.step.tools",
+  review: "setup.step.review",
+  finish: "setup.step.finish",
+};
 
-const ARR_APPS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr", "kapowarr", "mylar3"];
+/** The setup assistant: Account first, then a path of named steps with Back and Next in the same place, a Review of everything
+ *  before anything heavy runs, and a Finish that does the work. Where it stopped is kept on the server, so a reload carries on.
+ *  `rerun` is the same assistant opened later from Settings: no account step, and it only adds, never overwrites. */
+export function Setup({ onDone, rerun = false }: { onDone: () => void; rerun?: boolean }) {
+  const status = useQuery({ queryKey: ["setup"], queryFn: () => ok(api.GET("/setup")) });
+  const wizard = useWizardState();
+  const reset = useRef(false);
+  useEffect(() => {
+    if (rerun && wizard.ready && !reset.current) {
+      reset.current = true;
+      wizard.reset();
+    }
+  }, [rerun, wizard]);
 
-// A convenience, not a gate (section 21.11): every step can be skipped.
-export function Setup({ onDone }: { onDone: () => void }) {
-  // Local to this mount, same as App.tsx's own "skipped" -- there is no
-  // backend concept of "the *Arr step is done", since connecting is
-  // optional and idempotent (POST /arr/instances again just adds a second
-  // connection). Asked for 2026-09-11: between the account and the first
-  // root folder, since the connection's own root folder paths are what a
-  // real user picks their first library folder from.
-  const [arrStepDone, setArrStepDone] = useState(false);
-  const [languagesDone, setLanguagesDone] = useState(false);
-
-  const status = useQuery({
-    queryKey: ["setup"],
-    queryFn: () => ok(api.GET("/setup")),
-  });
-
-  if (status.isPending) return <Centered>Checking what still needs doing…</Centered>;
+  if (status.isPending) return <Centered>{t("setup.checking")}</Centered>;
   if (status.isError) return <Centered>{t("about.unreachable")}</Centered>;
+  const needsAccount = status.data.needs_administrator;
+  if (!needsAccount && (!wizard.ready || (rerun && !reset.current))) return <Centered>{t("setup.checking")}</Centered>;
+
+  const { state, update } = wizard;
+  const steps = stepsOf(state.path);
+  const at = steps.indexOf(state.step);
+  const go = (step: StepId) => update({ ...state, step });
+  const next = () => go(steps[Math.min(at + 1, steps.length - 1)]!);
+  const back = () => go(steps[Math.max(at - 1, 0)]!);
+  const leave = () => {
+    update({ ...state, finished: true });
+    onDone();
+  };
+  const choose = (path: WizardPath) => update({ ...state, path, step: "languages" });
 
   return (
     <Centered>
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-2xl space-y-6">
         <header className="space-y-1">
-          <img src="/favicon.svg" alt="" className="mb-3 size-16" />
+          <img src="/favicon.svg" alt="" className="mb-3 size-12" />
           <h1 className="text-lg font-semibold tracking-tight">{t("setup.setUpSolarr")}</h1>
-          <p className="text-sm text-ink-muted">
-            {t("setup.fourStepsYouCan")}
-          </p>
+          <p className="text-sm text-ink-muted">{rerun ? t("setup.rerunIntro") : t("setup.intro")}</p>
         </header>
 
-        {status.data.needs_administrator ? (
-          <CreateAdministrator />
-        ) : !languagesDone ? (
-          <Panel
-            title="Step 2 — Your languages"
-            description="Which audio languages do you want, best first? Every library you add starts with these; anime also gets Japanese first. You can change a library's language later."
-          >
-            <DefaultLanguagesEditor saveLabel="Continue" onSaved={() => setLanguagesDone(true)} />
-            <button type="button" onClick={() => setLanguagesDone(true)} className="text-xs text-ink-muted underline hover:text-ink">
-              Skip
-            </button>
-          </Panel>
-        ) : !arrStepDone ? (
-          <ConnectArr
-            onSkip={() => setArrStepDone(true)}
-            onConnected={(rootFoldersImported) => (rootFoldersImported ? onDone() : setArrStepDone(true))}
-          />
-        ) : (
-          <AddRootFolder onSkip={onDone} onAdded={onDone} />
+        <Stepper current={needsAccount ? "account" : state.step} steps={steps} showAccount={!rerun} />
+
+        {needsAccount && <AccountStep />}
+        {!needsAccount && state.step === "start" && <StartStep rerun={rerun} onChoose={choose} onLeave={leave} />}
+        {!needsAccount && state.step === "languages" && (
+          <LanguagesStep state={state} onChange={(languages) => update({ ...state, languages })} onBack={back} onNext={next} />
         )}
+        {!needsAccount && state.step === "connect" && <ConnectStep state={state} update={update} onBack={back} onNext={next} />}
+        {!needsAccount && state.step === "libraries" && <LibrariesStep state={state} update={update} onBack={back} onNext={next} />}
+        {!needsAccount && state.step === "quality" && <QualityStep state={state} update={update} onBack={back} onNext={next} />}
+        {!needsAccount && state.step === "tools" && <ToolsStep state={state} update={update} onBack={back} onNext={next} />}
+        {!needsAccount && state.step === "review" && <ReviewStep state={state} onBack={back} onFinish={next} />}
+        {!needsAccount && state.step === "finish" && <FinishStep state={state} update={update} onDone={onDone} />}
       </div>
     </Centered>
   );
 }
 
-// What a fresh connection to each app suggests for its own library -- a
-// starting point, always editable, not a rule (nothing stops naming a
-// Lidarr-backed library "Vinyl" instead).
-const LIBRARY_SUGGESTION: Record<ArrApp, { name: string; mediaType: MediaType }> = {
-  lidarr: { name: "Music", mediaType: "music" },
-  sonarr: { name: "TV", mediaType: "tv" },
-  radarr: { name: "Movies", mediaType: "movie" },
-  readarr: { name: "Books", mediaType: "book" },
-  whisparr: { name: "Adult", mediaType: "adult" },
-  kapowarr: { name: "Comics", mediaType: "comic" },
-  mylar3: { name: "Comics", mediaType: "comic" },
-};
-
-interface ConnectOutcome {
-  instance: ArrInstance;
-  rootFoldersImported: boolean;
-  rootFolderErrors: string[];
-}
-
-// Where an app's content comes from.
-const SYNCS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr", "kapowarr", "mylar3"];
-
-function ConnectArr({
-  onSkip,
-  onConnected,
-}: {
-  onSkip: () => void;
-  onConnected: (rootFoldersImported: boolean) => void;
-}) {
-  const queryClient = useQueryClient();
-  const [app, setApp] = useState<ArrApp>("lidarr");
-  const [name, setName] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [libraryName, setLibraryName] = useState(LIBRARY_SUGGESTION.lidarr.name);
-  const [libraryNameTouched, setLibraryNameTouched] = useState(false);
-  const [mediaType, setMediaType] = useState<MediaType>(LIBRARY_SUGGESTION.lidarr.mediaType);
-  const mediaTypes = useMediaTypes();
-  const [mediaTypeTouched, setMediaTypeTouched] = useState(false);
-  const [connectKind, setConnectKind] = useState("");
-  const targetChoice = useTargetChoice(mediaType);
-  const [importRootFolders, setImportRootFolders] = useState(true);
-  const [pushMonitoring, setPushMonitoring] = useState(false);
-  const [outcome, setOutcome] = useState<ConnectOutcome | null>(null);
-  // Every *Arr connected in this step, and the one whose import is being chosen.
-  const [connected, setConnected] = useState<ConnectOutcome[]>([]);
-  const [importing, setImporting] = useState<ArrInstance | null>(null);
-  // Imports started here, each shown with its progress, errors and notes.
-  const [started, setStarted] = useState<{ runId: number; name: string }[]>([]);
-  const anyRootFolders = connected.some((entry) => entry.rootFoldersImported);
-
-  const changeApp = (value: ArrApp) => {
-    setApp(value);
-    const suggestion = LIBRARY_SUGGESTION[value];
-    if (!libraryNameTouched) setLibraryName(suggestion.name);
-    if (!mediaTypeTouched) setMediaType(suggestion.mediaType);
-  };
-
-  // The library an attempt made, so a retry after the connection failed reuses it rather than meet its own name taken.
-  const [madeLibrary, setMadeLibrary] = useState<{ name: string; mediaType: string; id: number }>();
-  const connect = useMutation({
-    meta: { handlesErrors: true },
-    mutationFn: async (): Promise<ConnectOutcome> => {
-      let category = madeLibrary?.name === libraryName && madeLibrary.mediaType === mediaType ? { id: madeLibrary.id } : undefined;
-      if (!category) {
-        const { data: created, error: categoryError } = await api.POST("/categories", {
-          body: { name: libraryName, media_type: mediaType, kind: connectKind || undefined },
-        });
-        if (categoryError) throw categoryError;
-        category = created!;
-        await targetChoice.apply(category.id);
-        setMadeLibrary({ name: libraryName, mediaType, id: category.id });
-      }
-
-      const { data: instance, error: instanceError } = await api.POST("/arr/instances", {
-        body: { app, name, base_url: baseUrl, api_key: apiKey, category_id: category.id, enabled: true, push_monitoring: pushMonitoring },
-      });
-      if (instanceError) throw instanceError;
-
-      let rootFoldersImported = false;
-      const rootFolderErrors: string[] = [];
-      if (importRootFolders) {
-        const { data: remoteRoots, error: rootsError } = await api.GET("/arr/instances/{id}/rootfolders", {
-          params: { path: { id: instance!.id } },
-        });
-        if (rootsError) {
-          rootFolderErrors.push(
-            typeof rootsError === "object" && rootsError !== null && "detail" in rootsError
-              ? String((rootsError as { detail: unknown }).detail)
-              : "The instance's own root folders could not be read.",
-          );
-        } else {
-          for (const remote of remoteRoots ?? []) {
-            const { data: root, error: rootError } = await api.POST("/rootfolders", {
-              body: { path: remote.path },
-            });
-            if (rootError || !root) {
-              rootFolderErrors.push(`${remote.path}: could not be used here -- check it is mounted.`);
-              continue;
-            }
-            const { error: attachError } = await api.POST("/categories/{id}/rootfolders", {
-              params: { path: { id: category.id } },
-              body: { root_folder_id: root.id },
-            });
-            if (attachError) {
-              rootFolderErrors.push(`${remote.path}: added, but could not be attached to ${libraryName}.`);
-              continue;
-            }
-            rootFoldersImported = true;
-          }
-        }
-      }
-
-      return { instance: instance!, rootFoldersImported, rootFolderErrors };
-    },
-    onSuccess: async (result) => {
-      // The import options list the libraries; this connection just made one.
-      await queryClient.invalidateQueries({ queryKey: ["libraries"] });
-      setOutcome(result);
-      setConnected((before) => [...before, result]);
-      if (SYNCS.includes(result.instance.app as ArrApp)) setImporting(result.instance);
-      // Ready for the next one: the first of Lidarr, Sonarr and Radarr not connected yet, its own library suggestion.
-      const next = SYNCS.find((candidate) => ![...connected, result].some((entry) => entry.instance.app === candidate));
-      setName("");
-      setBaseUrl("");
-      setApiKey("");
-      setLibraryNameTouched(false);
-      setMediaTypeTouched(false);
-      setConnectKind("");
-      if (next) {
-        setApp(next);
-        setLibraryName(LIBRARY_SUGGESTION[next].name);
-        setMediaType(LIBRARY_SUGGESTION[next].mediaType);
-      }
-    },
-  });
-
-  if (importing) {
-    return (
-      <Panel
-        title={`Step 3 — Import from ${importing.name}`}
-        description="Choose what comes in. Its root folders are already this library's; the import runs in the background."
-      >
-        {outcome && outcome.rootFolderErrors.length > 0 && (
-          <div className="space-y-1 rounded-md border border-warn/40 bg-warn/10 p-2 text-xs text-warn">
-            {outcome.rootFolderErrors.map((message, index) => (
-              <p key={index}>{message}</p>
-            ))}
-          </div>
-        )}
-        <ArrSyncOptions
-          instance={importing}
-          cancelLabel="Not now"
-          onCancel={() => {
-            setImporting(null);
-            setOutcome(null);
-          }}
-          onStarted={(run) => {
-            setStarted((before) => [...before, { runId: run.id, name: importing.name }]);
-            setImporting(null);
-            setOutcome(null);
-          }}
-        />
-      </Panel>
-    );
-  }
-
+function Stepper({ current, steps, showAccount }: { current: StepId | "account"; steps: readonly StepId[]; showAccount: boolean }) {
+  const all: (StepId | "account")[] = [...(showAccount ? (["account"] as const) : []), ...steps];
+  const at = all.indexOf(current);
   return (
-    <Panel
-      title={t("setup.import.title")}
-      description={t("setup.import.description")}
-    >
-      {connected.length > 0 && (
-        <ul className="space-y-1 text-xs">
-          {connected.map((entry) => (
-            <li key={entry.instance.id} className="text-ink-muted">
-              Connected: <span className="text-ink">{entry.instance.name}</span> ({entry.instance.app})
-            </li>
-          ))}
-        </ul>
-      )}
-      {started.map((entry) => (
-        <div key={entry.runId} className="space-y-1 text-xs">
-          <p className="text-ink">{t("setup.importOf", { name: entry.name })}</p>
-          <ArrRunStatus runId={entry.runId} />
-        </div>
-      ))}
-      <form
-        className="space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setOutcome(null);
-          connect.mutate();
-        }}
-      >
-        <Field label="Application">
-          <select
-            className={inputStyle}
-            value={app}
-            onChange={(event) => changeApp(event.target.value as ArrApp)}
+    <ol aria-label={t("setup.progress")} className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
+      {all.map((step, index) => {
+        const state = index < at ? "done" : index === at ? "current" : "todo";
+        return (
+          <li
+            key={step}
+            aria-current={state === "current" ? "step" : undefined}
+            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+              state === "current" ? "border-accent bg-accent/10 text-ink" : state === "done" ? "border-border-subtle text-ink" : "border-border-subtle text-ink-muted"
+            }`}
           >
-            {ARR_APPS.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Name" hint="Shown in the interface, e.g. Home Lidarr.">
-          <input
-            className={inputStyle}
-            value={name}
-            placeholder={t("arrImport.homeLidarr")}
-            autoComplete="off"
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Field>
-        <Field label="Base URL">
-          <input
-            className={inputStyle}
-            value={baseUrl}
-            placeholder="http://lidarr:8686"
-            autoComplete="off"
-            onChange={(event) => setBaseUrl(event.target.value)}
-          />
-        </Field>
-        <Field label="API key">
-          <input
-            className={inputStyle}
-            type="password"
-            value={apiKey}
-            autoComplete="off"
-            onChange={(event) => setApiKey(event.target.value)}
-          />
-        </Field>
-
-        <div className="flex gap-2">
-          <Field label="Library name">
-            <input
-              className={inputStyle}
-              value={libraryName}
-              onChange={(event) => {
-                setLibraryNameTouched(true);
-                setLibraryName(event.target.value);
-              }}
-            />
-          </Field>
-          <Field label="Media type">
-            <select
-              className={inputStyle}
-              value={mediaType}
-              onChange={(event) => {
-                setMediaTypeTouched(true);
-                setMediaType(event.target.value as MediaType);
-                setConnectKind("");
-              }}
-            >
-              {mediaTypes.map((type) => (
-                <option key={type.key} value={type.key}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-        <KindSelect mediaType={mediaType} value={connectKind} onChange={setConnectKind} />
-        <TargetChoiceField choice={targetChoice} />
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={importRootFolders}
-            onChange={(event) => setImportRootFolders(event.target.checked)}
-          />
-          Import the root folder(s) from {app}
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={pushMonitoring} onChange={(event) => setPushMonitoring(event.target.checked)} />
-          {t("setup.sendMonitoringBack", { app })}
-        </label>
-
-        {connect.isError && <Problem error={connect.error} />}
-        {outcome && outcome.rootFolderErrors.length > 0 && (
-          <div className="space-y-1 rounded-md border border-warn/40 bg-warn/10 p-2 text-xs text-warn">
-            {outcome.rootFolderErrors.map((message, index) => (
-              <p key={index}>{message}</p>
-            ))}
-            <p>{t("setup.connectedRegardlessFixThe")}</p>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={
-              !name.trim() || !baseUrl.trim() || !apiKey.trim() || !libraryName.trim() || connect.isPending
-            }
-            className={primaryButtonStyle}
-          >
-            {connect.isPending ? "Connecting…" : connected.length > 0 ? "Connect another" : "Connect"}
-          </button>
-          {connected.length > 0 ? (
-            <button type="button" onClick={() => onConnected(anyRootFolders)} className={quietButtonStyle}>
-              Continue
-            </button>
-          ) : (
-            <button type="button" onClick={onSkip} className={quietButtonStyle}>
-              {t("setup.skipForNow")}
-            </button>
-          )}
-        </div>
-      </form>
-    </Panel>
+            <span aria-hidden>{state === "done" ? "✓" : index + 1}</span>
+            {step === "account" ? t("setup.step.account") : t(STEP_NAMES[step])}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
-
-function CreateAdministrator() {
-  const queryClient = useQueryClient();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [repeat, setRepeat] = useState("");
-  const [setupCode, setSetupCode] = useState("");
-
-  const create = useMutation({
-    meta: { handlesErrors: true },
-    mutationFn: () => ok(api.POST("/setup/admin", {
-      body: { username, password, ...(setupCode.trim() ? { setup_code: setupCode.trim() } : {}) },
-    })),
-    onSuccess: () => Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["setup"] }),
-      queryClient.invalidateQueries({ queryKey: ["me"] }),
-    ]),
-  });
-
-  const codeRequired = (create.error as { type?: string } | null)?.type === "setup-code-required" || setupCode !== "";
-
-  return (
-    <Panel
-      title="Step 1 — Create the administrator"
-      description="The first account owns the install. Nobody else can claim it afterwards."
-    >
-      <form
-        className="space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          create.mutate();
-        }}
-      >
-        <Field label="Username">
-          <input
-            className={inputStyle}
-            value={username}
-            autoComplete="username"
-            onChange={(event) => setUsername(event.target.value)}
-          />
-        </Field>
-        <Field label="Password">
-          <input
-            className={inputStyle}
-            type="password"
-            value={password}
-            autoComplete="new-password"
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </Field>
-        <RepeatPassword password={password} repeat={repeat} onRepeat={setRepeat} inputClassName={inputStyle} />
-        {codeRequired && (
-          <Field label="Setup code">
-            <input
-              className={inputStyle}
-              value={setupCode}
-              autoComplete="off"
-              placeholder="xxxx-xxxx-xxxx"
-              onChange={(event) => setSetupCode(event.target.value)}
-            />
-            <p className="text-xs text-ink-muted">
-              You are reaching Solarr from outside your network. The code is printed in the container log:
-              <code className="ml-1">docker logs solarr</code>
-            </p>
-          </Field>
-        )}
-
-        {create.isError && <Problem error={create.error} />}
-
-        <button
-          type="submit"
-          disabled={!username.trim() || !passwordReady(password, repeat) || create.isPending}
-          className={primaryButtonStyle}
-        >
-          {create.isPending ? "Creating…" : "Create account"}
-        </button>
-      </form>
-
-    </Panel>
-  );
-}
-
-function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () => void }) {
-  const libraryLabel = useLibraryLabel();
-  const [path, setPath] = useState("");
-  const [label, setLabel] = useState("");
-  // A root folder belongs to a library (2026-09-19): one created here with
-  // no library attached is invisible to every import and scan afterwards.
-  const [chosenCategory, setCategoryId] = useState<number | "new" | null>(null);
-  const library = useNewLibrary();
-  const queryClient = useQueryClient();
-
-  const categories = useCategories();
-
-  const existing = categories.data ?? [];
-  // A library the *Arr step just made is the likely home of this folder; a new one only when there is none.
-  const categoryId = chosenCategory ?? existing[0]?.id ?? "new";
-
-  const add = useMutation({
-    meta: { handlesErrors: true },
-    mutationFn: async () => {
-      let attachTo = categoryId;
-      if (attachTo === "new") {
-        attachTo = (await library.create()).id;
-        // Chosen from now on: a retry after the folder was refused attaches to it rather than make it twice.
-        setCategoryId(attachTo);
-        void queryClient.invalidateQueries({ queryKey: ["categories"] });
-      }
-
-      const { data: root, error } = await api.POST("/rootfolders", {
-        body: { path, label: label.trim() || undefined },
-      });
-      if (error) throw error;
-
-      const { error: attachError } = await api.POST("/categories/{id}/rootfolders", {
-        params: { path: { id: attachTo } },
-        body: { root_folder_id: root!.id },
-      });
-      if (attachError) throw attachError;
-      return root;
-    },
-    onSuccess: onAdded,
-  });
-
-  return (
-    <Panel
-      title="Step 4 — Add a library folder"
-      description="The path as the container sees it, not as your host sees it. It is checked before it is saved."
-    >
-      <form
-        className="space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          add.mutate();
-        }}
-      >
-        <Field label="Path">
-          <input
-            className={inputStyle}
-            placeholder="/media/music"
-            value={path}
-            onChange={(event) => setPath(event.target.value)}
-          />
-        </Field>
-        <Field label="Label" hint="Optional. Shown in the interface, e.g. music-hdd-1.">
-          <input
-            className={inputStyle}
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-          />
-        </Field>
-
-        <Field label="Library" hint="Which library this folder holds. Nothing can be imported into a folder with no library.">
-          <select
-            className={inputStyle}
-            value={categoryId}
-            onChange={(event) =>
-              setCategoryId(event.target.value === "new" ? "new" : Number(event.target.value))
-            }
-          >
-            {existing.map((category) => (
-              <option key={category.id} value={category.id}>
-                {libraryLabel(category)}
-              </option>
-            ))}
-            <option value="new">Create a new library…</option>
-          </select>
-        </Field>
-
-        {categoryId === "new" && (
-          <>
-            <Field label="What it holds">
-              <select
-                className={inputStyle}
-                value={library.mediaType ?? ""}
-                onChange={(event) => library.setMediaType(event.target.value as MediaType)}
-              >
-                {library.mediaTypes.map((type) => (
-                  <option key={type.key} value={type.key}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {library.mediaType && <KindSelect mediaType={library.mediaType} value={library.kind} onChange={library.setKind} />}
-            <TargetChoiceField choice={library.target} />
-            <Field label="Library name">
-              <input
-                className={inputStyle}
-                value={library.name}
-                placeholder={library.typeName}
-                onChange={(event) => library.setName(event.target.value)}
-              />
-            </Field>
-          </>
-        )}
-
-        {add.isError && <Problem error={add.error} />}
-
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={!path.trim() || add.isPending}
-            className={primaryButtonStyle}
-          >
-            {add.isPending ? "Checking…" : "Add folder"}
-          </button>
-          <button type="button" onClick={onSkip} className={quietButtonStyle}>
-            {t("setup.skipForNow")}
-          </button>
-        </div>
-      </form>
-    </Panel>
-  );
-}
-
-// `detail` is written to be read by a person; do not replace it.
-function Problem({ error }: { error: unknown }) {
-  const detail =
-    typeof error === "object" && error !== null && "detail" in error
-      ? String((error as { detail: unknown }).detail)
-      : "The server rejected that.";
-
-  return (
-    <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 p-2 text-sm text-danger">
-      {detail}
-    </p>
-  );
-}
-
-function Panel({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="space-y-4 rounded-lg border border-border-subtle bg-surface p-5">
-      <div className="space-y-1">
-        <h2 className="text-sm font-medium">{title}</h2>
-        <p className="text-xs text-ink-muted">{description}</p>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-xs font-medium text-ink-muted">{label}</span>
-      {children}
-      {hint && <span className="block text-xs text-ink-muted">{hint}</span>}
-    </label>
-  );
-}
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="flex h-full items-center justify-center p-6">{children}</div>;
-}
-
-const inputStyle =
-  "w-full rounded-md border border-border-subtle bg-canvas px-2.5 py-1.5 text-sm " +
-  "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent";
-
-const primaryButtonStyle =
-  "rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink " +
-  "disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 " +
-  "focus-visible:outline-accent";
-
-const quietButtonStyle =
-  "rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted " +
-  "hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
