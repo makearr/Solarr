@@ -242,6 +242,15 @@ ORDER BY m.collection_id, m.ord, m.part_id;
 SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked, facts_checked_at
 FROM collection WHERE kind = sqlc.arg(kind) AND media_type = sqlc.arg(media_type) ORDER BY name, id;
 
+-- A library's events of a kind: only those with a part of a work this library holds.
+-- name: ListCollectionsOfKindInCategory :many
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
+FROM collection c
+WHERE c.kind = sqlc.arg(kind) AND c.media_type = sqlc.arg(media_type)
+  AND EXISTS (SELECT 1 FROM collection_member m JOIN desired_item d ON d.work_id = m.work_id AND d.category_id = sqlc.arg(category_id)
+              WHERE m.collection_id = c.id)
+ORDER BY c.name, c.id;
+
 -- name: ListCollectionsOfWorkParts :many
 SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
 FROM collection c JOIN collection_member m ON m.collection_id = c.id

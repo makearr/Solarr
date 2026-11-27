@@ -80,7 +80,7 @@ func TestDetectEncoders_SoftwareRowsFollowTheBuildAndNVENCSaysItIsMissing(t *tes
 		t.Errorf("av1 = %+v", got)
 	}
 	for _, codec := range []transcode.Codec{transcode.CodecH264, transcode.CodecHEVC, transcode.CodecAV1} {
-		if got := rowOf(t, rows, transcode.NVENC, codec); got.Working || got.Detail != "this ffmpeg build has no NVENC" {
+		if got := rowOf(t, rows, transcode.NVENC, codec); got.Working || got.Detail != "not present on this host" {
 			t.Errorf("nvenc %s = %+v", codec, got)
 		}
 	}

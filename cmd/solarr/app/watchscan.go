@@ -128,6 +128,7 @@ type scanWhy struct {
 	Due          bool
 	Why          watch.Why
 	Watching     bool
+	Live         bool
 	CoveredDepth int
 	LastScan     time.Time
 }
@@ -147,7 +148,9 @@ func (p *process) scanDecision(ctx context.Context, rootID int64, manual, startu
 		Now: clock.NewSystem().Now(), LastScan: progress.FinishedAt, Manual: manual, Startup: startup,
 		Interval: p.cache.Snapshot().ScanInterval(),
 	}
+	live := false
 	if p.watch != nil {
+		live = p.watch.Registered(rootID)
 		input.Watching, input.CoveredDepth = p.watch.Trust(watch.Root{ID: rootID, Path: root.Path, Trusted: p.disks.WatchSeesChanges(root.Path)}, progress.FinishedAt)
 	}
 	due, why := watch.ScanDue(input)
@@ -155,7 +158,7 @@ func (p *process) scanDecision(ctx context.Context, rootID int64, manual, startu
 		input.Fingerprint = p.fingerprintVerdict(root)
 		due, why = watch.ScanDue(input)
 	}
-	return scanWhy{Due: due, Why: why, Watching: input.Watching, CoveredDepth: input.CoveredDepth, LastScan: progress.FinishedAt}
+	return scanWhy{Due: due, Why: why, Watching: input.Watching, Live: live, CoveredDepth: input.CoveredDepth, LastScan: progress.FinishedAt}
 }
 
 // fingerprintVerdict compares the root's used space and top-level entry count with the last scan's.
@@ -203,7 +206,7 @@ func (p *process) diskScanRoots(ctx context.Context) []apiserver.DiskScanRoot {
 		}
 		decision := p.scanDecision(ctx, id, false, false, false)
 		row := apiserver.DiskScanRoot{
-			RootFolderID: id, Path: root.Path, Watching: decision.Watching, CoveredDepth: decision.CoveredDepth,
+			RootFolderID: id, Path: root.Path, Watching: decision.Watching, Live: decision.Live, CoveredDepth: decision.CoveredDepth,
 			Due: decision.Due, Why: string(decision.Why),
 		}
 		if !decision.LastScan.IsZero() {

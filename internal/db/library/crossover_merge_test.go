@@ -306,3 +306,23 @@ func TestForgetFamilyChecksMakesTheNextPassCompareEveryFamilyAgain(t *testing.T)
 		t.Errorf("checked = %v, %v; want forgotten", ok, err)
 	}
 }
+
+func TestListInCategoryShowsOnlyEventsWithAPartOfTheLibrary(t *testing.T) {
+	opened, _ := newLibrary(t)
+	crossovers := library.NewCrossovers(opened)
+	var parts [2]int64
+	for i := range parts {
+		work := createWork(t, opened, "tv", "Invented Series "+string(rune('A'+i)))
+		parts[i] = createPart(t, opened, work.ID, "s01:e01", "s01:e01", "Shared Night").ID
+		if i == 0 {
+			createDesired(t, opened, work.ID, "SINGLE", 1)
+		}
+	}
+	held := autoEvent(t, opened, "Held Event", parts[0])
+	autoEvent(t, opened, "Other Library Event", parts[1])
+
+	events, err := crossovers.ListInCategory(t.Context(), "tv", 1)
+	if err != nil || len(events) != 1 || events[0].ID != held {
+		t.Fatalf("events = %+v, %v; want only the event %d", events, err, held)
+	}
+}

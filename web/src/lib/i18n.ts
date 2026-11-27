@@ -828,6 +828,8 @@ const catalogue = {
   "dashboard.theStatusPanelsCould": "The status panels could not be read.",
   "diskSettings.theDiskLayoutIs": "The disk layout is an expert-tier setting. Raise your own tier on the User settings page to see it.",
   "diskSettings.detectedLayout": "Detected layout",
+  "diskSettings.watchingNotTrusted": "active, but not yet trusted to skip a scan (a scan since the watches began, or a share that hides changes, makes it so)",
+  "users.apiKeyNamePlaceholder": "What the key is for",
   "diskSettings.libraryScans": "Library scans",
   "diskSettings.timeBetweenScans": "Time between scans",
   "diskSettings.inotifyWatches": "Inotify watches",

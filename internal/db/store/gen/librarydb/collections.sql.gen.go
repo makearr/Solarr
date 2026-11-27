@@ -1342,6 +1342,58 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 	return items, nil
 }
 
+const listCollectionsOfKindInCategory = `-- name: ListCollectionsOfKindInCategory :many
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
+FROM collection c
+WHERE c.kind = ?1 AND c.media_type = ?2
+  AND EXISTS (SELECT 1 FROM collection_member m JOIN desired_item d ON d.work_id = m.work_id AND d.category_id = ?3
+              WHERE m.collection_id = c.id)
+ORDER BY c.name, c.id
+`
+
+type ListCollectionsOfKindInCategoryParams struct {
+	Kind       string
+	MediaType  string
+	CategoryID int64
+}
+
+// A library's events of a kind: only those with a part of a work this library holds.
+func (q *Queries) ListCollectionsOfKindInCategory(ctx context.Context, arg ListCollectionsOfKindInCategoryParams) ([]Collection, error) {
+	rows, err := q.db.QueryContext(ctx, listCollectionsOfKindInCategory, arg.Kind, arg.MediaType, arg.CategoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Collection{}
+	for rows.Next() {
+		var i Collection
+		if err := rows.Scan(
+			&i.ID,
+			&i.MediaType,
+			&i.Name,
+			&i.Kind,
+			&i.Source,
+			&i.Monitored,
+			&i.CompleteAt,
+			&i.AddedAt,
+			&i.PosterUrl,
+			&i.CategoryID,
+			&i.NameLocked,
+			&i.FactsCheckedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCollectionsOfWorkParts = `-- name: ListCollectionsOfWorkParts :many
 SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
 FROM collection c JOIN collection_member m ON m.collection_id = c.id

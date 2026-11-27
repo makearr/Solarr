@@ -51,8 +51,8 @@ type EncoderSupport struct {
 	QualityMode string
 }
 
-// noNVENC is the sentence shown for every NVENC row of a machine that cannot use it.
-const noNVENC = "this ffmpeg build has no NVENC"
+// noNVENC is the neutral sentence for NVENC rows: the image has no NVENC and Intel/AMD hosts have no NVIDIA GPU, so it is absence, not a fault.
+const noNVENC = "not present on this host"
 
 // encoderName is the ffmpeg encoder of an engine and codec; false when the engine has none for it.
 func encoderName(engine Accel, codec Codec) (string, bool) {

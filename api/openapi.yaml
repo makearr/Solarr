@@ -11303,12 +11303,13 @@ components:
         hours: { type: array, items: { $ref: "#/components/schemas/TaskHour" } }
     DiskScanRoot:
       type: object
-      required: [root_folder_id, path, watching, covered_depth, due, why]
+      required: [root_folder_id, path, watching, live, covered_depth, due, why]
       properties:
         root_folder_id: { type: integer, format: int64 }
         path: { type: string }
         last_scan: { type: integer, format: int64, description: Unix seconds; absent when never scanned. }
         watching: { type: boolean, description: A watcher has seen every change since the last scan. }
+        live: { type: boolean, description: The root has live filesystem watches, even when they are not yet trusted to vouch for the last scan. }
         covered_depth: { type: integer, description: Deepest folder level watched completely (0 root, 1 artist or series folders); -1 none. }
         due: { type: boolean }
         why: { type: string, description: "Reason code: manual, never_scanned, startup_stale, startup_recent, watcher_lost, interval_passed, within_interval, size_or_count_changed, size_and_count_unchanged." }

@@ -55,7 +55,7 @@ func TestSystemHealth_NamesDownloadsWhoseClientCannotUseItsFiles(t *testing.T) {
 	}
 }
 
-func TestSystemHealth_NamesAPausedMetadataProviderAndSkipsAnUnknownConnection(t *testing.T) {
+func TestSystemHealth_HidesAPausedMetadataProviderAndSkipsAnUnknownConnection(t *testing.T) {
 	retry := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
 	health := SystemHealth{Paused: func() []httpx.BreakerSnapshot {
 		return []httpx.BreakerSnapshot{
@@ -64,13 +64,8 @@ func TestSystemHealth_NamesAPausedMetadataProviderAndSkipsAnUnknownConnection(t 
 			{Provider: "arr:3", RetryAt: retry},
 		}
 	}}
-	checks := health.pausedProviders(t.Context())
-	want := []apiserver.HealthCheck{{
-		ID: "provider_paused_tmdb", Severity: apiserver.HealthWarning,
-		Message: "tmdb is paused: its key was rejected, so check it.", Link: "/settings/metadata", Until: &retry,
-	}}
-	if !reflect.DeepEqual(checks, want) {
-		t.Fatalf("checks = %+v, want %+v", checks, want)
+	if checks := health.pausedProviders(t.Context()); len(checks) != 0 {
+		t.Fatalf("checks = %+v, want none", checks)
 	}
 }
 

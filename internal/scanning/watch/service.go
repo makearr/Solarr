@@ -367,5 +367,13 @@ func (s *Service) Trust(root Root, lastScan time.Time) (watching bool, coveredDe
 	return true, s.covered[root.ID]
 }
 
+// Registered says the root has live watches, whether or not they are yet trusted to vouch for the last scan.
+func (s *Service) Registered(rootID int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, has := s.registeredAt[rootID]
+	return has
+}
+
 // Close stops watching.
 func (s *Service) Close() error { return s.config.Notifier.Close() }

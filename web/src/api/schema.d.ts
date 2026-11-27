@@ -7470,6 +7470,8 @@ export interface components {
             last_scan?: number;
             /** @description A watcher has seen every change since the last scan. */
             watching: boolean;
+            /** @description The root has live filesystem watches */
+            live: boolean;
             /** @description Deepest folder level watched completely (0 root */
             covered_depth: number;
             due: boolean;

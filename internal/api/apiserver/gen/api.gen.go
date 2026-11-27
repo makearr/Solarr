@@ -3104,7 +3104,10 @@ type DiskScanRoot struct {
 	Due          bool `json:"due"`
 
 	// LastScan Unix seconds; absent when never scanned.
-	LastScan     *int64 `json:"last_scan,omitempty"`
+	LastScan *int64 `json:"last_scan,omitempty"`
+
+	// Live The root has live filesystem watches
+	Live         bool   `json:"live"`
 	Path         string `json:"path"`
 	RootFolderId int64  `json:"root_folder_id"`
 

@@ -729,6 +729,8 @@ type Querier interface {
 	// A library's collections: the provider's franchises with a work of the library, and the hand-made ones of the library.
 	ListCollectionsInCategory(ctx context.Context, arg ListCollectionsInCategoryParams) ([]ListCollectionsInCategoryRow, error)
 	ListCollectionsOfKind(ctx context.Context, arg ListCollectionsOfKindParams) ([]Collection, error)
+	// A library's events of a kind: only those with a part of a work this library holds.
+	ListCollectionsOfKindInCategory(ctx context.Context, arg ListCollectionsOfKindInCategoryParams) ([]Collection, error)
 	ListCollectionsOfWorkParts(ctx context.Context, arg ListCollectionsOfWorkPartsParams) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
 	// What an edition's parts cover, in the covered series' words.

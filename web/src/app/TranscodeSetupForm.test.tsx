@@ -35,7 +35,7 @@ function renderForm(rateMode: string) {
     target_id: 7, is_default: true, revision: 0, setup: setup(rateMode), warnings: [{ code: "checks_off" }],
     availability: [
       { engine: "auto", available: true, lookahead: true, ten_bit: true, quality_mode: "crf", preset_applies: true },
-      { engine: "nvenc", available: false, reason: "this ffmpeg build has no NVENC", lookahead: false, ten_bit: false, quality_mode: "", preset_applies: true },
+      { engine: "nvenc", available: false, reason: "not present on this host", lookahead: false, ten_bit: false, quality_mode: "", preset_applies: true },
     ],
     filters: {},
   };
@@ -56,7 +56,7 @@ test("an engine that cannot encode the codec is disabled and says why", async ()
   renderForm("quality");
   const radio = (await screen.findByLabelText(/NVIDIA NVENC/)) as HTMLInputElement;
   expect(radio.disabled).toBe(true);
-  expect(screen.getByText("this ffmpeg build has no NVENC")).toBeTruthy();
+  expect(screen.getByText("not present on this host")).toBeTruthy();
 });
 
 test("quality mode shows the quality number and bitrate mode shows the bitrate instead", async () => {

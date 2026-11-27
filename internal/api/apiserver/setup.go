@@ -180,9 +180,10 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reported, not refused: host ownership is the operator's decision.
-	writable := true
+	writable, readOnlyFilesystem := true, false
 	if err := s.roots.Writable(path); err != nil {
 		writable = false
+		readOnlyFilesystem = errors.Is(err, ErrReadOnlyFilesystem)
 		s.logger.Warn("root folder is not writable by this process",
 			"path", path, "detail", err.Error())
 	}
@@ -198,10 +199,14 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.recordRootCapacity(r.Context(), created.ID, path, writable) {
-		if refreshed, found := s.auth.Settings.Snapshot().RootFolder(created.ID); found {
-			created = refreshed
-		}
+	// A new root starts read only where the filesystem is, and may be renamed where Solarr is allowed to write at all.
+	renameAllowed := writable && !s.auth.Settings.Snapshot().SolarrMode().LibrariesReadOnly()
+	if err := s.auth.Settings.SetRootFolderPolicy(r.Context(), created.ID, readOnlyFilesystem, renameAllowed, created.MinFreeBytes); err != nil {
+		s.logger.Warn("root folder default policy could not be recorded", "path", path, "error", err)
+	}
+	s.recordRootCapacity(r.Context(), created.ID, path, writable)
+	if refreshed, found := s.auth.Settings.Snapshot().RootFolder(created.ID); found {
+		created = refreshed
 	}
 
 	view := s.rootFolderView(created)

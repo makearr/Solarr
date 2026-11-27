@@ -201,7 +201,7 @@ function APIKeysSection() {
                        text-ink focus-visible:outline-2 focus-visible:outline-offset-2
                        focus-visible:outline-accent"
             value={name}
-            placeholder="Prowlarr"
+            placeholder={t("users.apiKeyNamePlaceholder")}
             autoComplete="off"
             onChange={(event) => setName(event.target.value)}
           />

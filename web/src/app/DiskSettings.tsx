@@ -205,7 +205,7 @@ function DiskSettings() {
               <tr key={row.root_folder_id} className="border-t border-border-subtle">
                 <td className="py-1.5 pr-3 font-mono">{row.path}</td>
                 <td className="py-1.5 pr-3">{row.last_scan ? new Date(row.last_scan * 1000).toLocaleString() : "never"}</td>
-                <td className="py-1.5 pr-3">{row.watching ? `yes, down to ${DEPTH_NAMES[row.covered_depth] ?? `level ${row.covered_depth}`}` : "no"}</td>
+                <td className="py-1.5 pr-3">{row.watching ? `yes, down to ${DEPTH_NAMES[row.covered_depth] ?? `level ${row.covered_depth}`}` : row.live ? t("diskSettings.watchingNotTrusted") : "no"}</td>
                 <td className="py-1.5">{row.due ? "due" : "up to date"} <span className="text-ink-muted">({WHY[row.why] ?? row.why})</span></td>
               </tr>
             ))}

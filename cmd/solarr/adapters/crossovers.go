@@ -72,7 +72,7 @@ func crossoverViews(events []library.Crossover) []gen.Crossover {
 
 // List implements apiserver.Crossovers.
 func (a Crossovers) List(ctx context.Context, mediaType string, categoryID int64) ([]gen.Crossover, []gen.SameContentSuggestion, error) {
-	events, err := a.Crossovers.List(ctx, mediaType)
+	events, err := a.Crossovers.ListInCategory(ctx, mediaType, categoryID)
 	if err != nil {
 		return nil, nil, err
 	}

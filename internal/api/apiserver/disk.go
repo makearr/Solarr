@@ -41,6 +41,7 @@ type DiskScanRoot struct {
 	Path         string
 	LastScanUnix int64
 	Watching     bool
+	Live         bool
 	CoveredDepth int
 	Due          bool
 	Why          string
@@ -187,7 +188,7 @@ func diskReportView(report DiskReport) gen.DiskReport {
 	roots := make([]gen.DiskScanRoot, 0, len(report.Scan.Roots))
 	for _, r := range report.Scan.Roots {
 		root := gen.DiskScanRoot{
-			RootFolderId: r.RootFolderID, Path: r.Path, Watching: r.Watching, CoveredDepth: r.CoveredDepth, Due: r.Due, Why: r.Why,
+			RootFolderId: r.RootFolderID, Path: r.Path, Watching: r.Watching, Live: r.Live, CoveredDepth: r.CoveredDepth, Due: r.Due, Why: r.Why,
 		}
 		if r.LastScanUnix != 0 {
 			at := r.LastScanUnix

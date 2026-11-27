@@ -527,12 +527,13 @@ func (a SystemHealth) pausedProviders(ctx context.Context) []apiserver.HealthChe
 	return checks
 }
 
-// pausedConnection is a paused provider's display name and the screen that fixes it; empty for a user's own *Arr or
-// other service, which have screens of their own.
+// pausedConnection is a paused indexer's or download client's display name and the screen that fixes it; empty for a metadata
+// provider, a user's own *Arr or other service, which have screens of their own.
 func (a SystemHealth) pausedConnection(ctx context.Context, provider string) (name, link string) {
 	kind, idText, connection := strings.Cut(provider, ":")
 	if !connection {
-		return provider, "/settings/metadata"
+		// A paused metadata provider recovers on its own and the metadata settings already show it.
+		return "", ""
 	}
 	id, err := strconv.ParseInt(idText, 10, 64)
 	if err != nil {
@@ -565,7 +566,9 @@ func (a SystemHealth) pausedConnection(ctx context.Context, provider string) (na
 
 // searchingOffWithConnections says a client and an indexer are ready while the search task is switched off.
 func (a SystemHealth) searchingOffWithConnections(ctx context.Context) bool {
-	if a.Cache.Snapshot().ScheduleEnabled("hunt") {
+	snapshot := a.Cache.Snapshot()
+	// A companion or observing instance does not search by design.
+	if snapshot.ScheduleEnabled("hunt") || snapshot.SolarrMode().SearchesStopped() {
 		return false
 	}
 	indexers, indexerErr := a.Cache.Indexers(ctx)

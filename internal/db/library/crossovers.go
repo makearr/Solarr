@@ -235,6 +235,15 @@ func (c Crossovers) List(ctx context.Context, mediaType string) ([]Crossover, er
 	return c.withMembers(ctx, rows)
 }
 
+// ListInCategory answers the events with a part of a work the library holds, so a library never shows another library's event.
+func (c Crossovers) ListInCategory(ctx context.Context, mediaType string, categoryID int64) ([]Crossover, error) {
+	rows, err := librarydb.New(c.store.Read()).ListCollectionsOfKindInCategory(ctx, librarydb.ListCollectionsOfKindInCategoryParams{Kind: CrossoverKind, MediaType: mediaType, CategoryID: categoryID})
+	if err != nil {
+		return nil, fmt.Errorf("library: crossovers of library %d: %w", categoryID, err)
+	}
+	return c.withMembers(ctx, rows)
+}
+
 // ForWork answers the events a part of the work is in, with all their members.
 func (c Crossovers) ForWork(ctx context.Context, workID int64) ([]Crossover, error) {
 	rows, err := librarydb.New(c.store.Read()).ListCollectionsOfWorkParts(ctx, librarydb.ListCollectionsOfWorkPartsParams{WorkID: workID, Kind: CrossoverKind})
