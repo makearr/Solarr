@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Comics: a series is found whatever the accents (a folder without them matches the catalogue's accented title), so a folder of comics whose name lacks the accent is identified instead of waiting in Review.
 - The web interface opens one live-update stream per browser, not one per tab: with many tabs of the same instance open, the first tab reads the stream and passes it to the others, so the page no longer freezes behind the browser's six-connection limit.
 - Transcode: the parallel limits are ceilings down the lanes CPU, GPU, audio, comics, ebooks (CPU 1, GPU 2, audio 4 allows one CPU and one GPU job beside two audio ones), comics and ebooks have a lane of their own, and a limit under an earlier lane's is refused.
 - Transcode: the way files are converted to a quality target is set in that target's editor (Quality profiles, Target qualities); Settings, Transcode keeps the libraries, hardware, lanes and originals. The hardware card counts the video engines of Intel and AMD GPUs from the kernel instead of saying "engine count unknown".

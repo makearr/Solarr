@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/comicvine"
@@ -739,15 +740,8 @@ func stripMarkup(text string) string { return strings.TrimSpace(markup.ReplaceAl
 // sameTitle compares two titles ignoring case, punctuation and spacing.
 func sameTitle(a, b string) bool { return titleKey(a) != "" && titleKey(a) == titleKey(b) }
 
-func titleKey(title string) string {
-	var out strings.Builder
-	for _, r := range strings.ToLower(title) {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r > 127 {
-			out.WriteRune(r)
-		}
-	}
-	return out.String()
-}
+// titleKey is the title's letters and digits without case or accents, so an accented title and its plain spelling are one series.
+func titleKey(title string) string { return titlekey.Fold(title, titlekey.Compact) }
 
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
