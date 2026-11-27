@@ -9,7 +9,7 @@ import {
   Settings,
   CalendarDays,
   Compass,
-  UsersRound,
+  Cable,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,7 +29,7 @@ import type { components } from "@/api/schema";
 import { Logo } from "./Logo";
 import { queueQuery } from "./Queue";
 import {
-  ACTIVITY, entryTab, isAt, librarySections, SETTINGS, SETTINGS_GROUPS, visibleTabs, type Place, type SectionTab, type Viewer,
+  ACTIVITY, CONNECTIONS, entryTab, isAt, librarySections, SETTINGS, SETTINGS_GROUPS, visibleTabs, type Place, type SectionTab, type Viewer,
 } from "./sections";
 
 type LibraryEntry = components["schemas"]["Library"];
@@ -114,6 +114,7 @@ export function Sidebar({ expanded = false }: { expanded?: boolean }) {
   const sections = useOpenSections(activeKeys);
 
   const activityTab = entryTab(ACTIVITY, viewer);
+  const connectionsTab = entryTab(CONNECTIONS, viewer);
   const settingsEntry = entryTab(SETTINGS, viewer);
 
   return (
@@ -137,13 +138,6 @@ export function Sidebar({ expanded = false }: { expanded?: boolean }) {
         {showCalendar && (
           <NavLink to="/calendar" icon={CalendarDays} label={t("nav.calendar")} collapsed={collapsed} active={path.startsWith("/calendar")} />
         )}
-        <NavLink
-          to="/people"
-          icon={UsersRound}
-          label={t("nav.people")}
-          collapsed={collapsed}
-          active={path === "/people" || (path.startsWith("/people/") && !routeParams.categoryId)}
-        />
       </ul>
 
       {(administrator || (libraries.data?.length ?? 0) > 0) && <Heading collapsed={collapsed}>{t("nav.libraries")}</Heading>}
@@ -174,6 +168,15 @@ export function Sidebar({ expanded = false }: { expanded?: boolean }) {
             collapsed={collapsed}
             active={visibleTabs(ACTIVITY, viewer).some((entry) => isAt(entry, place)) && !routeParams.categoryId}
             badge={badges.downloads > 0 ? <Badge>{badges.downloads}</Badge> : undefined}
+          />
+        )}
+        {connectionsTab && (
+          <NavLink
+            to={connectionsTab.path}
+            icon={Cable}
+            label={t("nav.connections")}
+            collapsed={collapsed}
+            active={visibleTabs(CONNECTIONS, viewer).some((entry) => isAt(entry, place)) && !routeParams.categoryId}
           />
         )}
         {settingsEntry && collapsed && (

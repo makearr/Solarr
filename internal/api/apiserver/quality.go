@@ -377,7 +377,7 @@ func qualityTargetFromBody(body gen.QualityTarget) settings.QualityTarget {
 		SubtitleLanguages: lowerAll(derefOr(body.SubtitleLanguages, nil)),
 		AudioBitrateKbps:  body.AudioBitrateKbps, VideoBitrateKbps: body.VideoBitrateKbps,
 		FrameRate: float64(derefOr(body.FrameRate, 0)), CRF: float64(derefOr(body.Crf, 0)),
-		PreferOver: derefOr(body.PreferOver, false), IgnoreBelow: derefOr(body.IgnoreBelow, false),
+		PreferOver: derefOr(body.PreferOver, true), IgnoreBelow: derefOr(body.IgnoreBelow, true),
 		Label: strings.TrimSpace(derefOr(body.Label, "")), Description: strings.TrimSpace(derefOr(body.Description, "")),
 		SampleRateHz: derefOr(body.SampleRateHz, 0), BitDepth: derefOr(body.BitDepth, 0),
 		EncoderPreset: strings.ToLower(strings.TrimSpace(derefOr(body.EncoderPreset, ""))),

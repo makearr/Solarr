@@ -212,12 +212,12 @@ const KeyImportHistoryKeepDays = "import.history_keep_days"
 
 // The bounds of the history setting and its default, in days.
 const (
-	DefaultImportHistoryKeepDays int64 = 90
+	DefaultImportHistoryKeepDays int64 = 30
 	MinImportHistoryKeepDays     int64 = 7
 	MaxImportHistoryKeepDays     int64 = 3650
 )
 
-// ImportHistoryKeepDays reads how many days finished import history is kept, 90 when nothing is stored.
+// ImportHistoryKeepDays reads how many days finished import history is kept, 30 when nothing is stored.
 func (s *Snapshot) ImportHistoryKeepDays() int64 {
 	days := s.policyInt(KeyImportHistoryKeepDays, DefaultImportHistoryKeepDays)
 	if days < MinImportHistoryKeepDays || days > MaxImportHistoryKeepDays {

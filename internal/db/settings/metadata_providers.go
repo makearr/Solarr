@@ -183,7 +183,7 @@ const KeyMetadataProviderPaces = "metadata.provider_paces"
 
 // MetadataProviders are the providers a library's order is made of.
 var MetadataProviders = []MetadataProvider{
-	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie", "book", "audiobook", "adult", "comic"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
+	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie", "book", "audiobook", "adult", "comic", "music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
 		PerMinute: 60, Published: "one request at a time; no rate published"},
 	{Key: SourceBrainzMash, Label: "BrainzMash", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"},
 		PerMinute: 600, Published: "none published (its DroppedNeedle pool documents 10 a second)"},
@@ -438,7 +438,7 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 		}
 		return slices.Clone(DefaultComicSources)
 	case "music":
-		return slices.Clone(DefaultMetadataSourceOrder)
+		return append([]string{SourceWikidata}, DefaultMetadataSourceOrder...)
 	}
 	return nil
 }

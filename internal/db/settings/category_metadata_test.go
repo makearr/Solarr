@@ -74,13 +74,13 @@ func TestAProviderSwitchedOffIsAskedByNoLibrary(t *testing.T) {
 // Direct MusicBrainz can be switched off (user, 2026-10-23), and then is no fallback; the last music source on stays on.
 func TestMusicBrainzCanBeSwitchedOffButNotTheLastMusicSource(t *testing.T) {
 	cache, fake := newCache(t)
-	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy", "musicbrainz"}) {
+	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"wikidata", "brainzmash", "musicbrainz-proxy", "musicbrainz"}) {
 		t.Fatalf("starting order = %v", got)
 	}
 	if err := cache.SetProviderEnabled(t.Context(), fake, "musicbrainz", false); err != nil {
 		t.Fatalf("switching MusicBrainz off: %v", err)
 	}
-	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy"}) {
+	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"wikidata", "brainzmash", "musicbrainz-proxy"}) {
 		t.Errorf("order with MusicBrainz off = %v, want it gone, fallback too", got)
 	}
 	if err := cache.SetProviderEnabled(t.Context(), fake, "brainzmash", false); err != nil {
@@ -92,7 +92,7 @@ func TestMusicBrainzCanBeSwitchedOffButNotTheLastMusicSource(t *testing.T) {
 	if err := cache.SetProviderEnabled(t.Context(), fake, "musicbrainz", true); err != nil {
 		t.Fatalf("switching MusicBrainz on: %v", err)
 	}
-	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"musicbrainz-proxy", "musicbrainz"}) {
+	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"wikidata", "musicbrainz-proxy", "musicbrainz"}) {
 		t.Errorf("order with MusicBrainz back = %v", got)
 	}
 }
@@ -116,7 +116,7 @@ func TestEachMusicLibraryIsLookedUpInItsOwnOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := cache.Snapshot()
-	shipped := []string{"brainzmash", "musicbrainz-proxy", "musicbrainz"}
+	shipped := []string{"wikidata", "brainzmash", "musicbrainz-proxy", "musicbrainz"}
 	for _, check := range []struct {
 		name     string
 		category int64
@@ -229,7 +229,7 @@ func TestMergeCategory_MovesTheFoldersAndRemovesTheLibrary(t *testing.T) {
 // Google Books answers 429 without a key: it starts off, a person may still switch it on, and that sticks.
 func TestGoogleBooksStartsOffUntilSwitchedOn(t *testing.T) {
 	cache, fake := newCache(t)
-	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy", "musicbrainz"}) {
+	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"wikidata", "brainzmash", "musicbrainz-proxy", "musicbrainz"}) {
 		t.Fatalf("starting order = %v", got)
 	}
 	if cache.Snapshot().ProviderEnabled(settings.BookSourceGoogleBooks) {

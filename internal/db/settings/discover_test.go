@@ -11,7 +11,7 @@ import (
 func TestDiscoverIsOffWithDefaultsUntilSaved(t *testing.T) {
 	cache, _ := newCache(t)
 	movies, _ := cache.CreateCategory(t.Context(), "movie", "Movies", 10)
-	if got := cache.Snapshot().DiscoverGlobal(); !reflect.DeepEqual(got, settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5}) {
+	if got := cache.Snapshot().DiscoverGlobal(); !reflect.DeepEqual(got, settings.DiscoverGlobal{ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5, AutoAddSearch: true}) {
 		t.Errorf("global = %+v", got)
 	}
 	got, err := cache.LibraryDiscover(t.Context(), movies.ID)
@@ -19,7 +19,7 @@ func TestDiscoverIsOffWithDefaultsUntilSaved(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := settings.LibraryDiscover{
-		CategoryID: movies.ID, Name: "Movies", MediaType: "movie", TotalAmount: 60, ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5,
+		CategoryID: movies.ID, Name: "Movies", MediaType: "movie", TotalAmount: 60, ClassicAgeYears: 25, MinRating: 7, MinVotes: 1000, AutoAddPerDay: 5, AutoAddSearch: true,
 		Types: []settings.DiscoverTypeSetting{
 			{Type: "highest_rated", Enabled: true, Amount: 20}, {Type: "trending", Enabled: true, Amount: 20}, {Type: "upcoming", Enabled: true, Amount: 20},
 			{Type: "classics", Enabled: true, Amount: 20}, {Type: "collections", Enabled: true, Amount: 20},

@@ -15,7 +15,7 @@ import (
 const itemFields = "ProviderIds,Overview,Genres,People,Studios,OriginalTitle,OfficialRating,Path,Tags,ProductionYear,PremiereDate,RunTimeTicks,SortName,CommunityRating,OriginalLanguage"
 
 var itemTypes = map[string]string{
-	"movie": "Movie", "tv": "Series", "music": "MusicAlbum,MusicArtist,Audio",
+	"movie": "Movie", "tv": "Series", "music": "MusicAlbum,MusicArtist,Audio", "audiobook": "AudioBook",
 }
 
 type wireItem struct {
@@ -93,6 +93,8 @@ func mediaTypeOf(kind string) string {
 		return "tv"
 	case "MusicAlbum", "MusicArtist", "Audio":
 		return "music"
+	case "AudioBook":
+		return "audiobook"
 	}
 	return ""
 }

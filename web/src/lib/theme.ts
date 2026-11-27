@@ -61,8 +61,11 @@ export function definition(id: string): ThemeDefinition {
   return THEMES.find((theme) => theme.id === id) ?? DEFAULT_BASE;
 }
 
+/** The colour scheme of a fresh install. */
+export const DEFAULT_SCHEME = "nord";
+
 export function scheme(id: string): SchemeDefinition {
-  return SCHEMES.find((entry) => entry.id === id) ?? SCHEMES[0]!;
+  return SCHEMES.find((entry) => entry.id === id) ?? SCHEMES.find((entry) => entry.id === DEFAULT_SCHEME)!;
 }
 
 /** Whether a scheme has both variants, so the mode means something for it. */
@@ -102,6 +105,6 @@ export function stored(): { mode: Mode; scheme: string } {
       scheme: scheme(schemeID ?? "").id,
     };
   } catch {
-    return { mode: "system", scheme: "solarr" };
+    return { mode: "system", scheme: DEFAULT_SCHEME };
   }
 }

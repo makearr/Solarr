@@ -75,8 +75,9 @@ func (p *process) ensureDefaultQualityProfile(ctx context.Context) error {
 	return nil
 }
 
-// automaticSearchTasks are the periodic tasks that decide, search and grab without being asked.
-var automaticSearchTasks = []string{"plan", "cutoff", "rss", huntTaskKey}
+// automaticSearchTasks are the periodic tasks that decide, search and grab without being asked; the RSS sync stays on
+// because it only reacts to newly published releases, it never works through the backlog.
+var automaticSearchTasks = []string{"plan", "cutoff", huntTaskKey}
 
 // ensureSearchingDecision starts a fresh instance with automatic searching off: a scanned library fills the hunt queue, and
 // the first client added would take it all at once. An instance that already has a download client keeps what it had.

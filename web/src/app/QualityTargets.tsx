@@ -84,10 +84,11 @@ const FRAME_RATES: [number, string][] = [[24, "24 (23.976)"], [25, "25"], [30, "
 
 /** A new target's starting point: lossless audio, or a 1080p h265 picture. */
 function blankTarget(mediaType: string): QualityTarget {
-  if (DOCUMENT_MEDIA.has(mediaType)) return { name: "", media_type: mediaType, audio_codec: "", container: "epub", tolerance_pct: 0 };
+  const keepsQuality = { prefer_over: true, ignore_below: true };
+  if (DOCUMENT_MEDIA.has(mediaType)) return { name: "", media_type: mediaType, audio_codec: "", container: "epub", tolerance_pct: 0, ...keepsQuality };
   return AUDIO_MEDIA.has(mediaType)
-    ? { name: "", media_type: mediaType, audio_codec: "flac", container: "flac", tolerance_pct: 10 }
-    : { name: "", media_type: mediaType, audio_codec: "", container: "", tolerance_pct: 0, resolution: "1080p", video_codec: "h265" };
+    ? { name: "", media_type: mediaType, audio_codec: "flac", container: "flac", tolerance_pct: 10, ...keepsQuality }
+    : { name: "", media_type: mediaType, audio_codec: "", container: "", tolerance_pct: 0, resolution: "1080p", video_codec: "h265", ...keepsQuality };
 }
 
 export function Pick({

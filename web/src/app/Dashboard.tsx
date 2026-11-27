@@ -4,12 +4,12 @@ import { t } from "@/lib/i18n";
 import { Fragment } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Plus, SlidersHorizontal, XCircle , Inbox } from "lucide-react";
+import { AlertTriangle, Plus, SlidersHorizontal, X, XCircle , Inbox } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { healthMessage } from "@/lib/healthMessage";
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
-import { ADMINISTRATOR_WIDGETS, useDashboardWidgets, type DashboardWidget } from "@/lib/interfacePreferences";
+import { ADMINISTRATOR_WIDGETS, useAttentionDismissed, useDashboardWidgets, type DashboardWidget } from "@/lib/interfacePreferences";
 import { useLibraryTree } from "@/lib/resources";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -99,11 +99,19 @@ export function Dashboard() {
   const tier = useTier();
   const checks = health.data?.filter((check) => check.link == null || isTierVisible(tier, pageTier(check.link)));
 
+  const [dismissedChecks, setDismissedChecks] = useAttentionDismissed();
+  const checkKey = (check: { id: string; message: string }) => `${check.id}:${check.message}`;
+  const hasNewCheck = (checks ?? []).some((check) => !dismissedChecks.includes(checkKey(check)));
+
   const nodes: Record<DashboardWidget, React.ReactNode> = {
     setup: <SetupChecklist />,
     attention: (
-        checks && checks.length > 0 && (
-          <Section title={t("dashboard.needsAttention")}>
+        checks && checks.length > 0 && hasNewCheck && (
+          <Section
+            title={t("dashboard.needsAttention")}
+            onDismiss={() => setDismissedChecks(checks.map(checkKey))}
+            dismissLabel={t("dashboard.hideNeedsAttention")}
+          >
             <ul className="flex flex-col gap-1">
               {checks.map((check) => (
                 <li
@@ -292,10 +300,25 @@ function LibraryStrip({ libraries }: { libraries: readonly LibraryEntry[] }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title, children, onDismiss, dismissLabel,
+}: { title: string; children: React.ReactNode; onDismiss?: () => void; dismissLabel?: string }) {
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">{title}</h2>
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">{title}</h2>
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label={dismissLabel}
+            title={dismissLabel}
+            className="rounded-md p-0.5 text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            <X aria-hidden className="size-4" />
+          </button>
+        )}
+      </div>
       {children}
     </section>
   );

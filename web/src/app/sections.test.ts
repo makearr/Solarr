@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { entryTab, isAt, librarySections, pageTier, sectionAt, SETTINGS, visibleTabs } from "./sections";
+import { CONNECTIONS, entryTab, isAt, librarySections, pageTier, sectionAt, SETTINGS, visibleTabs } from "./sections";
 
 const labels = (tabs: readonly { label: string }[]) => tabs.map((tab) => tab.label);
 
@@ -50,4 +50,10 @@ test("a library of several types has each type's pages in its sections", () => {
   const [wanted] = librarySections("7", kinds);
   expect(labels(wanted!.tabs)).toEqual(["Wanted · Series", "Wanted · Movies"]);
   expect(sectionAt({ path: "/library/9/wanted" }, "7", kinds)?.key).toBe("library:7:wanted");
+});
+
+test("connections are one section of four tabs at the normal tier; import lists and webhooks stay in settings", () => {
+  expect(labels(visibleTabs(CONNECTIONS, { tier: "normal", administrator: true }))).toEqual(["Download clients", "Indexers", "Arr apps", "Media servers"]);
+  expect(sectionAt({ path: "/connections/indexers/add" }, undefined)?.key).toBe("connections");
+  expect(sectionAt({ path: "/connections/webhooks" }, undefined)?.key).toBe("settings");
 });

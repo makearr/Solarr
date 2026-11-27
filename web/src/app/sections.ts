@@ -34,6 +34,18 @@ export const ACTIVITY: Section = {
 };
 
 /** Settings' four sub-groups in sidebar order; a tab names its group. */
+/** Everything Solarr talks to, one sidebar entry of its own: where downloads come from and where the library is shown. */
+export const CONNECTIONS: Section = {
+  key: "connections",
+  label: "Connections",
+  tabs: [
+    { label: "Download clients", path: "/connections/downloaders", tier: "normal", administrator: true },
+    { label: "Indexers", path: "/connections/indexers", tier: "normal", administrator: true },
+    { label: "Arr apps", path: "/connections/arr", tier: "normal", administrator: true },
+    { label: "Media servers", path: "/connections/media-servers", tier: "normal", administrator: true },
+  ],
+};
+
 export const SETTINGS_GROUPS = ["Media", "Connections", "Storage", "System"] as const;
 export type SettingsGroup = (typeof SETTINGS_GROUPS)[number];
 
@@ -42,19 +54,15 @@ export const SETTINGS: Section = {
   label: "Settings",
   tabs: [
     { group: "Media", label: "Libraries", path: "/settings/libraries", tier: "normal", administrator: true },
-    { group: "Media", label: "Quality", path: "/quality-profiles", tier: "normal", administrator: true },
-    { group: "Media", label: "Metadata", path: "/settings/metadata", tier: "normal", administrator: true },
+    { group: "Media", label: "Quality", path: "/quality-profiles", tier: "expert", administrator: true },
+    { group: "Media", label: "Metadata", path: "/settings/metadata", tier: "expert", administrator: true },
     { group: "Media", label: "Discover", path: "/settings/discover", tier: "normal", administrator: true },
-    { group: "Media", label: "Transcode", path: "/settings/transcode", tier: "normal", administrator: true },
+    { group: "Media", label: "Transcode", path: "/settings/transcode", tier: "expert", administrator: true },
     { group: "Media", label: "Player", path: "/settings/player", tier: "normal", administrator: true },
     { group: "Media", label: "Tags", path: "/settings/tags", tier: "normal", administrator: true },
     { group: "Media", label: "Blocklists", path: "/settings/blocklists", tier: "expert", administrator: true },
-    { group: "Connections", label: "Indexers", path: "/connections/indexers", tier: "advanced", administrator: true },
-    { group: "Connections", label: "Download clients", path: "/connections/downloaders", tier: "advanced", administrator: true },
     { group: "Connections", label: "Import lists", path: "/connections/import-lists", tier: "advanced", administrator: true },
-    { group: "Connections", label: "Media servers", path: "/connections/media-servers", tier: "advanced", administrator: true },
     { group: "Connections", label: "Webhooks", path: "/connections/webhooks", tier: "advanced", administrator: true },
-    { group: "Connections", label: "Arr", path: "/connections/arr", tier: "expert", administrator: true },
     { group: "Storage", label: "Folders", path: "/storage/folders", tier: "advanced", administrator: true },
     { group: "Storage", label: "Import", path: "/storage/import", tier: "advanced", administrator: true },
     { group: "Storage", label: "Duplicates", path: "/storage/duplicates", tier: "advanced", administrator: true },
@@ -74,7 +82,7 @@ export const SETTINGS: Section = {
   ],
 };
 
-export const GLOBAL_SECTIONS: readonly Section[] = [ACTIVITY, SETTINGS];
+export const GLOBAL_SECTIONS: readonly Section[] = [ACTIVITY, CONNECTIONS, SETTINGS];
 
 /** A library's four entries after its own levels: what it lacks, what happened and how it stands, its files, its
  *  configuration. */
@@ -127,9 +135,9 @@ function ownSections(categoryId: string): readonly Section[] {
       key: `library:${categoryId}:settings`,
       label: "Settings",
       tabs: [
-        { label: "Quality", path: `${base}/config/quality`, tier: "advanced", administrator: true },
+        { label: "Quality", path: `${base}/config/quality`, tier: "expert", administrator: true },
         { label: "Naming", path: `${base}/config/naming`, tier: "advanced", administrator: true },
-        { label: "Metadata", path: `${base}/config/metadata`, tier: "advanced", administrator: true },
+        { label: "Metadata", path: `${base}/config/metadata`, tier: "expert", administrator: true },
         { label: "File management", path: `${base}/config/file-management`, tier: "expert", administrator: true },
         { label: "Import lists", path: `${base}/config/import-lists`, tier: "advanced", administrator: true },
         { label: "Suggested for", path: `${base}/config/rules`, tier: "advanced", administrator: true },

@@ -69,3 +69,9 @@ export function useSetupDismissed(): [boolean, (value: boolean) => void] {
   const [dismissed, set] = usePreference("ui.setup_dismissed", false);
   return [dismissed, set];
 }
+
+/** The attention items the administrator hid; the box returns when an item arrives that is not among them. */
+export function useAttentionDismissed(): [readonly string[], (value: string[]) => void] {
+  const [dismissed, set] = usePreference<string[]>("ui.attention_dismissed", []);
+  return [Array.isArray(dismissed) ? dismissed : [], set];
+}

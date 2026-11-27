@@ -185,3 +185,24 @@ CREATE TABLE category_transcode (
   list_order  TEXT    NOT NULL DEFAULT 'found'
               CHECK (list_order IN ('alphabetical', 'largest', 'smallest', 'oldest', 'newest', 'found'))
 );
+
+-- Quality profiles: a 1080p profile ranks a 2160p release above a 720p one (the resolution gate's range follows the tier order, so
+-- the range widens with it); music ranks AAC above Vorbis. Matched on the shipped text, so an edited profile stays as it was.
+UPDATE quality_profile SET rules_json = REPLACE(rules_json,
+  '"resolution":[["1080p","1080i"],["720p"],["576p","480p","360p"],["2160p"]]', '"resolution":[["1080p","1080i"],["2160p"],["720p"],["576p","480p","360p"]]')
+WHERE id IN (4, 5, 7, 8, 11, 13, 21);
+UPDATE quality_profile SET rules_json = REPLACE(rules_json,
+  '"audio_codec":[["flac","alac"],["ogg","opus"],["aac"],["mp3"]]', '"audio_codec":[["flac","alac"],["opus"],["aac"],["ogg"],["mp3"]]')
+WHERE id = 1;
+UPDATE quality_profile SET rules_json = REPLACE(rules_json,
+  '"audio_codec":[["mp3","aac","ogg","opus"],["flac","alac"]]', '"audio_codec":[["mp3","aac","opus"],["ogg"],["flac","alac"]]')
+WHERE id = 2;
+
+-- Quality targets: a release above the target beats one below it, and one below the target loses to everything at or above.
+UPDATE quality_target SET prefer_over = 1, ignore_below = 1 WHERE builtin = 1;
+
+-- Content profiles for the book family: the recommended target is the shipped target each one points at.
+INSERT INTO target_profile (id, name, media_types, description, resolution, video_codec, frame_rate, max_frame_rate, crf, encoder_preset, encoder_tune, deinterlace, audio_codec, audio_channels, audio_bitrate_kbps, sample_rate_hz, bit_depth, bitrate_kbps, recommended_target, builtin) VALUES
+  (13, 'Ebook EPUB', 'book', 'Novels and non-fiction: reflowable EPUB without DRM and with the cover embedded.', '', '', NULL, NULL, NULL, '', '', 0, '', '', NULL, NULL, NULL, NULL, 'EPUB, DRM-free, reflowable, embedded cover', 1),
+  (14, 'Comic CBZ', 'book', 'Western comics: a CBZ archive with pages at digital-release size.', '', '', NULL, NULL, NULL, '', '', 0, '', '', NULL, NULL, NULL, NULL, 'CBZ, HD (3056 x 1988)', 1),
+  (15, 'Manga CBZ', 'book', 'Manga volumes: a CBZ archive with pages at scanned-volume size.', '', '', NULL, NULL, NULL, '', '', 0, '', '', NULL, NULL, NULL, NULL, 'CBZ, manga HD (2400 x 1600)', 1);

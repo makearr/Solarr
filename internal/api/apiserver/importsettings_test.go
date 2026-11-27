@@ -240,23 +240,23 @@ func TestUpdateImportSettings_KeepsTheHistoryDaysWithinTheirBounds(t *testing.T)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/import/settings")); !strings.Contains(recorder.Body.String(), `"history_keep_days":90`) {
-		t.Fatalf("default = %s, want 90 days", recorder.Body)
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/import/settings")); !strings.Contains(recorder.Body.String(), `"history_keep_days":30`) {
+		t.Fatalf("default = %s, want 30 days", recorder.Body)
 	}
-	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"auto_commit_confidence":0.9,"history_keep_days":30}`))
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"auto_commit_confidence":0.9,"history_keep_days":45}`))
 	var body importSettingsBody
-	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK || body.HistoryKeepDays != 30 {
-		t.Fatalf("status = %d, %v, body = %s, want 30 days", recorder.Code, err, recorder.Body)
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK || body.HistoryKeepDays != 45 {
+		t.Fatalf("status = %d, %v, body = %s, want 45 days", recorder.Code, err, recorder.Body)
 	}
-	if got := fixture.cache.Snapshot().ImportHistoryKeepDays(); got != 30 {
-		t.Errorf("stored = %d, want 30", got)
+	if got := fixture.cache.Snapshot().ImportHistoryKeepDays(); got != 45 {
+		t.Errorf("stored = %d, want 45", got)
 	}
 	for _, sent := range []string{`{"history_keep_days":3}`, `{"history_keep_days":4000}`} {
 		if recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", sent)); recorder.Code != http.StatusBadRequest {
 			t.Errorf("%s: status = %d, want 400", sent, recorder.Code)
 		}
 	}
-	if got := fixture.cache.Snapshot().ImportHistoryKeepDays(); got != 30 {
-		t.Errorf("stored = %d after refused values, want 30 still", got)
+	if got := fixture.cache.Snapshot().ImportHistoryKeepDays(); got != 45 {
+		t.Errorf("stored = %d after refused values, want 45 still", got)
 	}
 }

@@ -325,8 +325,8 @@ func TestShippedTargets_EveryFamilyHasOneSpaceConsciousPresetAndAllValidate(t *t
 func TestShippedTargetProfiles_EachRecommendsATargetOfEveryMediaTypeItServes(t *testing.T) {
 	cache, _ := newCache(t)
 	snapshot := cache.Snapshot()
-	if got := len(snapshot.TargetProfiles()); got != 12 {
-		t.Fatalf("shipped content profiles = %d, want 12", got)
+	if got := len(snapshot.TargetProfiles()); got != 15 {
+		t.Fatalf("shipped content profiles = %d, want 15", got)
 	}
 	named := map[string]bool{}
 	for _, target := range snapshot.QualityTargets() {

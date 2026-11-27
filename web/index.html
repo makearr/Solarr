@@ -19,7 +19,7 @@
         };
         try {
           const mode = localStorage.getItem("solarr.mode") || "system";
-          const pair = SCHEMES[localStorage.getItem("solarr.scheme")] || SCHEMES.solarr;
+          const pair = SCHEMES[localStorage.getItem("solarr.scheme")] || SCHEMES.nord;
           const dark = mode === "dark" || (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
           let theme = (dark ? pair[1] : pair[0]) || pair[0] || pair[1];
           document.documentElement.dataset.theme = theme;

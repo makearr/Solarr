@@ -52,7 +52,7 @@ var kinds = map[string]Kind{
 	"jellyfin": {
 		Key: "jellyfin", Label: "Jellyfin", Credential: CredentialKeyOrPassword, CanPush: true, PushByPath: true, CanAnnounce: true,
 		CanPlayback: true, PerUserPlayback: true, CanMetadata: true, HasUsers: true, NeedsAdmin: true,
-		MediaTypes: []string{"tv", "movie", "music"}, DefaultPortHint: "8096",
+		MediaTypes: []string{"tv", "movie", "music", "audiobook"}, DefaultPortHint: "8096",
 	},
 	"emby": {
 		Key: "emby", Label: "Emby", Credential: CredentialKeyOrPassword, CanPush: true, PushByPath: true, CanAnnounce: true,

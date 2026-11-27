@@ -92,7 +92,7 @@ func (s *Snapshot) DiscoverGlobal() DiscoverGlobal {
 		MinRating:       s.policyFloat(KeyDiscoverMinRating, DefaultDiscoverMinRating),
 		MinVotes:        s.policyInt(KeyDiscoverMinVotes, DefaultDiscoverMinVotes),
 		AutoAddPerDay:   s.policyInt(KeyDiscoverAutoAddPerDay, DefaultDiscoverAutoAddPerDay),
-		AutoAddSearch:   s.policyBool(KeyDiscoverAutoAddSearch, false),
+		AutoAddSearch:   s.policyBool(KeyDiscoverAutoAddSearch, true),
 	}
 }
 

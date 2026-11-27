@@ -196,13 +196,13 @@ func NewDefaultRegistry() *Registry {
 		Key: KeyVerifyFiles, Kind: KindBool, Tier: TierNormal,
 		Name:     "Check the end of each file",
 		HelpText: "The probe decodes the last seconds of each video and audio file; one that stops short is marked defective. Off skips that read.",
-		Default:  "true",
+		Default:  "false",
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyShowCollections, Kind: KindBool, Tier: TierNormal,
 		Name:     "Show collections",
 		HelpText: "Lists collections in the navigation and on item pages. Off hides them only; collections are still collected in the background.",
-		Default:  "true",
+		Default:  "false",
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeySolarrMode, Kind: KindString, Tier: TierNormal,
@@ -609,7 +609,7 @@ func NewDefaultRegistry() *Registry {
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyDiscoverAutoAddSearch, Kind: KindBool, Tier: TierNormal,
-		Name: "Discover: search for what auto-add adds", HelpText: "Start looking for each title as soon as auto-add has added it.", Default: "false",
+		Name: "Discover: search for what auto-add adds", HelpText: "Start looking for each title as soon as auto-add has added it.", Default: "true",
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyMetadataLanguage, Kind: KindString, Tier: TierNormal,

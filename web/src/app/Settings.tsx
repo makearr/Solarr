@@ -137,7 +137,7 @@ export function GeneralSettings() {
             type="checkbox"
             className="mt-1"
             disabled={!general.data || change.isPending}
-            checked={general.data?.show_collections ?? true}
+            checked={general.data?.show_collections ?? false}
             onChange={(event) => change.mutate({ show_collections: event.target.checked })}
           />
           <span>
@@ -155,7 +155,7 @@ export function GeneralSettings() {
             type="checkbox"
             className="mt-1"
             disabled={!general.data || change.isPending}
-            checked={general.data?.verify_files ?? true}
+            checked={general.data?.verify_files ?? false}
             onChange={(event) => change.mutate({ verify_files: event.target.checked })}
           />
           <span>
