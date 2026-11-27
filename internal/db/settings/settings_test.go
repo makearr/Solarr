@@ -24,7 +24,8 @@ func newCache(t *testing.T) (*settings.Cache, *clock.Fake) {
 	}
 
 	fake := clock.NewFakeAtEpoch()
-	opened, err := store.Open(t.Context(), fake, store.Config{
+	// The store times its transactions on the real clock: a test advancing fake mid-write is not a slow write.
+	opened, err := store.Open(t.Context(), clock.NewSystem(), store.Config{
 		Name: "settings",
 		Path: filepath.Join(directory, "settings.db"),
 		OnBudgetExceeded: func(report store.TransactionReport) {

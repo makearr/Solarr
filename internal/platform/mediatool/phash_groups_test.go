@@ -33,6 +33,7 @@ func (f *framesRunner) Run(_ context.Context, name string, args ...string) ([]by
 	}
 	f.mu.Lock()
 	f.ffmpeg = append(f.ffmpeg, args)
+	calls := len(f.ffmpeg)
 	f.mu.Unlock()
 	joined := strings.Join(args, " ")
 	if f.refuseTogether && strings.Contains(joined, "concat=n=") {
@@ -48,7 +49,7 @@ func (f *framesRunner) Run(_ context.Context, name string, args ...string) ([]by
 	}
 	out := make([]byte, frames*width*height*3)
 	// A smooth gradient with a bright square whose place depends on the call: not flat, not noise.
-	shift := len(f.ffmpeg) * 11 % 40
+	shift := calls * 11 % 40
 	for y := range height {
 		for x := range width {
 			value := byte((x*255/width + y*255/height) / 2)

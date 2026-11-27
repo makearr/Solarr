@@ -39,7 +39,8 @@ func newQueueWithStore(t *testing.T) (*jobs.Queue, *store.Store, *clock.Fake) {
 	}
 
 	fake := clock.NewFakeAtEpoch()
-	opened, err := store.Open(t.Context(), fake, store.Config{
+	// The store times its transactions on the real clock: a handler advancing fake mid-write is not a slow write.
+	opened, err := store.Open(t.Context(), clock.NewSystem(), store.Config{
 		Name: "jobs", Path: filepath.Join(directory, "jobs.db"),
 	})
 	if err != nil {
