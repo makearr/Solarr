@@ -9496,6 +9496,11 @@ export interface components {
              */
             download_clients: boolean;
             /**
+             * @description Also add the *Arr's TMDb and MDBList import lists, switched off, to new_folders_library_id (else the connection's library).
+             * @default false
+             */
+            import_lists: boolean;
+            /**
              * @description Monitored artists and albums.
              * @default true
              */

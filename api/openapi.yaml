@@ -13327,6 +13327,10 @@ components:
           type: boolean
           default: false
           description: Also add the *Arr's download clients Solarr can use.
+        import_lists:
+          type: boolean
+          default: false
+          description: Also add the *Arr's TMDb and MDBList import lists, switched off, to new_folders_library_id (else the connection's library).
         monitored: { type: boolean, default: true, description: Monitored artists and albums. }
         unmonitored:
           type: boolean

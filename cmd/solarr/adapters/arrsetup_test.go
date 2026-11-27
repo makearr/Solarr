@@ -14,10 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/importing/arrmap"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/secrets"
@@ -259,5 +261,97 @@ func TestArrSetupNotesTheCategoryAClientSharesWithTheArr(t *testing.T) {
 	}
 	if len(notes) != 1 || !strings.Contains(notes[0], `Box`) || !strings.Contains(notes[0], `"music"`) {
 		t.Errorf("notes = %q, want one naming the client and its category", notes)
+	}
+}
+
+// A Radarr v3 answer, Prowlarr-synced indexer and keyed clients included, is added: indexers by their Prowlarr key,
+// clients switched off with a note naming the category they share with the *Arr.
+func TestArrSetupTakesRadarrV3IndexersAndDownloadClients(t *testing.T) {
+	cache := newSetupCache(t)
+	cipher, err := secrets.New(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.EnableSecrets(cipher)
+	if _, err := cache.CreateArrInstance(t.Context(), settings.ArrInstanceRequest{
+		App: settings.ArrAppProwlarr, Name: "P", BaseURL: "http://prowlarr.local:9696", Enabled: true,
+	}, secrets.Secret("prowlarr-key"), 1); err != nil {
+		t.Fatal(err)
+	}
+	served := map[string]string{
+		"/api/v3/indexer": `[
+		 {"id":1,"name":"Synced (Prowlarr)","implementation":"Newznab","configContract":"NewznabSettings","protocol":"usenet","enableRss":true,"enableAutomaticSearch":true,"enableInteractiveSearch":true,"priority":25,"tags":[],
+		  "fields":[{"name":"baseUrl","value":"http://prowlarr.local:9696/3/"},{"name":"apiPath","value":"/api"},{"name":"apiKey","value":"********"},{"name":"categories","value":[2000,2040]},{"name":"additionalParameters","value":null},{"name":"minimumSeeders","value":null}]},
+		 {"id":2,"name":"Tracker","implementation":"Torznab","protocol":"torrent","enableRss":true,"fields":[{"name":"baseUrl","value":"http://prowlarr.local:9696/7/"},{"name":"apiKey","value":"********"},{"name":"seedCriteria.seedRatio","value":null}]}]`,
+		"/api/v3/downloadclient": `[
+		 {"id":1,"name":"SAB","implementation":"Sabnzbd","configContract":"SabnzbdSettings","protocol":"usenet","enable":true,"priority":1,"fields":[
+		   {"name":"host","value":"sab.local"},{"name":"port","value":8080},{"name":"useSsl","value":false},{"name":"apiKey","value":"********"},{"name":"movieCategory","value":"movies"},{"name":"recentMoviePriority","value":-100}]},
+		 {"id":2,"name":"qBit","implementation":"QBittorrent","protocol":"torrent","enable":true,"priority":1,"fields":[
+		   {"name":"host","value":"qbit.local"},{"name":"port","value":8086},{"name":"username","value":"u"},{"name":"password","value":"********"},{"name":"movieCategory","value":"radarr"},{"name":"initialState","value":0}]}]`,
+		"/api/v3/remotepathmapping": `[]`,
+	}
+	fake := clock.NewFakeAtEpoch()
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
+	client := arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
+		Provider: "arr-setup-test", UserAgent: "test", Transport: servedBody(func(request *http.Request) string { return served[request.URL.Path] }),
+	}), "http://radarr.local", "key")
+	setup := ArrSetup{Cache: cache, Clock: fake}
+
+	notes, err := setup.indexers(t.Context(), settings.ArrAppRadarr, client)
+	if err != nil || len(notes) != 0 {
+		t.Fatalf("indexers: notes = %q, err = %v, want both Prowlarr indexers added without a note", notes, err)
+	}
+	notes, err = setup.downloadClients(t.Context(), settings.ArrAppRadarr, client)
+	if err != nil {
+		t.Fatalf("downloadClients: %v", err)
+	}
+	if len(notes) != 2 {
+		t.Errorf("client notes = %q, want one per shared category", notes)
+	}
+	indexers, _ := cache.Indexers(t.Context())
+	downloaders, _ := cache.Downloaders(t.Context())
+	if len(indexers) != 2 || !indexers[0].Enabled || !indexers[0].HasAPIKey {
+		t.Errorf("indexers = %+v, want two enabled with Prowlarr's key", indexers)
+	}
+	if len(downloaders) != 2 || downloaders[0].Enabled || downloaders[0].BaseURL != "http://sab.local:8080" {
+		t.Errorf("downloaders = %+v, want two switched off, the first at its address", downloaders)
+	}
+}
+
+// The indexers and clients are in place before the library walk starts, so a long walk (or a test on a big library) never hides them.
+type setupProbeImporter struct {
+	cache *settings.Cache
+	seen  *int
+}
+
+func (p setupProbeImporter) Import(ctx context.Context, _ arrmap.Run) (library.ArrImportCounts, error) {
+	found, _ := p.cache.Indexers(ctx)
+	*p.seen = len(found)
+	return library.ArrImportCounts{}, nil
+}
+
+func (setupProbeImporter) Preview(context.Context, arrimport.LidarrClient) (arrmap.PreviewSource, error) {
+	return arrmap.PreviewSource{}, nil
+}
+
+func TestArrSyncAddsIndexersBeforeTheWalk(t *testing.T) {
+	cache := newSetupCache(t)
+	cipher, _ := secrets.New(make([]byte, 32))
+	cache.EnableSecrets(cipher)
+	imports := library.NewArrImports(newPushLibrary(t))
+	importID, err := imports.Start(t.Context(), 1, "lidarr", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := -1
+	sync := ArrSync{
+		Cache: cache, Imports: imports, Clock: clock.NewFakeAtEpoch(), Setup: ArrSetup{Cache: cache, Clock: clock.NewFakeAtEpoch()},
+		Importers: map[settings.ArrApp]arrmap.Importer{settings.ArrAppLidarr: setupProbeImporter{cache: cache, seen: &seen}},
+	}
+	served := `[{"name":"Direct","implementation":"Newznab","enableRss":true,"fields":[{"name":"baseUrl","value":"http://indexer.example"},{"name":"apiKey","value":"abc"}]}]`
+	sync.runAndFinish(t.Context(), importID, 1, settings.ArrInstance{App: settings.ArrAppLidarr}, lidarrServing(served), apiserver.ArrSyncOptions{Indexers: true})
+	if seen != 1 {
+		t.Errorf("indexers present when the walk began = %d, want 1", seen)
 	}
 }

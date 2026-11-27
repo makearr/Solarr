@@ -150,13 +150,14 @@ func (a ArrSync) runAndFinish(
 ) {
 	settingsErr := a.takeSettings(ctx, instance.App, client, options.SettingsInto)
 	foldersErr := a.rootFolders(ctx, instance, client, options)
+	// Indexers, clients and lists are small and first, so a long library walk never hides them.
+	notes, setupErr := a.importSetup(ctx, instance, client, options)
+	listsErr := a.importLists(ctx, instance, client, options)
 	counts, syncErr := a.Importers[instance.App].Import(ctx, a.run(importID, instance, client, options))
 	defer a.Progress.clear(importID)
-	notes, setupErr := a.importSetup(ctx, instance, client, options)
 	if setupErr != nil {
 		syncErr = errors.Join(syncErr, setupErr)
 	}
-	listsErr := a.importLists(ctx, instance, client, options)
 
 	finishedAt := a.Clock.Now().Unix()
 	errMsg := ""

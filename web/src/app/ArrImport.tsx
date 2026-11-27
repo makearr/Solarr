@@ -330,6 +330,17 @@ function PushMonitoring({ instance, onChanged }: { instance: ArrInstance; onChan
   );
 }
 
+/** One run's live state: progress while it walks, then its counts, errors and notes; polls until it ends. */
+export function ArrRunStatus({ runId }: { runId: number }) {
+  const detail = useQuery({
+    queryKey: ["arr-import", runId],
+    queryFn: () => ok(api.GET("/arr/imports/{id}", { params: { path: { id: runId } } })),
+    refetchInterval: (query) => (query.state.data?.run.state === "RUNNING" ? 2000 : false),
+  });
+  if (!detail.data) return null;
+  return <RunSummary run={detail.data.run} />;
+}
+
 function RunSummary({ run }: { run: ArrImportRun }) {
   if (run.state === "RUNNING") {
     return (

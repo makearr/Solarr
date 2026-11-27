@@ -2038,6 +2038,9 @@ type ArrSyncOptions struct {
 	// DownloadClients Also add the *Arr's download clients Solarr can use.
 	DownloadClients *bool `json:"download_clients,omitempty"`
 
+	// ImportLists Also add the *Arr's TMDb and MDBList import lists, switched off, to new_folders_library_id (else the connection's library).
+	ImportLists *bool `json:"import_lists,omitempty"`
+
 	// Indexers Also add the *Arr's Newznab and Torznab indexers here, as the connection's own.
 	Indexers *bool `json:"indexers,omitempty"`
 

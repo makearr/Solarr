@@ -46,8 +46,9 @@ export function ArrSyncOptions({
   const words = APP_WORDS[instance.app] ?? APP_WORDS.lidarr!;
   const comicManager = instance.app === "kapowarr" || instance.app === "mylar3";
   const [monitoringOnly, setMonitoringOnly] = useState(false);
-  const [indexers, setIndexers] = useState(false);
-  const [downloadClients, setDownloadClients] = useState(false);
+  const [indexers, setIndexers] = useState(true);
+  const [downloadClients, setDownloadClients] = useState(true);
+  const [importLists, setImportLists] = useState(true);
   const [limit, setLimit] = useState("");
   const [monitored, setMonitored] = useState(true);
   const [unmonitored, setUnmonitored] = useState(false);
@@ -84,11 +85,12 @@ export function ArrSyncOptions({
     limit: Number(limit) || 0,
     indexers,
     download_clients: downloadClients,
+    import_lists: importLists,
     path_rewrites: rewrites.filter((entry) => entry.from.trim() && entry.to.trim()),
   });
   // A preview counts the items an add would bring; with none to add there is nothing to count.
   const addsItems = !monitoringOnly && (monitored || unmonitored);
-  const nothingChosen = !monitoringOnly && !monitored && !unmonitored && !indexers && !downloadClients;
+  const nothingChosen = !monitoringOnly && !monitored && !unmonitored && !indexers && !downloadClients && !importLists;
   const previewing = useMutation({
     meta: { handlesErrors: true },
     mutationFn: () =>
@@ -135,6 +137,7 @@ export function ArrSyncOptions({
         params: { path: { id: instance.id } },
         body: {
           ...options(),
+          new_folders_library_id: libraryId,
           profile_map: Object.entries(profiles).map(([arr, profile]) => ({ arr_profile_id: Number(arr), profile_id: profile })),
           settings_into: settingsInto,
         },
@@ -169,6 +172,10 @@ export function ArrSyncOptions({
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={downloadClients} onChange={(event) => setDownloadClients(event.target.checked)} />
           <span title="Copy its download clients. They arrive switched off, because the *Arr hides their passwords.">Download clients</span>
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={importLists} onChange={(event) => setImportLists(event.target.checked)} />
+          <span title={t("arrSyncOptions.importListsHelp")}>{t("arrSyncOptions.importLists")}</span>
         </label>
         </>)}
       </fieldset>

@@ -11,6 +11,7 @@ import { useLibraryLabel } from "@/lib/libraryLabel";
 import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
+import { ArrRunStatus } from "./ArrImport";
 import { ArrSyncOptions } from "./ArrSyncOptions";
 import { KindSelect } from "./LibraryKindSelect";
 import { useNewLibrary } from "./NewLibrary";
@@ -124,6 +125,8 @@ function ConnectArr({
   // Every *Arr connected in this step, and the one whose import is being chosen.
   const [connected, setConnected] = useState<ConnectOutcome[]>([]);
   const [importing, setImporting] = useState<ArrInstance | null>(null);
+  // Imports started here, each shown with its progress, errors and notes.
+  const [started, setStarted] = useState<{ runId: number; name: string }[]>([]);
   const anyRootFolders = connected.some((entry) => entry.rootFoldersImported);
 
   const changeApp = (value: ArrApp) => {
@@ -232,7 +235,8 @@ function ConnectArr({
             setImporting(null);
             setOutcome(null);
           }}
-          onStarted={() => {
+          onStarted={(run) => {
+            setStarted((before) => [...before, { runId: run.id, name: importing.name }]);
             setImporting(null);
             setOutcome(null);
           }}
@@ -255,6 +259,12 @@ function ConnectArr({
           ))}
         </ul>
       )}
+      {started.map((entry) => (
+        <div key={entry.runId} className="space-y-1 text-xs">
+          <p className="text-ink">{t("setup.importOf", { name: entry.name })}</p>
+          <ArrRunStatus runId={entry.runId} />
+        </div>
+      ))}
       <form
         className="space-y-3"
         onSubmit={(event) => {

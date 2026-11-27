@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- *Arr import: indexers, download clients and the new Import lists option are ticked by default and copied before the library walk, so a quick test on a big library sees them at once; the setup assistant shows each started import with its progress, errors and notes (for example which indexers still need a key).
 - Command palette (Ctrl+K or /) replaces the header search box: every page and setting by name, actions (add to a library, rescan, switch theme), and a search of your items and people; it only lists what your account may open.
 - The notification bell opens a list of what needs attention and what failed lately, with "See all".
 - Keyboard shortcuts: g d, g l and g s go to the Dashboard, the first library and Settings, j / k / Enter walk the rows of a list, and ? lists them all.

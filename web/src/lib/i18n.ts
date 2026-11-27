@@ -1723,6 +1723,9 @@ const catalogue = {
   "nav.closeMenu": "Close the menu",
   "nav.profile": "User profile",
   "nav.preferences": "Web UI preferences",
+  "arrSyncOptions.importLists": "Import lists",
+  "arrSyncOptions.importListsHelp": "Copy its TMDb and MDBList lists. They arrive switched off, so you can look at them first.",
+  "setup.importOf": "Import from {name}",
 } as const;
 
 export type MessageKey = keyof typeof catalogue;

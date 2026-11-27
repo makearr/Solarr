@@ -243,8 +243,9 @@ func (s *Server) readArrSyncOptions(w http.ResponseWriter, r *http.Request) (Arr
 	options.NewFoldersLibrary = body.NewFoldersLibraryId
 	options.MonitoringOnly = body.Mode != nil && *body.Mode == gen.ArrSyncOptionsModeMonitoring
 	options.Indexers, options.DownloadClients = derefOr(body.Indexers, false), derefOr(body.DownloadClients, false)
+	options.ImportLists = derefOr(body.ImportLists, false)
 	options.Limit = derefOr(body.Limit, 0)
-	if !options.MonitoringOnly && !options.Monitored && !options.Unmonitored && !options.Indexers && !options.DownloadClients {
+	if !options.MonitoringOnly && !options.Monitored && !options.Unmonitored && !options.Indexers && !options.DownloadClients && !options.ImportLists {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Nothing to import", "choose monitored items, unmonitored items or both")
 		return ArrSyncOptions{}, false
 	}
