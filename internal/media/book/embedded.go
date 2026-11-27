@@ -2,9 +2,9 @@ package book
 
 import (
 	"context"
-	"github.com/makearr/Solarr/internal/identify/edition"
 
 	"github.com/makearr/Solarr/internal/identify/bookmeta"
+	"github.com/makearr/Solarr/internal/identify/edition"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/iogate"

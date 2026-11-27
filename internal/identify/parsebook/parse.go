@@ -2,13 +2,13 @@
 package parsebook
 
 import (
-	"github.com/makearr/Solarr/internal/identify/edition"
 	"path"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/makearr/Solarr/internal/identify/edition"
 	"github.com/makearr/Solarr/internal/identify/titlekey"
 )
 

@@ -2,7 +2,6 @@ package book
 
 import (
 	"context"
-	"github.com/makearr/Solarr/internal/identify/edition"
 	"log/slog"
 	"maps"
 	"regexp"
@@ -12,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/edition"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 	"github.com/makearr/Solarr/internal/media/works"

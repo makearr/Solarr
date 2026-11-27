@@ -37,7 +37,8 @@ func FromName(name string) string {
 	for _, match := range taggedLanguage.FindAllStringSubmatchIndex(padded, -1) {
 		word := padded[match[2]:match[3]]
 		opener, closer := padded[match[0]], padded[match[1]-1]
-		if len(word) <= 3 && !(opener == '[' && closer == ']' || opener == '(' && closer == ')') {
+		bracketed := opener == '[' && closer == ']' || opener == '(' && closer == ')'
+		if len(word) <= 3 && !bracketed {
 			continue
 		}
 		if code := Code(word); code != "" {

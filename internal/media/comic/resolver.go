@@ -2,12 +2,12 @@ package comic
 
 import (
 	"context"
-	"github.com/makearr/Solarr/internal/identify/edition"
 	"log/slog"
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/comicinfo"
+	"github.com/makearr/Solarr/internal/identify/edition"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsecomic"
 	"github.com/makearr/Solarr/internal/media/works"
