@@ -169,7 +169,7 @@ func TestAListThatCannotBeReadSaysWhy(t *testing.T) {
 	path := "/api/v1/import-lists/" + strconv.FormatInt(list.ID, 10) + "/preview"
 	f.importLists.previewErr = apiserver.ImportListReadError{Failure: "needs_key"}
 	recorder := f.post(t, path)
-	if recorder.Code != http.StatusBadGateway || !strings.Contains(recorder.Body.String(), "TMDB key") {
+	if recorder.Code != http.StatusBadGateway || !strings.Contains(recorder.Body.String(), "key or token") {
 		t.Errorf("needs key: status = %d, body = %s", recorder.Code, recorder.Body)
 	}
 	f.importLists.previewErr = fmt.Errorf("wrapped: %w", apiserver.ErrImportListNotSupported)

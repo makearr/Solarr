@@ -81,7 +81,7 @@ type ImportListPreviewRow struct {
 
 // importListReadDetails word a read failure for the person.
 var importListReadDetails = map[string]string{
-	"needs_key":          "This list reads TMDB, which needs your TMDB key: add it under Settings, Metadata.",
+	"needs_key":          "This list needs a key or token that is not stored yet: add it under Settings, Metadata.",
 	"list_not_found":     "The list does not exist, or it is private.",
 	"source_unavailable": "The list's source did not answer; try again in a while.",
 }

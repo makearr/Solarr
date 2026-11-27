@@ -33,15 +33,15 @@ func TestHardcoverListFindsOneOfYourListsByNameSlugIdOrLink(t *testing.T) {
 	}
 	want := []media.ListEntry{{Title: "One", Year: 2001, Form: "book", IDs: []media.ProviderID{{Provider: "hardcover", ExternalID: "11"}}}}
 	for _, value := range []string{"to read", "to-read", "7", "https://hardcover.app/@zela/lists/to-read"} {
-		got, err := importlist.HardcoverList{Client: client}.Entries(t.Context(), importlist.Options{"list": value})
+		got, err := importlist.HardcoverList{Client: client}.Entries(t.Context(), importlist.Options{"hardcover": value})
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Errorf("%q: got %+v, %v", value, got, err)
 		}
 	}
-	if _, err := (importlist.HardcoverList{Client: client}).Entries(t.Context(), importlist.Options{"list": "nobody's"}); !errors.Is(err, importlist.ErrListNotFound) {
+	if _, err := (importlist.HardcoverList{Client: client}).Entries(t.Context(), importlist.Options{"hardcover": "nobody's"}); !errors.Is(err, importlist.ErrListNotFound) {
 		t.Errorf("a list that is not yours = %v, want ErrListNotFound", err)
 	}
-	_, err := importlist.HardcoverList{Client: fakeHardcover{err: hardcover.ErrNoKey}}.Entries(t.Context(), importlist.Options{"list": "x"})
+	_, err := importlist.HardcoverList{Client: fakeHardcover{err: hardcover.ErrNoKey}}.Entries(t.Context(), importlist.Options{"hardcover": "x"})
 	if importlist.FailureOf(err) != importlist.FailureNeedsKey {
 		t.Errorf("without a token = %v, want needs_key", err)
 	}
@@ -73,5 +73,22 @@ func TestMusicBrainzCollectionTakesAnIdOrALinkAndNamesAlbumsByReleaseGroup(t *te
 	}
 	if _, err := (importlist.MusicBrainzCollection{Client: &fakeCollections{err: errMissing}}).Entries(t.Context(), importlist.Options{"collection": "0a1b2c3d-0000-4000-8000-0123456789ab"}); !errors.Is(err, importlist.ErrListNotFound) {
 		t.Errorf("a private collection = %v, want ErrListNotFound", err)
+	}
+}
+
+func TestValidateAcceptsEachNewKindsOwnSettingsAndRefusesAStrangeLink(t *testing.T) {
+	catalogue := importlist.NewCatalogue(nil, nil, nil).WithHardcover(fakeHardcover{}).WithMusicBrainzCollections(&fakeCollections{}).WithOpenLibrary(&fakeOpenLibrary{})
+	accepted := []media.ListType{media.ListHardcover, media.ListMusicBrainzCollection, media.ListOpenLibrary}
+	for listType, options := range map[media.ListType]importlist.Options{
+		media.ListHardcover:             {"hardcover": "To Read"},
+		media.ListMusicBrainzCollection: {"collection": "0a1b2c3d-0000-4000-8000-0123456789ab"},
+		media.ListOpenLibrary:           {"openlibrary": "https://openlibrary.org/people/zela_m/lists/OL55L"},
+	} {
+		if problems := catalogue.Validate(accepted, listType, options); len(problems) != 0 {
+			t.Errorf("%s refused its own setting: %v", listType, problems)
+		}
+	}
+	if problems := catalogue.Validate(accepted, media.ListMusicBrainzCollection, importlist.Options{"collection": "https://example.com/x"}); len(problems) == 0 {
+		t.Error("a stranger's link was accepted")
 	}
 }

@@ -130,6 +130,16 @@ func (f Field) check(value string) (config.Problem, bool) {
 				return config.Problem{Path: path, Value: value, Expectation: "an MDBList number, user/name or its mdblist.com link"}, true
 			}
 		}
+		if f.Key == musicBrainzCollectionField {
+			if _, ok := MusicBrainzCollectionID(value); !ok {
+				return config.Problem{Path: path, Value: value, Expectation: "a MusicBrainz collection id or its musicbrainz.org link"}, true
+			}
+		}
+		if f.Key == openLibraryListField {
+			if _, ok := OpenLibraryListPath(value); !ok {
+				return config.Problem{Path: path, Value: value, Expectation: "an Open Library list link (openlibrary.org/people/<user>/lists/OL1L)"}, true
+			}
+		}
 		if f.Key == tmdbListField {
 			if _, ok := TMDBListID(value); !ok {
 				return config.Problem{Path: path, Value: value, Expectation: "a TMDB list number or its themoviedb.org link"}, true

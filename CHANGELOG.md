@@ -4,7 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
-- Import lists: book and audiobook libraries can add from one of your own Hardcover lists (read only, with the Hardcover token), music libraries from a public MusicBrainz collection by id or link (through the same MusicBrainz rate limit as the rest of Solarr); the help points to MDBList for Letterboxd lists.
+- Import lists: book and audiobook libraries can add from one of your own Hardcover lists (read only, with the Hardcover token), music libraries from a public MusicBrainz collection by id or link (through the same MusicBrainz rate limit as the rest of Solarr); the help points to MDBList for Letterboxd lists. A list that needs a key now says "a key or token" instead of naming TMDB.
 - Settings, Discover: the classic age, auto-add's minimum rating and votes, its daily ceiling and the search-after-add switch are one setting for the whole instance (in the first card) instead of one per library.
 - Collections folded into one keep the name of the one with the most works, then the one with more provider ids, the lowest id only last.
 - The old per-target transcode setup page is gone; the setup lives in the quality target's editor.

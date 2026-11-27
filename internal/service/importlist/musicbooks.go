@@ -16,7 +16,7 @@ import (
 const (
 	listenBrainzUserField  = "user"
 	listenBrainzRangeField = "range"
-	openLibraryListField   = "list"
+	openLibraryListField   = "openlibrary"
 	// listenBrainzCount bounds one read of a user's top albums; openLibraryCount bounds one list.
 	listenBrainzCount = 100
 	openLibraryCount  = 500
@@ -141,7 +141,7 @@ type HardcoverLists interface {
 }
 
 const (
-	hardcoverListField = "list"
+	hardcoverListField = "hardcover"
 	hardcoverPageSize  = 100
 	maxHardcoverPages  = 10
 	providerHardcover  = "hardcover"

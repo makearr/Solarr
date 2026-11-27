@@ -432,7 +432,7 @@ const catalogue = {
   "importLists.neverRun": "Not run yet",
   "importLists.lastRun": "Last run {when}: added {added}",
   "importLists.lastRunFailed": "Last run {when}: {failure}",
-  "importLists.failure.needs_key": "needs your TMDB key (Settings, Metadata)",
+  "importLists.failure.needs_key": "needs a key or token (Settings, Metadata)",
   "importLists.failure.list_not_found": "the list does not exist, or it is private",
   "importLists.failure.source_unavailable": "the list's source did not answer",
   "importLists.failure.not_supported": "this library does not take this list",

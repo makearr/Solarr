@@ -377,7 +377,7 @@ func (f *fakeOpenLibrary) ListSeeds(_ context.Context, path string, _ int) ([]op
 
 func TestOpenLibraryListReadsTheWorksOfAListByItsLink(t *testing.T) {
 	client := &fakeOpenLibrary{seeds: []openlibrary.Seed{{URL: "/works/OL1W", Title: "Book"}, {URL: "/authors/OL2A", Title: "Author"}, {URL: "/books/OL3M", Title: "Edition"}}}
-	got, err := importlist.OpenLibraryList{Client: client}.Entries(t.Context(), importlist.Options{"list": "https://openlibrary.org/people/zela_m/lists/OL55L/"})
+	got, err := importlist.OpenLibraryList{Client: client}.Entries(t.Context(), importlist.Options{"openlibrary": "https://openlibrary.org/people/zela_m/lists/OL55L/"})
 	if err != nil {
 		t.Fatal(err)
 	}
