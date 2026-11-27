@@ -835,6 +835,7 @@ const catalogue = {
   "rootFolders.orPercent": "or",
   "users.manageLink": "Manage users, access and sign-in",
   "nav.users": "Users",
+  "work.ageHelp": "The youngest age this is meant for, on one scale (0, 6, 12, 16, 18) whatever rating system the source uses. Adult content is 18.",
   "diskSettings.libraryScans": "Library scans",
   "diskSettings.timeBetweenScans": "Time between scans",
   "diskSettings.inotifyWatches": "Inotify watches",

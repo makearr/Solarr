@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- A work shows one age chip on a single scale (All ages, 6+, 12+, 16+, 18+) whatever rating system its source uses; adult content is 18+.
 - Music libraries have kinds (General, Classical, Soundtracks, Kids, Live and DJ mixes), audiobook libraries gain Audio drama, Lectures and courses, Non-fiction and Podcasts, book libraries gain Light novels, Non-fiction and reference, Magazines and Adult fiction (hidden from restricted users); Discover keeps an item no library rule claims out of a specialised library (documentaries, anime) when a general library of the type exists; Users is its own entry under Manage, linked from User settings.
 - Storage > Folders: a folder also reserves a percentage of its size (default 5%), the larger of that and the absolute reserve blocks writes, and the bytes the library holds on the folder show left of the usage bar. Schema: two columns on `root_folder` (edit in place; recreate a dev settings database). Connections: an *Arr connection offers only the libraries of its own media type.
 - Crossovers: an episode in an event opens that episode in its series (the season opens and the row is marked), shows its picture when the file is present, and episodes whose videos look alike are linked as the same broadcast.

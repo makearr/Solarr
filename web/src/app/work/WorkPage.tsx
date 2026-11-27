@@ -39,6 +39,7 @@ import { grabNote } from "./grabNote";
 import { ExpertFileInfo, type ExpertFiles, useExpertFiles } from "./FileExpert";
 import { FileThumb } from "../FileThumb";
 import { TargetChip } from "./TargetChip";
+import { ageLabel, ageStep } from "@/lib/ageBadge";
 import { externalLinks, fileTagChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
 import { useShowCollections } from "@/lib/useShowCollections";
@@ -257,6 +258,7 @@ function WorkHeader({
   const genres = work.facets?.genre ?? work.genres;
   const workLevel = library?.levels.find((level) => level.entity === "work")?.key;
   const links = externalLinks(work.external_ids);
+  const ageShown = ageStep(work.rating?.age, info?.key === "adult");
   // Library, then the artist (or whoever leads), then this work; each earlier step links back.
   const crumbClass = "hover:text-ink hover:underline";
   const breadcrumbs = [
@@ -329,6 +331,11 @@ function WorkHeader({
                   {counts.required > 0
                     ? t("work.partsOnDisk", { ...words, present: counts.present, required: counts.required })
                     : t("work.partsPresent", { ...words, present: counts.present })}
+                </Chip>
+              )}
+              {ageShown !== undefined && (
+                <Chip tone={ageShown === 18 ? "warn" : "neutral"} title={t("work.ageHelp")}>
+                  {ageLabel(ageShown)}
                 </Chip>
               )}
               {work.rating && (
