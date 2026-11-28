@@ -43,7 +43,7 @@ export function useFooterItems(): [FooterEntry[], (value: FooterEntry[]) => void
 }
 
 /** The dashboard's sections, in their default order; the first two are the administrator's. */
-export const DASHBOARD_WIDGETS = ["setup", "attention", "scanning", "downloads", "discover", "recent", "libraries"] as const;
+export const DASHBOARD_WIDGETS = ["setup", "attention", "scanning", "discover", "downloads", "recent", "libraries"] as const;
 export type DashboardWidget = (typeof DASHBOARD_WIDGETS)[number];
 export const ADMINISTRATOR_WIDGETS: ReadonlySet<DashboardWidget> = new Set(["setup", "attention"]);
 export interface DashboardEntry {

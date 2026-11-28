@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- The dashboard shows Discover above Downloads.
 - Maximum age (per account and per library) offers 0, 6, 7, 10, 12, 13, 14, 16, 17 and 18 and compares the work's exact age (TV-14 is 14, TV-MA is 17); the age chip shows that exact age.
 - Book libraries list ebook target qualities (EPUB) instead of the comic CBZ ones, which stay with comics.
 - Manage > Statistics > Solarr process shows the read and write figures again (they stayed at zero when the container runs as a media user).

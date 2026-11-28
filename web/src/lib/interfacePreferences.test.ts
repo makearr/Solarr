@@ -22,6 +22,6 @@ describe("normaliseFooter", () => {
 it("keeps the dashboard's stored order and appends sections added since", () => {
   const stored = [{ widget: "recent", shown: false }, { widget: "gone", shown: true }, { widget: "recent", shown: true }, { widget: "setup", shown: true }] as never;
   expect(normaliseDashboard(stored).map((entry) => `${entry.widget}:${entry.shown}`)).toEqual([
-    "recent:false", "setup:true", "attention:true", "scanning:true", "downloads:true", "discover:true", "libraries:true",
+    "recent:false", "setup:true", "attention:true", "scanning:true", "discover:true", "downloads:true", "libraries:true",
   ]);
 });
