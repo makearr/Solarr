@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/measure"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/scanning/probe"
 )
@@ -28,6 +29,7 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 		VerifyFiles:       func() bool { return p.cache.Snapshot().VerifyFiles() },
 		VideoPreviews:     func() bool { return p.cache.Snapshot().VideoPreviews() },
 		ParallelFiles:     func() int { return p.cache.Snapshot().VideoParallelFiles() },
+		RootPressure:      func(rootPath string) float64 { return p.timings.rec.LoadOf(measure.Disk, rootPath) },
 		PreviewsDir:       filepath.Join(p.config.Paths.ConfigDir, "previews"),
 		Clock:             clock.NewSystem(),
 		Logger:            p.logger,

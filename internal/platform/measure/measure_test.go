@@ -61,3 +61,28 @@ func TestTransferShowsAsBytesPerSecond(t *testing.T) {
 		t.Fatalf("bytes/s = %v, want 100", got)
 	}
 }
+
+func TestLoadOf_OneSeriesOnlyAndOneForAnUnknownKey(t *testing.T) {
+	fake := clock.NewFake(time.Unix(1_800_000_000, 0))
+	r := New(fake)
+	for range 5 {
+		for range 20 {
+			r.Latency(Disk, "/a", 2*time.Millisecond)
+			r.Latency(Disk, "/b", 2*time.Millisecond)
+		}
+		fake.Advance(time.Minute)
+	}
+	for range 20 {
+		r.Latency(Disk, "/a", 10*time.Millisecond)
+		r.Latency(Disk, "/b", 2*time.Millisecond)
+	}
+	if got := r.LoadOf(Disk, "/a"); got < 2.5 {
+		t.Errorf("LoadOf(/a) = %v, want a slowdown", got)
+	}
+	if got := r.LoadOf(Disk, "/b"); got != 1 {
+		t.Errorf("LoadOf(/b) = %v, want 1", got)
+	}
+	if got := r.LoadOf(Disk, "/none"); got != 1 {
+		t.Errorf("LoadOf(/none) = %v, want 1", got)
+	}
+}

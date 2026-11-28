@@ -61,6 +61,22 @@ func (j *Job) parallelFiles() int {
 	return max(1, j.parallel())
 }
 
+// rootPath is the path of a root folder, empty when it is not configured.
+func (j *Job) rootPath(rootID int64) string {
+	if root, found := j.roots.RootFolder(rootID); found {
+		return root.Path
+	}
+	return ""
+}
+
+// rootPressure is how much slower a root's disk is than it normally is; 1 when nothing is measured.
+func (j *Job) rootPressure(rootPath string) float64 {
+	if j.pressure == nil {
+		return 1
+	}
+	return j.pressure(rootPath)
+}
+
 // Roots resolves a root folder by id. They are settings.db policy (ADR-25),
 // so the job asks rather than reading the table -- the same interface
 // internal/scanning/scan already asks of its own Roots dependency.
@@ -73,6 +89,7 @@ type Roots interface {
 type Job struct {
 	physical    library.Physical
 	parallel    func() int
+	pressure    func(rootPath string) float64
 	coverage    library.ProbeCoverage
 	roots       Roots
 	tool        mediatool.Tool
@@ -109,6 +126,9 @@ type Config struct {
 	Logger        *slog.Logger
 	// ParallelFiles is how many video files the hash backfills read at once; nil or below 2 reads one at a time.
 	ParallelFiles func() int
+	// RootPressure is how much slower a root folder's disk is than it normally is (1 is normal); the hash and preview
+	// backfills read a root with more files at once only while it holds, and fewer when it slows. Nil never backs off.
+	RootPressure func(rootPath string) float64
 	// OthersWaiting says whether other jobs of the pool are queued behind this one; nil means always, so the sweep yields as it always did.
 	OthersWaiting func(ctx context.Context) bool
 }
@@ -121,11 +141,13 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		physical: config.Physical, coverage: config.Coverage, roots: config.Roots,
-		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, verifying: config.VerifyFiles, previews: config.VideoPreviews, parallel: config.ParallelFiles, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger, waiting: config.OthersWaiting,
+		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, verifying: config.VerifyFiles, previews: config.VideoPreviews, parallel: config.ParallelFiles, pressure: config.RootPressure, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger, waiting: config.OthersWaiting,
 	}
 }
 
-// Run implements jobs.Handler with no cursor across runs, only within one, so a file failing its probe cannot spin the batch; the next scheduled run asks the same question again.
+// Run implements jobs.Handler. Its passes are the priorities: probing and the end-of-file decode that finds broken files
+// first, then oshash, then the frame hash and previews (one read of the frames makes both), then audio fingerprints.
+// It has no cursor across runs, only within one, so a file failing its probe cannot spin the batch; the next scheduled run asks the same question again.
 func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 	started := j.clock.Now()
 	total, failed := 0, 0
@@ -259,7 +281,7 @@ func (j *Job) backfill(
 	}
 	afterID := j.resumeAt[pass].Swap(0)
 	var hashed atomic.Int64
-	slots := make(chan struct{}, max(1, workers))
+	limits := newAdaptiveLimits(max(1, workers), j.rootPressure)
 	var running sync.WaitGroup
 	for {
 		if err := ctx.Err(); err != nil {
@@ -275,11 +297,15 @@ func (j *Job) backfill(
 				running.Wait()
 				return jobs.Retryablef("probe.context", string(JobType), err)
 			}
-			slots <- struct{}{}
+			limit := limits.of(file.RootFolderID, j.rootPath(file.RootFolderID))
+			if !limit.acquire(ctx) {
+				running.Wait()
+				return jobs.Retryablef("probe.context", string(JobType), ctx.Err())
+			}
 			progress.Add(1)
 			running.Add(1)
 			go func() {
-				defer func() { <-slots; running.Done() }()
+				defer func() { limit.release(); running.Done() }()
 				if err := hash(ctx, file); err != nil {
 					j.logger.WarnContext(ctx, name+" failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
 				} else {

@@ -212,3 +212,14 @@ func (r *Recorder) Load(kind Kind) float64 {
 	}
 	return load
 }
+
+// LoadOf is the degradation of one series (a root folder's disk, say): 1 while it runs as it normally does or is unknown.
+func (r *Recorder) LoadOf(kind Kind, key string) float64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, found := r.series[seriesKey{kind, key}]
+	if !found {
+		return 1
+	}
+	return max(1, one.stat(seriesKey{kind, key}, r.clock.Now().Unix()/60, false).Degradation)
+}
