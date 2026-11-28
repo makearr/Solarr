@@ -121,6 +121,15 @@ func TargetFamily(mediaType string) string {
 	return mediaType
 }
 
+// FitsMediaType says a target is offered to a media type: its family, and within the book family comic targets (CBZ pages)
+// go to comics only, so a book library lists ebook targets.
+func (t QualityTarget) FitsMediaType(mediaType string) bool {
+	if t.MediaType != TargetFamily(mediaType) {
+		return false
+	}
+	return t.MediaType != "book" || (t.Container == "cbz") == (mediaType == "comic")
+}
+
 // PreferredTargetLabel tags the shipped target that holds the user's own preferred settings.
 const PreferredTargetLabel = "Space conscious"
 

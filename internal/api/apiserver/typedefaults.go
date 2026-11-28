@@ -33,7 +33,7 @@ func (s *Server) libraryTypeDefaultsView(snapshot *settings.Snapshot, mediaType 
 		}
 	}
 	for _, target := range snapshot.QualityTargets() {
-		if target.MediaType == settings.TargetFamily(mediaType) {
+		if target.FitsMediaType(mediaType) {
 			view.AvailableTargets = append(view.AvailableTargets, gen.QualityProfileRef{Id: target.ID, Name: targetDisplayName(target)})
 		}
 	}

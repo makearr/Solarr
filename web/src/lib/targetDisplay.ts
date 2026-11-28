@@ -18,6 +18,12 @@ export function familyOf(mediaType: string): string {
   return mediaType;
 }
 
+/** Whether a media type is offered a target: its family, and within books only comics take the CBZ (page) targets. */
+export function targetFits(target: Pick<QualityTarget, "media_type" | "container">, mediaType: string): boolean {
+  const family = familyOf(mediaType);
+  return target.media_type === family && (family !== "book" || (target.container === "cbz") === (mediaType === "comic"));
+}
+
 /** The preferred ("Space conscious") target of a media type's family, which a new library starts with; undefined when it has none. */
 export function preferredTarget(targets: readonly QualityTarget[], mediaType: string): QualityTarget | undefined {
   const family = familyOf(mediaType);

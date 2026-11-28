@@ -15,6 +15,7 @@ import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle, labelStyle } from "@/ui/form";
+import { MAX_AGE_CHOICES } from "@/lib/ageBadge";
 
 import { Card } from "./SettingsCard";
 
@@ -728,7 +729,7 @@ function LimitsFields({
           }}
         >
           <option value="">{t("users.maxAgeNone")}</option>
-          {[0, 6, 12, 16].map((age) => (
+          {MAX_AGE_CHOICES.map((age) => (
             <option key={age} value={age}>
               {age === 0 ? t("users.maxAgeAllAges") : t("users.maxAgeUpTo", { age })}
             </option>

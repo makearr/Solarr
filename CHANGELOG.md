@@ -4,6 +4,8 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Maximum age (per account and per library) offers 0, 6, 7, 10, 12, 13, 14, 16, 17 and 18 and compares the work's exact age (TV-14 is 14, TV-MA is 17); the age chip shows that exact age.
+- Book libraries list ebook target qualities (EPUB) instead of the comic CBZ ones, which stay with comics.
 - Manage > Statistics > Solarr process shows the read and write figures again (they stayed at zero when the container runs as a media user).
 - The Folders page and the storage statistics now show how much each root folder holds (the capacity sweep never recorded it); the Statistics page has the same margins as the other pages.
 - Manga and hentai libraries open comics in the reader right to left by default.
@@ -17,7 +19,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 - Video hashing and previews read each folder with more files at once only while that folder's disk answers as fast as it normally does, and back off when it slows; broken-file detection still runs before previews and hashes.
 - Comics: a series with no provider poster takes its cover from the first page of its first issue (cbz, cbr, cb7, cbt), a page named cover first; a provider poster still wins.
 - Series, films and books whose library uses Wikidata keep the Wikidata item, and their page links the English Wikipedia article.
-- Lists and posters show the age chip (All ages, 6+, 12+, 16+, 18+) beside the year, and a calendar entry for an episode opens that episode.
+- Lists and posters show the age chip (its exact age: All ages, 7+, 14+, 17+, 18+) beside the year, and a calendar entry for an episode opens that episode.
 - Import: a folder's units are all listed as "Identifying" before the first file is read, so a big import shows its whole batch at once and the identified units replace them as each folder is read. Every media type names its folders from their names alone first: a match of 90% or more shows its work on the "Identifying" unit at once, and the files then confirm it (commit as usual) or disagree (held in Review).
 - Users: a maximum age per account (All ages only, up to 6+, 12+, 16+) hides works rated above it from lists, search, detail pages, artwork, people credits and playback; unrated works stay hidden unless a Kids library holds them. Schema: `app_user.max_age` (edit in place; recreate a dev settings database).
 - Manage > Statistics: charts, per minute for two days and per hour for 90 days, of Solarr's own CPU, memory and IO, scans and metadata jobs finished per minute, each folder's disk latency and throughput, internet bandwidth and latency per provider, and each library's items, files and storage. Schema: new `metric_point` table in statistics.db (migration 0010).

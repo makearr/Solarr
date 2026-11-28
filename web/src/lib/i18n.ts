@@ -859,7 +859,7 @@ const catalogue = {
   "users.maxAgeNone": "No limit",
   "users.maxAgeAllAges": "All ages only",
   "users.maxAgeUpTo": "Up to {age}+",
-  "work.ageHelp": "The youngest age this is meant for, on one scale (0, 6, 12, 16, 18) whatever rating system the source uses. Adult content is 18.",
+  "work.ageHelp": "The youngest age this is meant for, as one number whatever rating system the source uses (TV-Y7 is 7+, TV-14 is 14+, TV-MA is 17+). Adult content is 18.",
   "diskSettings.libraryScans": "Library scans",
   "nav.statistics": "Statistics",
   "systemStatistics.noData": "Nothing measured yet; figures appear a minute after Solarr starts.",

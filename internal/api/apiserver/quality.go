@@ -170,7 +170,7 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 	view.SuggestedProfiles = &suggestedProfiles
 	available := []gen.QualityProfileRef{}
 	for _, target := range snapshot.QualityTargets() {
-		if target.MediaType == settings.TargetFamily(category.MediaType) {
+		if target.FitsMediaType(category.MediaType) {
 			available = append(available, gen.QualityProfileRef{Id: target.ID, Name: targetDisplayName(target)})
 		}
 	}
@@ -252,7 +252,7 @@ func suggestTargets(snapshot *settings.Snapshot, category settings.Category, pro
 	}
 	var fits []fit
 	for _, candidate := range snapshot.QualityTargets() {
-		if candidate.MediaType != settings.TargetFamily(category.MediaType) || (category.QualityTarget != nil && candidate.ID == category.QualityTarget.ID) {
+		if !candidate.FitsMediaType(category.MediaType) || (category.QualityTarget != nil && candidate.ID == category.QualityTarget.ID) {
 			continue
 		}
 		facts := targetFacts(candidate)
