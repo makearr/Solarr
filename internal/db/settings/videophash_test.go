@@ -13,3 +13,10 @@ func TestVideoPerceptualHashIsOffUnlessTurnedOn(t *testing.T) {
 		}
 	}
 }
+
+func TestVideoPerceptualHashFollowsPreviews(t *testing.T) {
+	snapshot := &Snapshot{policy: map[string]string{KeyVideoPreviews: "true", KeyVideoPerceptualHash: "false"}}
+	if !snapshot.VideoPerceptualHash() {
+		t.Error("hashing is off while previews are on, want on")
+	}
+}

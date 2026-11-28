@@ -181,7 +181,7 @@ export function GeneralSettings() {
           </span>
         </label>
         <div className="flex items-start justify-between gap-3">
-        <label className={`flex items-start gap-2 text-sm ${general.data?.video_previews === true ? "opacity-60" : ""}`} title={general.data?.video_previews === true ? t("settings.hashFree") : undefined}>
+        <label className="flex items-start gap-2 text-sm" title={general.data?.video_previews === true ? t("settings.hashFree") : undefined}>
           <input
             type="checkbox"
             className="mt-1"

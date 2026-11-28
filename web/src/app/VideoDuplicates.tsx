@@ -27,7 +27,7 @@ function HashingSwitch() {
   return (
     <div className="flex flex-col gap-2">
     <label
-      className={`flex items-start gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-xs ${previewsOn ? "opacity-60" : ""}`}
+      className={`flex items-start gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-xs`}
       title={previewsOn ? t("settings.hashFree") : undefined}
     >
       <input
