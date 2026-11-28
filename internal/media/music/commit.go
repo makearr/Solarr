@@ -230,31 +230,10 @@ func (c Committer) CommitMatchedUnit(
 		return Placed{}, fmt.Errorf("music: commit unit %q: no media files", unit.Directory)
 	}
 
-	var totalBytes int64
-	for _, f := range unit.Media {
-		totalBytes += f.SizeBytes
-	}
-
-	// ADR-53 part 2 gate: hash and check every file from the source before placing any, so a block on file 2 never leaves file 1 copied; the hashes are reused after placement.
-	quickHashes := make([]string, len(unit.Media))
-	for index, media := range unit.Media {
-		hash, err := library.QuickHash(c.fsys, path.Join(sourceRoot, media.RelPath), media.SizeBytes)
-		if err != nil {
-			return Placed{}, fmt.Errorf("music: quick hash %q: %w", media.RelPath, err)
-		}
-		quickHashes[index] = hash
-	}
-	if c.blockedContent != nil {
-		now := c.clock.Now().Unix()
-		for index, hash := range quickHashes {
-			blocks, err := c.blockedContent.FindByHash(ctx, "", hash, now)
-			if err != nil {
-				return Placed{}, fmt.Errorf("music: check blocked content for unit %q: %w", unit.Directory, err)
-			}
-			if len(blocks) > 0 {
-				return Placed{}, fmt.Errorf("%w: %s matched %s", ErrBlockedContent, blocks[0].Reason, unit.Media[index].RelPath)
-			}
-		}
+	totalBytes := unitBytes(unit)
+	quickHashes, err := c.quickHashesChecked(ctx, sourceRoot, unit)
+	if err != nil {
+		return Placed{}, err
 	}
 
 	representative, err := tags.TagsFor(ctx, model.FileRef{RelPath: unit.Media[0].RelPath})
@@ -295,50 +274,12 @@ func (c Committer) CommitMatchedUnit(
 		}
 	}
 
-	affinityKey := artistAffinityKey(artist)
-	var existingAffinityRoot *int64
-	if affinityKey != "" {
-		if rootFolderID, found, err := c.affinity.PlacementAffinity(ctx, categoryID, affinityKey); err != nil {
-			return Placed{}, fmt.Errorf("music: read placement affinity for unit %q: %w", unit.Directory, err)
-		} else if found {
-			existingAffinityRoot = &rootFolderID
-		}
-	}
-
-	root, decision, err := placement.Resolve(placement.Request{
-		CategoryID: categoryID, SizeBytes: totalBytes, Strategy: placement.StrategyMostFreeSpace,
-		AffinityEnabled: affinityKey != "", AffinityKey: affinityKey, ExistingAffinityRoot: existingAffinityRoot,
-	}, c.rootCandidates(categoryID))
+	destRoot, err := c.resolveDestRoot(ctx, categoryID, artist, totalBytes, unit.Directory)
 	if err != nil {
-		return Placed{}, fmt.Errorf("music: resolve placement for unit %q: %w", unit.Directory, err)
+		return Placed{}, err
 	}
-	if decision.Outcome != placement.OutcomePlaced {
-		return Placed{}, fmt.Errorf("%w: %s", ErrNoPlacement, decision.Reason)
-	}
-	destRoot, ok := c.roots.RootFolder(root.RootFolderID)
-	if !ok {
-		return Placed{}, fmt.Errorf("%w: unit %q: root folder %d has no known path", ErrNoPlacement, unit.Directory, root.RootFolderID)
-	}
-
 	now := c.clock.Now()
-	if affinityKey != "" {
-		if err := c.affinity.SetPlacementAffinity(ctx, categoryID, affinityKey, root.RootFolderID, now.Unix()); err != nil {
-			return Placed{}, fmt.Errorf("music: record placement affinity for unit %q: %w", unit.Directory, err)
-		}
-	}
-
-	methods := mover.DefaultLadder
-	if c.transferLadder != nil {
-		if configured := c.transferLadder(); len(configured) > 0 {
-			methods = configured
-		}
-	}
-	if len(ladder) > 0 {
-		methods = make([]mover.PlaceMethod, len(ladder))
-		for i, method := range ladder {
-			methods[i] = mover.PlaceMethod(method)
-		}
-	}
+	methods := c.transferMethods(ladder)
 
 	names := NamingFor(nil)
 	fileManagement := settings.DefaultFileManagement
@@ -696,4 +637,88 @@ func keptFileName(renderedRelPath, sourceRelPath string) string {
 		return renderedRelPath
 	}
 	return path.Join(path.Dir(renderedRelPath), kept)
+}
+
+// unitBytes is the size of the unit's media.
+func unitBytes(unit inspect.Unit) int64 {
+	var total int64
+	for _, f := range unit.Media {
+		total += f.SizeBytes
+	}
+	return total
+}
+
+// quickHashesChecked hashes every file from the source before anything is placed (ADR-53 part 2), so a block on file 2 never leaves file 1 copied; the hashes are reused after placement.
+func (c Committer) quickHashesChecked(ctx context.Context, sourceRoot string, unit inspect.Unit) ([]string, error) {
+	quickHashes := make([]string, len(unit.Media))
+	for index, media := range unit.Media {
+		hash, err := library.QuickHash(c.fsys, path.Join(sourceRoot, media.RelPath), media.SizeBytes)
+		if err != nil {
+			return nil, fmt.Errorf("music: quick hash %q: %w", media.RelPath, err)
+		}
+		quickHashes[index] = hash
+	}
+	if c.blockedContent != nil {
+		now := c.clock.Now().Unix()
+		for index, hash := range quickHashes {
+			blocks, err := c.blockedContent.FindByHash(ctx, "", hash, now)
+			if err != nil {
+				return nil, fmt.Errorf("music: check blocked content for unit %q: %w", unit.Directory, err)
+			}
+			if len(blocks) > 0 {
+				return nil, fmt.Errorf("%w: %s matched %s", ErrBlockedContent, blocks[0].Reason, unit.Media[index].RelPath)
+			}
+		}
+	}
+	return quickHashes, nil
+}
+
+// resolveDestRoot picks the library's root folder a unit of this artist and size is placed in, remembering the artist's affinity.
+func (c Committer) resolveDestRoot(ctx context.Context, categoryID int64, artist string, totalBytes int64, directory string) (settings.RootFolder, error) {
+	affinityKey := artistAffinityKey(artist)
+	var existingAffinityRoot *int64
+	if affinityKey != "" {
+		if rootFolderID, found, err := c.affinity.PlacementAffinity(ctx, categoryID, affinityKey); err != nil {
+			return settings.RootFolder{}, fmt.Errorf("music: read placement affinity for unit %q: %w", directory, err)
+		} else if found {
+			existingAffinityRoot = &rootFolderID
+		}
+	}
+	root, decision, err := placement.Resolve(placement.Request{
+		CategoryID: categoryID, SizeBytes: totalBytes, Strategy: placement.StrategyMostFreeSpace,
+		AffinityEnabled: affinityKey != "", AffinityKey: affinityKey, ExistingAffinityRoot: existingAffinityRoot,
+	}, c.rootCandidates(categoryID))
+	if err != nil {
+		return settings.RootFolder{}, fmt.Errorf("music: resolve placement for unit %q: %w", directory, err)
+	}
+	if decision.Outcome != placement.OutcomePlaced {
+		return settings.RootFolder{}, fmt.Errorf("%w: %s", ErrNoPlacement, decision.Reason)
+	}
+	destRoot, ok := c.roots.RootFolder(root.RootFolderID)
+	if !ok {
+		return settings.RootFolder{}, fmt.Errorf("%w: unit %q: root folder %d has no known path", ErrNoPlacement, directory, root.RootFolderID)
+	}
+	if affinityKey != "" {
+		if err := c.affinity.SetPlacementAffinity(ctx, categoryID, affinityKey, root.RootFolderID, c.clock.Now().Unix()); err != nil {
+			return settings.RootFolder{}, fmt.Errorf("music: record placement affinity for unit %q: %w", directory, err)
+		}
+	}
+	return destRoot, nil
+}
+
+// transferMethods is the order files are placed by: the unit's own ladder, else the configured one, else the default.
+func (c Committer) transferMethods(ladder []string) []mover.PlaceMethod {
+	methods := mover.DefaultLadder
+	if c.transferLadder != nil {
+		if configured := c.transferLadder(); len(configured) > 0 {
+			methods = configured
+		}
+	}
+	if len(ladder) > 0 {
+		methods = make([]mover.PlaceMethod, len(ladder))
+		for i, method := range ladder {
+			methods[i] = mover.PlaceMethod(method)
+		}
+	}
+	return methods
 }

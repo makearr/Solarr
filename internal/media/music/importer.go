@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -213,6 +214,10 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	matched := make([]*AlbumPlacement, len(request.Units))
 	identifiers := i.identifiers(request.SourcePath, tags)
 	identified := parallel.Do(ctx, len(request.Units), identifyParallelism, func(ctx context.Context, index int) error {
+		if isVideoUnit(request.Units[index]) {
+			decisions[index] = library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: ReasonVideoUnit}
+			return nil
+		}
 		decisions[index], results[index], matched[index] = identifyUnit(ctx, request.UnitIDs[index], request.Units[index], identifiers, cfg, refine)
 		return nil
 	})
@@ -271,7 +276,13 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			if decision.Decision != library.UnitQueue || len(request.Units[index].Media) == 0 {
 				continue
 			}
-			placed, err := unverified.CommitUnverifiedUnit(ctx, request.SourcePath, request.Units[index], tags, request.CategoryID, request.Ladder)
+			var placed Placed
+			var err error
+			if isVideoUnit(request.Units[index]) {
+				placed, err = i.commitVideoUnit(ctx, request, index, relPaths, probes)
+			} else {
+				placed, err = unverified.CommitUnverifiedUnit(ctx, request.SourcePath, request.Units[index], tags, request.CategoryID, request.Ladder)
+			}
 			if err != nil {
 				i.logger.Warn("import: could not add an unverified album", slog.Int64("unit_id", request.UnitIDs[index]),
 					slog.String("path", request.Units[index].Directory), slog.Any("error", err))
@@ -281,6 +292,32 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		}
 	}
 	return batch.Result{Decisions: decisions, Placements: placements}, nil
+}
+
+// ReasonVideoUnit is why a unit of video files is not identified as an album: it is recorded as video works until a lookup names them.
+const ReasonVideoUnit = "video files are recorded unverified, not matched as an album"
+
+// isVideoUnit says every file of the unit is a video (a music library's concert film or clip).
+func isVideoUnit(unit inspect.Unit) bool {
+	return len(unit.Media) > 0 && !slices.ContainsFunc(unit.Media, func(file inspect.File) bool { return !IsVideoFile(file.RelPath) })
+}
+
+// commitVideoUnit adds a video unit as unverified video works; the committer must be a VideoCommitter.
+func (i Importer) commitVideoUnit(ctx context.Context, request batch.Request, index int, relPaths []string, probes []mediatool.Probe) (Placed, error) {
+	committer, ok := i.config.Committer.(VideoCommitter)
+	if !ok {
+		return Placed{}, errors.New("music: the committer places no video")
+	}
+	unit := request.Units[index]
+	byPath := make(map[string]mediatool.Probe, len(probes))
+	for at, probe := range probes {
+		byPath[relPaths[at]] = probe
+	}
+	unitProbes := make([]mediatool.Probe, len(unit.Media))
+	for at, file := range unit.Media {
+		unitProbes[at] = byPath[file.RelPath]
+	}
+	return committer.CommitVideoUnit(ctx, request.SourcePath, unit, unitProbes, request.CategoryID, request.Ladder)
 }
 
 // CommitHeld implements batch.HeldCommitter: the album a person named, or the unit's own top candidate. A unit

@@ -3,6 +3,7 @@ package music_test
 import (
 	"path"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -63,5 +64,38 @@ func TestUnverifiedAlbum_IsAddedThenMovedOntoTheIdentifiedOne(t *testing.T) {
 	}
 	if work, err := queries.GetWork(t.Context(), identified.WorkID); err != nil || work.CanonicalTitle != "KI Pecezinu" {
 		t.Errorf("identified album = %+v, %v; want it named as the unverified one was", work, err)
+	}
+}
+
+// A downloaded video lands as the scan records one: placed under its artist, one unverified video work, credited, no wanted item.
+func TestCommitVideoUnit_PlacesAnUnverifiedVideoWorkUnderItsArtist(t *testing.T) {
+	committer, opened, fsys := newCommitter(t, true)
+	writeCommitSourceFile(t, fsys, "Rel/Katupoken - Sesoge (2011).mkv", []byte("video"))
+	unit := testUnit("Rel", []inspect.File{{RelPath: "Rel/Katupoken - Sesoge (2011).mkv", SizeBytes: 5}})
+	probes := []mediatool.Probe{{Path: path.Join(commitSourceRoot, "Rel/Katupoken - Sesoge (2011).mkv"), Measured: mediatool.Measured{Duration: 4 * time.Minute}}}
+
+	placed, err := committer.CommitVideoUnit(t.Context(), commitSourceRoot, unit, probes, commitCategoryID, nil)
+	if err != nil {
+		t.Fatalf("CommitVideoUnit: %v", err)
+	}
+	queries := librarydb.New(opened.Read())
+	work, err := queries.GetWork(t.Context(), placed.WorkID)
+	if err != nil || work.CanonicalTitle != "Sesoge" || work.Subtype.String != music.SubtypeMusicVideo {
+		t.Fatalf("work = %+v, %v; want the music video Sesoge", work, err)
+	}
+	ids, err := queries.ListWorkExternalIDs(t.Context(), placed.WorkID)
+	if err != nil || len(ids) != 1 || ids[0].Provider != music.ProviderLocalVideo {
+		t.Fatalf("external ids = %+v, %v; want one %s id", ids, err, music.ProviderLocalVideo)
+	}
+	credits, err := queries.ListCreditsForWorkWithPerson(t.Context(), placed.WorkID)
+	if err != nil || len(credits) != 1 || credits[0].PersonName != "Katupoken" {
+		t.Fatalf("credits = %+v, %v; want the artist of the name", credits, err)
+	}
+	items, err := queries.ListDesiredItemsForWork(t.Context(), placed.WorkID)
+	if err != nil || len(items) != 0 {
+		t.Errorf("items = %+v, %v; want none", items, err)
+	}
+	if len(placed.MediaObjectIDs) != 1 || len(placed.LibraryPathIDs) != 1 {
+		t.Errorf("placed = %+v, want one file", placed)
 	}
 }

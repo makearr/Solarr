@@ -11,8 +11,12 @@ import (
 
 var _ batch.Fitter = Importer{}
 
-// Fit implements batch.Fitter: a folder of sound alone is an album, unless an audiobook's own file is among it.
+// Fit implements batch.Fitter: a folder of sound alone is an album, unless an audiobook's own file is among it;
+// a folder of video alone could be a concert film or clip, though a movie library usually holds it.
 func (Importer) Fit(unit inspect.Unit) float64 {
+	if isVideoUnit(unit) {
+		return batch.FitPossible
+	}
 	fit := batch.FitLikely
 	for _, file := range unit.Media {
 		switch {
