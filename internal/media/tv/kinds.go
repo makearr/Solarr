@@ -14,6 +14,10 @@ const (
 	KindReality     = "reality"
 	KindKids        = "kids"
 	KindDaily       = "daily"
+	KindSports      = "sports"
+	KindNews        = "news"
+	KindGameShow    = "game_show"
+	KindTalkShow    = "talk_show"
 )
 
 // The language profiles the kinds start with (section 19.8: series en/de, anime ja/en/de); preferred, never required.
@@ -46,8 +50,24 @@ var libraryKinds = []media.LibraryKind{
 		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages, Rules: screen.KidsRules,
 	},
 	{
-		Key: KindDaily, Label: "Daily", Help: "Talk, news and game shows: its series are daily, searched and named by air date.",
+		Key: KindDaily, Label: "Daily", Help: "Shows that air every day, of any sort: its series are daily, searched and named by air date.",
 		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages,
+	},
+	{
+		Key: KindSports, Label: "Sports", Help: "Sports coverage and sports series.",
+		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages, Rules: media.GenreRules("Sports", "Sport"),
+	},
+	{
+		Key: KindNews, Label: "News", Help: "News programmes and current affairs.",
+		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages, Rules: media.GenreRules("News"),
+	},
+	{
+		Key: KindGameShow, Label: "Game show", Help: "Quiz and game shows.",
+		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages, Rules: media.GenreRules("Game Show"),
+	},
+	{
+		Key: KindTalkShow, Label: "Talk show", Help: "Talk shows and late-night shows.",
+		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages, Rules: media.GenreRules("Talk", "Talk Show"),
 	},
 }
 

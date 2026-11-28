@@ -6,7 +6,7 @@
 ## Create a TV library (🟢)
 
 **Settings → Libraries**: create a library of media type **TV** and pick its **kind**: Series, Anime,
-Documentary, Reality, Kids or Daily. A kind only sets the starting point:
+Documentary, Reality, Kids, Daily, Sports, News, Game show or Talk show. A kind only sets the starting point:
 
 - its quality profiles (1080p first for Anime, a smaller x265 profile for Reality);
 - its languages (English or German; Japanese, English or German for Anime);

@@ -14,3 +14,18 @@ func TestSeriesTypeOfKind(t *testing.T) {
 		}
 	}
 }
+
+func TestLibraryKindsAreUniqueAndGenreKindsSuggestThemselves(t *testing.T) {
+	seen := map[string]bool{}
+	for _, kind := range libraryKinds {
+		if seen[kind.Key] {
+			t.Errorf("kind %q listed twice", kind.Key)
+		}
+		seen[kind.Key] = true
+	}
+	for _, key := range []string{KindSports, KindNews, KindGameShow, KindTalkShow} {
+		if !seen[key] {
+			t.Errorf("kind %q missing", key)
+		}
+	}
+}

@@ -198,6 +198,15 @@ type LibraryKind struct {
 	Rules []settings.LibraryRule
 }
 
+// GenreRules suggest a library of a kind for a work filed under any of the genres.
+func GenreRules(genres ...string) []settings.LibraryRule {
+	rules := make([]settings.LibraryRule, len(genres))
+	for i, genre := range genres {
+		rules[i] = settings.LibraryRule{Conditions: []settings.RuleCondition{{Field: settings.RuleGenre, Value: genre}}}
+	}
+	return rules
+}
+
 // ExtraFilesDefault is a media type's "Import Extra Files" for a library that has not chosen.
 type ExtraFilesDefault struct {
 	Import     bool

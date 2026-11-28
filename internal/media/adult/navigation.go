@@ -1,6 +1,7 @@
 package adult
 
 import (
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
 )
@@ -69,10 +70,17 @@ var (
 	filmProfiles  = []string{"Adult: 1080p preferred", "Adult: any quality"}
 )
 
-// kinds are what a library of the type is for: scenes (Stash's and Whisparr's unit) or whole films.
+// kinds are what a library of the type is for: scenes (Stash's and Whisparr's unit), whole films, or one genre of either.
 func kinds() []media.LibraryKind {
 	return []media.LibraryKind{
 		{Key: "scenes", Label: "Scenes", Help: "Single scenes, filed by studio.", QualityProfiles: sceneProfiles},
 		{Key: "movies", Label: "Movies", Help: "Whole films, filed by studio.", QualityProfiles: filmProfiles},
+		{Key: "jav", Label: "JAV", Help: "Japanese adult video: works from Japan, named by their studio code.", QualityProfiles: filmProfiles, Rules: []settings.LibraryRule{{Conditions: []settings.RuleCondition{{Field: settings.RuleCountry, Value: "JP"}}}}},
+		{Key: "amateur", Label: "Amateur", Help: "Home-made and independent scenes.", QualityProfiles: sceneProfiles, Rules: media.GenreRules("Amateur")},
+		{Key: "pmv", Label: "PMV", Help: "Porn music videos: clips cut to a song.", QualityProfiles: sceneProfiles, Rules: media.GenreRules("PMV", "Music Video")},
+		{Key: "bts", Label: "BTS", Help: "Behind the scenes: making-of footage and bloopers.", QualityProfiles: sceneProfiles, Rules: media.GenreRules("Behind The Scenes", "BTS")},
+		{Key: "hentai_animation", Label: "Hentai (animation)", Help: "Animated adult films and series; hentai manga lives in a comic library.", QualityProfiles: sceneProfiles, Rules: media.GenreRules("Hentai", "Animation")},
+		{Key: "live_streams", Label: "Live streams", Help: "Recorded webcam and live-stream sessions.", QualityProfiles: sceneProfiles, Rules: media.GenreRules("Live Stream", "Webcam")},
+		{Key: "vr", Label: "VR", Help: "Virtual-reality scenes, searched in the VR categories.", QualityProfiles: filmProfiles, Rules: media.GenreRules("VR", "Virtual Reality")},
 	}
 }

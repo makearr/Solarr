@@ -98,17 +98,17 @@ func (f Format) kinds() []media.LibraryKind {
 	}
 	if f.ByFolder {
 		return append(kinds,
-			media.LibraryKind{Key: "audio_drama", Label: "Audio drama", Help: "Full-cast dramatisations and radio plays.", QualityProfiles: profiles, Rules: genreRules("Drama", "Radio Play")},
-			media.LibraryKind{Key: "lectures", Label: "Lectures and courses", Help: "Courses, lectures and talks.", QualityProfiles: profiles, Rules: genreRules("Education")},
-			media.LibraryKind{Key: "nonfiction", Label: "Non-fiction", Help: "Biographies, history, science and self-help.", QualityProfiles: profiles, Rules: genreRules("Non-fiction")},
+			media.LibraryKind{Key: "audio_drama", Label: "Audio drama", Help: "Full-cast dramatisations and radio plays.", QualityProfiles: profiles, Rules: media.GenreRules("Drama", "Radio Play")},
+			media.LibraryKind{Key: "lectures", Label: "Lectures and courses", Help: "Courses, lectures and talks.", QualityProfiles: profiles, Rules: media.GenreRules("Education")},
+			media.LibraryKind{Key: "nonfiction", Label: "Non-fiction", Help: "Biographies, history, science and self-help.", QualityProfiles: profiles, Rules: media.GenreRules("Non-fiction")},
 			media.LibraryKind{Key: "podcasts", Label: "Podcasts", Help: "Podcast episodes kept as audiobooks.", QualityProfiles: profiles},
 		)
 	}
 	return append(kinds,
-		media.LibraryKind{Key: "light_novels", Label: "Light novels", Help: "Japanese light novels.", QualityProfiles: profiles, Rules: genreRules("Light Novel")},
-		media.LibraryKind{Key: "nonfiction", Label: "Non-fiction and reference", Help: "Non-fiction, textbooks and reference.", QualityProfiles: profiles, Rules: genreRules("Non-fiction", "Reference")},
+		media.LibraryKind{Key: "light_novels", Label: "Light novels", Help: "Japanese light novels.", QualityProfiles: profiles, Rules: media.GenreRules("Light Novel")},
+		media.LibraryKind{Key: "nonfiction", Label: "Non-fiction and reference", Help: "Non-fiction, textbooks and reference.", QualityProfiles: profiles, Rules: media.GenreRules("Non-fiction", "Reference")},
 		media.LibraryKind{Key: "magazines", Label: "Magazines", Help: "Magazines and periodicals.", QualityProfiles: profiles},
-		media.LibraryKind{Key: "adult_fiction", Label: "Adult fiction", Help: "Erotica and other adult fiction, hidden from restricted users and confirmed as adult.", QualityProfiles: profiles, Adult: true, Rules: genreRules("Erotica")},
+		media.LibraryKind{Key: "adult_fiction", Label: "Adult fiction", Help: "Erotica and other adult fiction, hidden from restricted users and confirmed as adult.", QualityProfiles: profiles, Adult: true, Rules: media.GenreRules("Erotica")},
 	)
 }
 
@@ -116,15 +116,6 @@ func (f Format) kinds() []media.LibraryKind {
 var kidsRules = []settings.LibraryRule{
 	{Conditions: []settings.RuleCondition{{Field: settings.RuleGenre, Value: "Children's"}}},
 	{Conditions: []settings.RuleCondition{{Field: settings.RuleGenre, Value: "Young Adult"}}},
-}
-
-// genreRules suggest a library for a book its providers file under any of the genres.
-func genreRules(genres ...string) []settings.LibraryRule {
-	rules := make([]settings.LibraryRule, len(genres))
-	for i, genre := range genres {
-		rules[i] = settings.LibraryRule{Conditions: []settings.RuleCondition{{Field: settings.RuleGenre, Value: genre}}}
-	}
-	return rules
 }
 
 // lower is a word as it reads mid-sentence: "Books" in "children's books".

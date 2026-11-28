@@ -26,6 +26,12 @@ kind's shipped ones (`media.LibraryKind.Rules`, `internal/media/screen/kinds.go`
 | Documentary | Documentary |
 | Kids | Kids; Family |
 | Reality | Reality |
+| Sports | Sports; Sport |
+| News | News |
+| Game show | Game Show |
+| Talk show | Talk; Talk Show |
+| Adult: JAV | country Japan |
+| Adult: Amateur, PMV, BTS, Hentai (animation), Live streams, VR | the genre of the same name (and its usual alternatives) |
 | Daily | none: the kind only types its series as daily shows (guide/tv.md) |
 
 A further media type of a library uses the library's rules and kind.

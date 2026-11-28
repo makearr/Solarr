@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- TV libraries can be Sports, News, Game show or Talk show; adult libraries can be JAV, Amateur, PMV, BTS, Hentai (animation), Live streams or VR; each suggests itself for works of its genre.
 - Import lists and Webhooks moved from Settings to Manage > Connections, which now holds every outside connection in one place.
 - Every work page has a prominent Play (audio, video) or Read (comics, EPUB, PDF) button under its cover; an album or series plays from its first file onwards.
 - Hashing videos for look-alike duplicates is on whenever video preview pictures are on, also on instances that turned previews on before, and no longer looks greyed out.

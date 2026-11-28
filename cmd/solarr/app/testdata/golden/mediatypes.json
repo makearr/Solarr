@@ -742,9 +742,29 @@
         "label": "Kids"
       },
       {
-        "help": "Talk, news and game shows: its series are daily, searched and named by air date.",
+        "help": "Shows that air every day, of any sort: its series are daily, searched and named by air date.",
         "key": "daily",
         "label": "Daily"
+      },
+      {
+        "help": "Sports coverage and sports series.",
+        "key": "sports",
+        "label": "Sports"
+      },
+      {
+        "help": "News programmes and current affairs.",
+        "key": "news",
+        "label": "News"
+      },
+      {
+        "help": "Quiz and game shows.",
+        "key": "game_show",
+        "label": "Game show"
+      },
+      {
+        "help": "Talk shows and late-night shows.",
+        "key": "talk_show",
+        "label": "Talk show"
       }
     ],
     "label": "TV",
@@ -1331,6 +1351,41 @@
         "help": "Whole films, filed by studio.",
         "key": "movies",
         "label": "Movies"
+      },
+      {
+        "help": "Japanese adult video: works from Japan, named by their studio code.",
+        "key": "jav",
+        "label": "JAV"
+      },
+      {
+        "help": "Home-made and independent scenes.",
+        "key": "amateur",
+        "label": "Amateur"
+      },
+      {
+        "help": "Porn music videos: clips cut to a song.",
+        "key": "pmv",
+        "label": "PMV"
+      },
+      {
+        "help": "Behind the scenes: making-of footage and bloopers.",
+        "key": "bts",
+        "label": "BTS"
+      },
+      {
+        "help": "Animated adult films and series; hentai manga lives in a comic library.",
+        "key": "hentai_animation",
+        "label": "Hentai (animation)"
+      },
+      {
+        "help": "Recorded webcam and live-stream sessions.",
+        "key": "live_streams",
+        "label": "Live streams"
+      },
+      {
+        "help": "Virtual-reality scenes, searched in the VR categories.",
+        "key": "vr",
+        "label": "VR"
       }
     ],
     "label": "Adult",
