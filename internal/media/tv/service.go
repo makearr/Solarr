@@ -1,6 +1,7 @@
 package tv
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -595,6 +596,7 @@ func (s Service) bridgeIDs(ctx context.Context, ids IDs, order []string) IDs {
 	if len(ids.AniList) == 0 {
 		ids.AniList = found.AniList
 	}
+	ids.Wikidata = cmp.Or(ids.Wikidata, found.QID)
 	return ids
 }
 

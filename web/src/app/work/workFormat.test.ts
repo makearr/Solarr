@@ -51,3 +51,9 @@ test("a work links each provider's page once, and leaves out ids nobody browses"
     ]),
   ).toEqual([{ label: "TheTVDB", href: "https://thetvdb.com/dereferrer/series/81189" }]);
 });
+
+test("a work with a Wikidata item links its English Wikipedia article", () => {
+  expect(externalLinks([{ provider: "wikidata", external_id: "Q42" }])).toEqual([
+    { label: "Wikipedia", href: "https://www.wikidata.org/wiki/Special:GoToLinkedPage/enwiki/Q42" },
+  ]);
+});

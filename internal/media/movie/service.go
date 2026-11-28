@@ -328,6 +328,7 @@ func (s Service) bridgeIDs(ctx context.Context, ids IDs, order []string) IDs {
 	if found.IMDb != "" && (ids.IMDb == "" || at == 0) {
 		ids.IMDb = found.IMDb
 	}
+	ids.Wikidata = cmp.Or(ids.Wikidata, found.QID)
 	return ids
 }
 

@@ -42,6 +42,8 @@ const (
 // IDs are the identifiers one book carries at the providers; empty means unknown.
 type IDs struct {
 	OpenLibrary string
+	// Wikidata is the item (Q...) Wikidata records for the book.
+	Wikidata    string
 	GoogleBooks string
 	ASIN        string
 	ISBN        string

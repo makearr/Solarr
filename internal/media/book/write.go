@@ -154,6 +154,7 @@ func (f Format) idWrites(ids IDs) []library.ExternalIDWrite {
 	add(ProviderOpenLibrary, ids.OpenLibrary)
 	add(ProviderGoogleBooks, ids.GoogleBooks)
 	add(ProviderISBN, ids.ISBN)
+	add(ProviderWikidata, ids.Wikidata)
 	add(ProviderGoodreads, ids.Goodreads)
 	add(ProviderHardcover, ids.Hardcover)
 	add(ProviderITunes, ids.ITunes)

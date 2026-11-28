@@ -53,6 +53,8 @@ func (a Availability) Valid() bool {
 type IDs struct {
 	TMDB int64
 	IMDb string
+	// Wikidata is the item (Q...) Wikidata records for the film.
+	Wikidata string
 }
 
 // Roles a movie stores, in the credit table's vocabulary.

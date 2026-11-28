@@ -32,8 +32,10 @@ const (
 type IDs struct {
 	TVDB, TVmaze, TMDB int64
 	IMDb               string
-	AniDB, MAL         []int64
-	AniList            []int64
+	// Wikidata is the item (Q...) Wikidata records for the series, whose English article the work links to.
+	Wikidata   string
+	AniDB, MAL []int64
+	AniList    []int64
 }
 
 // AirTime is the series' usual local air time and where it is read.

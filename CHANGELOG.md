@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Series, films and books whose library uses Wikidata keep the Wikidata item, and their page links the English Wikipedia article.
 - Lists and posters show the age chip (All ages, 6+, 12+, 16+, 18+) beside the year, and a calendar entry for an episode opens that episode.
 - Import: a folder's units are all listed as "Identifying" before the first file is read, so a big import shows its whole batch at once and the identified units replace them as each folder is read.
 - Users: a maximum age per account (All ages only, up to 6+, 12+, 16+) hides works rated above it from lists, search, detail pages, artwork, people credits and playback; unrated works stay hidden unless a Kids library holds them. Schema: `app_user.max_age` (edit in place; recreate a dev settings database).

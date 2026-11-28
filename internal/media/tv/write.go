@@ -302,6 +302,9 @@ func idWrites(ids IDs) []library.ExternalIDWrite {
 	if ids.IMDb != "" {
 		writes = append(writes, library.ExternalIDWrite{Provider: ProviderIMDb, ExternalID: ids.IMDb})
 	}
+	if ids.Wikidata != "" {
+		writes = append(writes, library.ExternalIDWrite{Provider: ProviderWikidata, ExternalID: ids.Wikidata})
+	}
 	for _, id := range ids.AniDB {
 		add(ProviderAniDB, id)
 	}

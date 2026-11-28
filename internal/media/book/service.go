@@ -500,6 +500,7 @@ func (s Service) bridgeIDs(ctx context.Context, ids IDs, order []string) IDs {
 		ids.ISBN = found.ISBN
 	}
 	ids.Goodreads = cmp.Or(ids.Goodreads, found.Goodreads)
+	ids.Wikidata = cmp.Or(ids.Wikidata, found.QID)
 	return ids
 }
 

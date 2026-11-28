@@ -119,6 +119,9 @@ const LINKS: Record<string, { label: string; url: (id: string) => string }> = {
   bookbrainz: { label: "BookBrainz", url: (id) => `https://bookbrainz.org/work/${id}` },
   fantlab: { label: "FantLab", url: (id) => `https://fantlab.ru/work${id}` },
   "fantlab:audiobook": { label: "FantLab", url: (id) => `https://fantlab.ru/work${id}` },
+  // Wikidata redirects to the item's English Wikipedia article, or says it has none.
+  wikidata: { label: "Wikipedia", url: (id) => `https://www.wikidata.org/wiki/Special:GoToLinkedPage/enwiki/${id}` },
+  "wikidata:audiobook": { label: "Wikipedia", url: (id) => `https://www.wikidata.org/wiki/Special:GoToLinkedPage/enwiki/${id}` },
   audible: { label: "Audible", url: (id) => `https://www.audible.com/pd/${id}` },
 };
 
