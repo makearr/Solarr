@@ -2903,6 +2903,12 @@ paths:
           in: query
           description: Only works the person is credited on.
           schema: { type: integer, format: int64 }
+        - name: linked
+          in: query
+          description: >-
+            Only works holding a provider id that starts with a prefix: comma-separated `provider=prefix` pairs, any one
+            matching. How a work is tied to another (a music video to its album) is the media type's own.
+          schema: { type: string }
         - name: favorite
           in: query
           description: Only the works the caller hearted.
@@ -15208,6 +15214,10 @@ components:
               description: Only libraries the caller may read; nothing reveals another.
             credits:
               type: array
+              items: { $ref: "#/components/schemas/WorkCredit" }
+            videos:
+              type: array
+              description: The credits whose work its media type lists on a level of its own (a music library's concert and music videos), kept out of credits so a discography holds one kind of work.
               items: { $ref: "#/components/schemas/WorkCredit" }
 
     PersonAttributes:

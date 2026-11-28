@@ -27,6 +27,18 @@ SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
 JOIN work ON work.id = visible.work_id
 WHERE sqlc.arg(media_type) = '' OR work.media_type = sqlc.arg(media_type);
 
+-- Works per subtype for one category, by the same visibility as CountWorksVisibleToCategory: a level cut to some subtypes counts from these.
+-- name: CountWorksBySubtypeVisibleToCategory :many
+SELECT CAST(work.subtype AS TEXT) AS subtype, CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
+  SELECT work_id FROM work_root_folder
+  WHERE root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids)))
+  UNION
+  SELECT work_id FROM desired_item WHERE category_id = sqlc.arg(category_id)
+) AS visible
+JOIN work ON work.id = visible.work_id
+WHERE work.subtype IS NOT NULL AND (sqlc.arg(media_type) = '' OR work.media_type = sqlc.arg(media_type))
+GROUP BY work.subtype;
+
 -- The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 -- have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 -- name: CountWantedWorksVisibleToCategory :one

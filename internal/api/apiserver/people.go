@@ -278,20 +278,26 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		}
 		credits = visibleCredits
 	}
-	detail.Credits = creditViews(s.withoutLeveledSubtypes(credits), s.wall.Now())
+	discography, videos := s.splitLeveledSubtypes(credits)
+	detail.Credits = creditViews(discography, s.wall.Now())
+	if len(videos) > 0 {
+		views := creditViews(videos, s.wall.Now())
+		detail.Videos = &views
+	}
 	writeJSON(w, s.logger, http.StatusOK, detail)
 }
 
-// withoutLeveledSubtypes drops the credits whose work its media type lists on a level of its own (music's videos), so a discography holds one kind of work.
-func (s *Server) withoutLeveledSubtypes(credits []PersonCreditRow) []PersonCreditRow {
-	kept := make([]PersonCreditRow, 0, len(credits))
+// splitLeveledSubtypes parts the credits whose work its media type lists on a level of its own (music's videos) from the rest, so a discography holds one kind of work.
+func (s *Server) splitLeveledSubtypes(credits []PersonCreditRow) (kept, leveled []PersonCreditRow) {
+	kept = make([]PersonCreditRow, 0, len(credits))
 	for _, credit := range credits {
 		if credit.Work.PrimaryType != nil && s.subtypeHasOwnLevel(credit.Work.MediaType, *credit.Work.PrimaryType) {
+			leveled = append(leveled, credit)
 			continue
 		}
 		kept = append(kept, credit)
 	}
-	return kept
+	return kept, leveled
 }
 
 // subtypeHasOwnLevel says the media type shows works of this subtype on a level that only lists subtypes.

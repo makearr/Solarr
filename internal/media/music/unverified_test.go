@@ -122,7 +122,7 @@ func TestCommitVideoUnit_ANamedMusicVideoIsItsRecordingAndLinksItsAlbum(t *testi
 	for _, id := range ids {
 		got = append(got, id.Provider+"="+id.ExternalID)
 	}
-	want := []string{music.ProviderVideoRecording + "=rec-1", music.ProviderVideoAlbum + "=rg-1"}
+	want := []string{music.ProviderVideoRecording + "=rec-1", music.ProviderVideoAlbum + "=" + music.VideoAlbumID("rg-1", "rec-1")}
 	slices.Sort(got)
 	slices.Sort(want)
 	if !reflect.DeepEqual(got, want) {

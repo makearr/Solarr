@@ -100,6 +100,53 @@ func (q *Queries) CountWorkPartsVisibleToCategory(ctx context.Context, arg Count
 	return total, err
 }
 
+const countWorksBySubtypeVisibleToCategory = `-- name: CountWorksBySubtypeVisibleToCategory :many
+SELECT CAST(work.subtype AS TEXT) AS subtype, CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
+  SELECT work_id FROM work_root_folder
+  WHERE root_folder_id IN (SELECT value FROM json_each(?1))
+  UNION
+  SELECT work_id FROM desired_item WHERE category_id = ?2
+) AS visible
+JOIN work ON work.id = visible.work_id
+WHERE work.subtype IS NOT NULL AND (?3 = '' OR work.media_type = ?3)
+GROUP BY work.subtype
+`
+
+type CountWorksBySubtypeVisibleToCategoryParams struct {
+	RootFolderIds interface{}
+	CategoryID    int64
+	MediaType     interface{}
+}
+
+type CountWorksBySubtypeVisibleToCategoryRow struct {
+	Subtype string
+	Total   int64
+}
+
+// Works per subtype for one category, by the same visibility as CountWorksVisibleToCategory: a level cut to some subtypes counts from these.
+func (q *Queries) CountWorksBySubtypeVisibleToCategory(ctx context.Context, arg CountWorksBySubtypeVisibleToCategoryParams) ([]CountWorksBySubtypeVisibleToCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, countWorksBySubtypeVisibleToCategory, arg.RootFolderIds, arg.CategoryID, arg.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountWorksBySubtypeVisibleToCategoryRow{}
+	for rows.Next() {
+		var i CountWorksBySubtypeVisibleToCategoryRow
+		if err := rows.Scan(&i.Subtype, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countWorksVisibleToCategory = `-- name: CountWorksVisibleToCategory :one
 SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
   SELECT work_id FROM work_root_folder

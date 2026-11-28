@@ -21,6 +21,7 @@ import { AddToLibrary } from "./work/AddToSolarr";
 import { ChooseImage } from "./ChooseImage";
 import { externalItemLink } from "./ExternalItem";
 import { useAllParts } from "./work/WorkParts";
+import { VideoRows } from "./work/VideoRows";
 import { CoverArt } from "./CoverArt";
 import { FollowPanel } from "./FollowPanel";
 import { PersonPicker } from "./PersonPicker";
@@ -303,6 +304,7 @@ export function PersonPage() {
               name={library?.name ?? "Library"}
               type={typeOf(library)}
               credits={person.credits.filter((credit) => credit.category_id === categoryId)}
+              videos={(person.videos ?? []).filter((credit) => credit.category_id === categoryId)}
             />
           );
         })}
@@ -571,7 +573,7 @@ function sortWorks<T>(items: readonly T[], workOf: (item: T) => PersonWork, sort
 
 /** One library's part of the person: the lead role as that library lists it (an artist's discography by release
  *  type), every other role as a wall of the works, with the role chips when there are several. */
-function LibrarySection({ name, type, credits }: { name: string; type?: MediaTypeInfo; credits: Credit[] }) {
+function LibrarySection({ name, type, credits, videos }: { name: string; type?: MediaTypeInfo; credits: Credit[]; videos: Credit[] }) {
   const [role, setRole] = useState("");
   const roles = [...new Set(credits.map((credit) => credit.role))];
   const label = (key: string) => type?.roles.find((entry) => entry.key === key)?.label ?? key.replace(/_/g, " ");
@@ -633,6 +635,10 @@ function LibrarySection({ name, type, credits }: { name: string; type?: MediaTyp
           </ul>
         </div>
       ))}
+      <VideoRows
+        videos={[...new Map(videos.map((credit) => [credit.work.id, { id: credit.work.id, title: credit.work.title, year: credit.work.year }])).values()]}
+        categoryId={String(videos[0]?.category_id ?? "")}
+      />
       {others.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
           {others.map(({ credit, roles: held }) => (

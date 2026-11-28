@@ -120,10 +120,15 @@ func videoLink(claim VideoClaim, identity *VideoIdentity, localKey string, rootF
 	return link
 }
 
+// VideoAlbumID is the id a music video holds for its album: the release group then the recording, since a provider id belongs to one work and an album holds several videos.
+func VideoAlbumID(releaseGroupMBID, recordingMBID string) string {
+	return releaseGroupMBID + "/" + recordingMBID
+}
+
 // linkVideoAlbum ties a music video to the release group of its track; a concert is already keyed by its live album.
 func linkVideoAlbum(ctx context.Context, identity library.Identity, at time.Time, workID int64, named *VideoIdentity) error {
 	if named == nil || named.Provider != ProviderVideoRecording || named.ReleaseGroupMBID == "" {
 		return nil
 	}
-	return identity.LinkExternalIDIfFree(ctx, at, workID, ProviderVideoAlbum, named.ReleaseGroupMBID, named.Confidence)
+	return identity.LinkExternalIDIfFree(ctx, at, workID, ProviderVideoAlbum, VideoAlbumID(named.ReleaseGroupMBID, named.ExternalID), named.Confidence)
 }

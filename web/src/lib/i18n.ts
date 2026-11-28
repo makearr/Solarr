@@ -114,6 +114,7 @@ const catalogue = {
   "work.notFound": "This {work} could not be found.",
   "level.notFound": "This library has no such list.",
   "work.loading": "Loading…",
+  "videos.heading": "Videos",
   "arrImport.follows": "Followed release types",
   "arrImport.intro": "Connect an existing Sonarr/Radarr/Lidarr/Readarr/Whisparr and choose what to bring in: its paths, what it monitors (as intent, never a download), only the monitoring status of what is already here, its indexers and its download clients. A connection may also send monitoring back, which is the one thing Solarr ever writes to an *Arr, and is off until you turn it on. Lidarr (artists and albums), Sonarr (series), Radarr (movies), Readarr (books and audiobooks), Whisparr (scenes, performers, studios), and Kapowarr and Mylar3 (comic series) sync today. Connect Prowlarr to use its active indexers and download clients here.",
   "arrImport.walking": "Walking {what} {done} of {total}.",

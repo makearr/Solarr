@@ -82,6 +82,8 @@ type WorkFilter struct {
 	Subtypes, ExceptSubtypes []string
 	// PersonID keeps only works the person is credited on; 0 any.
 	PersonID int64
+	// Linked keeps only works holding a provider id that starts with one of these prefixes; nil any.
+	Linked []LinkedID
 	// FavoriteUserID keeps only the works this user hearted; 0 any.
 	FavoriteUserID int64
 	// Watched keeps the works with this watch status (yes, no, in_progress) as the WatchPairs saw them; "" any.
@@ -192,6 +194,23 @@ type WorkListRow struct {
 	Narrators string
 }
 
+// LinkedID is a provider id prefix a listed work must hold.
+type LinkedID struct{ Provider, Prefix string }
+
+// addLinked keeps the works holding any one of the provider ids (the prefix is compared by substr, never as a pattern).
+func addLinked(predicates *store.Predicates, linked []LinkedID) {
+	if len(linked) == 0 {
+		return
+	}
+	var alternatives []string
+	var arguments []any
+	for _, id := range linked {
+		alternatives = append(alternatives, "(x.provider = ? AND substr(x.external_id, 1, ?) = ?)")
+		arguments = append(arguments, id.Provider, len(id.Prefix), id.Prefix)
+	}
+	predicates.Add("EXISTS (SELECT 1 FROM work_external_id x WHERE x.work_id = work.id AND ("+strings.Join(alternatives, " OR ")+"))", arguments...)
+}
+
 // Works reads the library list surface.
 type Works struct {
 	store *store.Store
@@ -217,6 +236,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		predicates.Add(fragment, arguments...)
 	}
 	predicates.AddIf(filter.PersonID != 0, "EXISTS (SELECT 1 FROM credit pc WHERE pc.work_id = work.id AND pc.person_id = ?)", filter.PersonID)
+	addLinked(&predicates, filter.Linked)
 	predicates.AddIf(filter.FavoriteUserID != 0, favoriteSQL(FavoriteWork, "work.id"), filter.FavoriteUserID)
 	addWatched(&predicates, filter.Watched, filter.WatchPairs)
 	predicates.AddIf(filter.Language != "", "original_language = ?", filter.Language)

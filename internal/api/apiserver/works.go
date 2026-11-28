@@ -96,6 +96,8 @@ type WorksFilter struct {
 	Subtypes, ExceptSubtypes []string
 	// PersonID keeps only works the person is credited on, 0 any.
 	PersonID int64
+	// Linked keeps only works holding a provider id that starts with one of these prefixes, nil any.
+	Linked []LinkedID
 	// FavoriteUserID keeps only the works this user hearted, 0 any.
 	FavoriteUserID int64
 	// Watched keeps one watch status (yes, no, in_progress) as WatchPairs saw it, "" any.
@@ -234,6 +236,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: append(without, blockedTagIDs(access)...), AboveRating: derefOr(params.AboveRating, false), OwnProfile: derefOr(params.OwnProfile, false),
 			MediaType:      derefOr(params.MediaType, ""),
 			PersonID:       derefOr(params.PersonId, 0),
+			Linked:         parseLinkedIDs(derefOr(params.Linked, "")),
 			FavoriteUserID: favoriteViewer(params.Favorite, access),
 			MediaTypes:     s.libraryMediaTypes(params.CategoryId, derefOr(params.WholeLibrary, false)),
 			ViewerAge:      viewerAgeOf(access),
@@ -256,6 +259,21 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, page)
+}
+
+// LinkedID is a provider id prefix a listed work must hold.
+type LinkedID struct{ Provider, Prefix string }
+
+// parseLinkedIDs reads `provider=prefix` pairs; a pair with an empty side is dropped, since an empty prefix would match every work.
+func parseLinkedIDs(text string) []LinkedID {
+	var linked []LinkedID
+	for _, pair := range strings.Split(text, ",") {
+		provider, prefix, found := strings.Cut(pair, "=")
+		if found && provider != "" && prefix != "" {
+			linked = append(linked, LinkedID{Provider: provider, Prefix: prefix})
+		}
+	}
+	return linked
 }
 
 // libraryMediaTypes are the media types of the library the list is of: its own, and with whole the types of its further

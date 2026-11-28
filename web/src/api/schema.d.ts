@@ -11293,6 +11293,8 @@ export interface components {
             /** @description Only libraries the caller may read; nothing reveals another. */
             libraries: components["schemas"]["PersonLibrary"][];
             credits: components["schemas"]["WorkCredit"][];
+            /** @description The credits whose work its media type lists on a level of its own (a music library's concert and music videos), kept out of credits so a discography holds one kind of work. */
+            videos?: components["schemas"]["WorkCredit"][];
         };
         /** @description The descriptive facts of a person the list filters on; absent or zero is unknown. What a person set by hand stands over the provider's. */
         PersonAttributes: {
@@ -17299,6 +17301,8 @@ export interface operations {
                 whole_library?: boolean;
                 /** @description Only works the person is credited on. */
                 person_id?: number;
+                /** @description Only works holding a provider id that starts with a prefix: comma-separated `provider=prefix` pairs, any one matching. How a work is tied to another (a music video to its album) is the media type's own. */
+                linked?: string;
                 /** @description Only the works the caller hearted. */
                 favorite?: boolean;
                 /** @description Only works with this watch status as the caller sees it (a user mapped to a media server user sees their own, an administrator without a mapping sees any counted user's); nothing is filtered for a caller who sees no watch state. */

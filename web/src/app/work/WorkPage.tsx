@@ -48,6 +48,7 @@ import { WorkSearchTab, runInteractiveKey } from "./WorkSearchTab";
 import { PlayButton } from "../player/PlayButton";
 import { ReadButton } from "../reader/ReadButton";
 import { WorkStart } from "./WorkStart";
+import { AlbumVideos } from "./VideoRows";
 
 type Work = components["schemas"]["WorkDetail"];
 type Group = components["schemas"]["WorkGroup"];
@@ -633,6 +634,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
       {/* A work with no parts (a film, a scene) shows its file first, as a series shows each episode's. */}
       {!grouped && !info?.part.one && <WholeFiles work={work} />}
       <CastStrip work={work} info={info} categoryId={categoryId} />
+      <AlbumVideos externalIds={work.external_ids} categoryId={categoryId} />
       {categoryId && showCollections && <WorkCollections workId={work.id} categoryId={categoryId} />}
       {crossoverPart && categoryId && <CrossoverDialog part={crossoverPart} categoryId={categoryId} onClose={() => setCrossoverPart(undefined)} />}
       {grouped ? (

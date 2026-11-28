@@ -102,6 +102,7 @@ func (a Works) ListWorks(
 			Subtypes:        filter.Subtypes,
 			ExceptSubtypes:  filter.ExceptSubtypes,
 			PersonID:        filter.PersonID,
+			Linked:          linkedIDs(filter.Linked),
 			FavoriteUserID:  filter.FavoriteUserID,
 			Watched:         filter.Watched,
 			WatchPairs:      libraryPairs(filter.WatchPairs),
@@ -247,4 +248,12 @@ func viewerAge(limit *apiserver.ViewerAge) *library.ViewerAge {
 		return nil
 	}
 	return &library.ViewerAge{MaxAge: limit.MaxAge, KidsCategoryIDs: limit.KidsCategoryIDs}
+}
+
+func linkedIDs(linked []apiserver.LinkedID) []library.LinkedID {
+	var converted []library.LinkedID
+	for _, id := range linked {
+		converted = append(converted, library.LinkedID{Provider: id.Provider, Prefix: id.Prefix})
+	}
+	return converted
 }

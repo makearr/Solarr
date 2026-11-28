@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -119,6 +120,12 @@ func (c CategoryCounters) reconcileScope(
 	if err != nil {
 		return nil, fmt.Errorf("count artists: %w", err)
 	}
+	subtypes, err := reader.CountWorksBySubtypeVisibleToCategory(ctx, librarydb.CountWorksBySubtypeVisibleToCategoryParams{
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID, MediaType: scope.MediaType,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("count works by subtype: %w", err)
+	}
 	truth := map[string]int64{
 		"works":         works,
 		"works_wanted":  wanted,
@@ -126,6 +133,9 @@ func (c CategoryCounters) reconcileScope(
 		"files_offline": sumFor(filesByRoot, scope.OfflineRootFolderIDs),
 		"parts":         parts,
 		"artists":       artists,
+	}
+	for _, row := range subtypes {
+		truth[SubtypeMetric(row.Subtype)] = row.Total
 	}
 
 	return c.writeScope(ctx, reader, now, scopeKey, truth)
@@ -140,6 +150,13 @@ func (c CategoryCounters) writeScope(ctx context.Context, reader *librarydb.Quer
 	stored := make(map[string]int64, len(existingRows))
 	for _, row := range existingRows {
 		stored[row.Metric] = row.Value
+	}
+
+	// A subtype that no longer has a work is zeroed rather than left at its old figure.
+	for metric := range stored {
+		if _, current := truth[metric]; !current && strings.HasPrefix(metric, subtypeMetricPrefix) {
+			truth[metric] = 0
+		}
 	}
 
 	var corrections []Correction
@@ -166,6 +183,11 @@ func (c CategoryCounters) writeScope(ctx context.Context, reader *librarydb.Quer
 	}
 	return corrections, nil
 }
+
+const subtypeMetricPrefix = "works.subtype."
+
+// SubtypeMetric is the counter holding how many works of one subtype a category lists.
+func SubtypeMetric(subtype string) string { return subtypeMetricPrefix + subtype }
 
 func sumFor(byRoot map[int64]int64, rootFolderIDs []int64) int64 {
 	var total int64

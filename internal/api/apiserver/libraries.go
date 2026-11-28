@@ -171,9 +171,8 @@ func (s *Server) libraryLevels(category settings.Category, values map[string]int
 			Entity: gen.LibraryLevelEntity(level.Entity),
 			Count:  countFor(values, level.Entity),
 		}
-		// The works counter spans every subtype, so a level cut to some subtypes has no count of its own.
-		if len(level.Subtypes) > 0 {
-			views[index].Count = nil
+		if level.Entity == model.LevelEntityWork && (len(level.Subtypes) > 0 || len(level.ExceptSubtypes) > 0) {
+			views[index].Count = subtypeLevelCount(values, level)
 		}
 		if level.Role != "" {
 			role := level.Role
@@ -181,6 +180,29 @@ func (s *Server) libraryLevels(category settings.Category, values map[string]int
 		}
 	}
 	return views
+}
+
+// subtypeCounterPrefix starts the per-subtype work counters CategoryCounters writes (library.SubtypeMetric).
+const subtypeCounterPrefix = "works.subtype."
+
+// subtypeLevelCount counts a work level cut by subtype: the subtypes it keeps, or every work less the subtypes it leaves out.
+func subtypeLevelCount(values map[string]int64, level model.Level) *int {
+	total, ok := values["works"]
+	if !ok {
+		return nil
+	}
+	count := total
+	if len(level.Subtypes) > 0 {
+		count = 0
+		for _, subtype := range level.Subtypes {
+			count += values[subtypeCounterPrefix+subtype]
+		}
+	}
+	for _, subtype := range level.ExceptSubtypes {
+		count -= values[subtypeCounterPrefix+subtype]
+	}
+	value := int(count)
+	return &value
 }
 
 // counterValues reads every metric for one category's scope, once, so

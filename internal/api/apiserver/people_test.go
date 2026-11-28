@@ -565,11 +565,19 @@ func TestGetPerson_LeavesOutWorksOfASubtypeWithItsOwnLevel(t *testing.T) {
 				ID int64 `json:"id"`
 			} `json:"work"`
 		} `json:"credits"`
+		Videos []struct {
+			Work struct {
+				ID int64 `json:"id"`
+			} `json:"work"`
+		} `json:"videos"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if len(body.Credits) != 1 || body.Credits[0].Work.ID != 41 {
 		t.Errorf("credits = %+v, want only work 41", body.Credits)
+	}
+	if len(body.Videos) != 1 || body.Videos[0].Work.ID != 42 {
+		t.Errorf("videos = %+v, want only work 42", body.Videos)
 	}
 }

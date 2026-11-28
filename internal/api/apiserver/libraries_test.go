@@ -86,6 +86,37 @@ func TestListLibraries_RendersTheDeclaredLevelsWithTheirCounts(t *testing.T) {
 	}
 }
 
+// A level cut by subtype counts from the per-subtype counters: the kept subtypes, or every work less the left-out ones.
+func TestListLibraries_SubtypeLevelsCountFromSubtypeCounters(t *testing.T) {
+	navigation := fakeNavigation{
+		"music": {
+			{Key: "albums", Label: "Albums", Entity: model.LevelEntityWork, ExceptSubtypes: []string{"Concert video", "Music video"}},
+			{Key: "videos", Label: "Videos", Entity: model.LevelEntityWork, Subtypes: []string{"Concert video", "Music video"}},
+		},
+	}
+	librarySize := fakeLibrarySize{byScope: map[string]map[string]int64{}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, librarySize, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	librarySize.byScope["category:"+strconv.FormatInt(category.ID, 10)] = map[string]int64{
+		"works": 12, "works.subtype.Concert video": 2, "works.subtype.Music video": 3, "works.subtype.Album": 7,
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	recorder := fixture.do(authedGet(t, fixture.signIn(t, "admin"), "/api/v1/libraries"))
+	var body []libraryBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	want := map[string]int{"albums": 7, "videos": 5}
+	for _, level := range body[0].Levels {
+		if level.Count == nil || *level.Count != want[level.Key] {
+			t.Errorf("level %q count = %v, want %d", level.Key, level.Count, want[level.Key])
+		}
+	}
+}
+
 // A category the caller cannot read must not appear, the same ADR-27
 // guarantee GET /categories already gives.
 func TestListLibraries_OnlyGrantedCategoriesAppear(t *testing.T) {

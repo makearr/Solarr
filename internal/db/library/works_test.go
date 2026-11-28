@@ -1143,3 +1143,40 @@ func TestListWorks_SubtypeFiltersSplitAlbumsFromVideos(t *testing.T) {
 		t.Errorf("unfiltered = %v, want all four", got)
 	}
 }
+
+// A work is linked by a provider id that starts with the prefix, whichever of the alternatives holds.
+func TestListWorks_LinkedKeepsWorksHoldingAProviderIDPrefix(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	identity := library.NewIdentity(opened)
+	for provider, id := range map[string]string{"video-album": "rg-1/rec-1", "live-video": "rg-1", "other": "rg-1/rec-9"} {
+		if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+			Provider: provider, ExternalID: id, Confidence: 1,
+			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: provider, SortTitle: provider},
+		}}); err != nil {
+			t.Fatalf("ResolveWorks: %v", err)
+		}
+	}
+	list := func(linked ...library.LinkedID) []string {
+		page, err := works.List(t.Context(), library.WorkFilter{Linked: linked}, library.WorkCursor{}, 100)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		var got []string
+		for _, work := range page {
+			got = append(got, work.CanonicalTitle)
+		}
+		slices.Sort(got)
+		return got
+	}
+	both := []library.LinkedID{{Provider: "video-album", Prefix: "rg-1"}, {Provider: "live-video", Prefix: "rg-1"}}
+	if got, want := list(both...), []string{"live-video", "video-album"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("linked = %v, want %v", got, want)
+	}
+	if got := list(library.LinkedID{Provider: "video-album", Prefix: "rg-2"}); len(got) != 0 {
+		t.Errorf("other prefix = %v, want none", got)
+	}
+	if got := list(); len(got) != 3 {
+		t.Errorf("unfiltered = %v, want all three", got)
+	}
+}

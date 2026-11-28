@@ -230,6 +230,8 @@ type Querier interface {
 	// e.g. music's Tracks): every work_part belonging to a work visible to the
 	// category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
 	CountWorkPartsVisibleToCategory(ctx context.Context, arg CountWorkPartsVisibleToCategoryParams) (int64, error)
+	// Works per subtype for one category, by the same visibility as CountWorksVisibleToCategory: a level cut to some subtypes counts from these.
+	CountWorksBySubtypeVisibleToCategory(ctx context.Context, arg CountWorksBySubtypeVisibleToCategoryParams) ([]CountWorksBySubtypeVisibleToCategoryRow, error)
 	// The "works" count for one category: the union of on-disk presence
 	// (work_root_folder) and desired-state membership (desired_item.category_id) --
 	// a subscription-discovered work has no root folder yet but still belongs to its

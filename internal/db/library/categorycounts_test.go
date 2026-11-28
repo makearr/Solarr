@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -366,5 +367,47 @@ func TestCategoryCounters_CountsWantedWorks(t *testing.T) {
 	}
 	if v, ok := correctionFor(corrections, "works_wanted"); !ok || v.Now != 1 {
 		t.Errorf("works_wanted = %+v, ok=%v, want 1 of 3 albums", v, ok)
+	}
+}
+
+// A subtype's works are counted on their own, and a subtype that lost its last work reads zero rather than its old figure.
+func TestCategoryCounters_CountsWorksBySubtype(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	counters := library.NewCategoryCounters(opened, clock.NewFakeAtEpoch())
+	link := func(id, subtype string) library.WorkLink {
+		return library.WorkLink{
+			Provider: "test", ExternalID: id, Confidence: 1, RootFolderID: 1,
+			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: id, SortTitle: id, Subtype: subtype},
+		}
+	}
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link("a", "Album"), link("b", "Music video"), link("c", "Music video"), link("d", "")}); err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	scopes := []library.CategoryScope{{CategoryID: 1, RootFolderIDs: []int64{1}}}
+	corrections, err := counters.Reconcile(t.Context(), scopes)
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	for metric, want := range map[string]int64{library.SubtypeMetric("Album"): 1, library.SubtypeMetric("Music video"): 2} {
+		if got, ok := correctionFor(corrections, metric); !ok || got.Now != want {
+			t.Errorf("%s = %+v, ok=%v, want %d", metric, got, ok, want)
+		}
+	}
+	if _, ok := correctionFor(corrections, library.SubtypeMetric("")); ok {
+		t.Error("works without a subtype got a subtype counter")
+	}
+	stale := library.SubtypeMetric("Concert video")
+	if err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetCounter(ctx, librarydb.SetCounterParams{Scope: "category:1", Metric: stale, Value: 4, UpdatedAt: 1})
+	}); err != nil {
+		t.Fatalf("SetCounter: %v", err)
+	}
+	corrections, err = counters.Reconcile(t.Context(), scopes)
+	if err != nil {
+		t.Fatalf("Reconcile again: %v", err)
+	}
+	if got, ok := correctionFor(corrections, stale); !ok || got.Now != 0 || got.Was != 4 {
+		t.Errorf("%s = %+v, ok=%v, want zeroed from 4", stale, got, ok)
 	}
 }

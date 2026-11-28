@@ -6170,6 +6170,9 @@ type PersonDetail struct {
 	Monitored bool             `json:"monitored"`
 	Name      string           `json:"name"`
 	SortName  string           `json:"sort_name"`
+
+	// Videos The credits whose work its media type lists on a level of its own (a music library's concert and music videos), kept out of credits so a discography holds one kind of work.
+	Videos *[]WorkCredit `json:"videos,omitempty"`
 }
 
 // PersonEdit defines model for PersonEdit.
@@ -10114,6 +10117,9 @@ type ListWorksParams struct {
 
 	// PersonId Only works the person is credited on.
 	PersonId *int64 `form:"person_id,omitempty" json:"person_id,omitempty"`
+
+	// Linked Only works holding a provider id that starts with a prefix: comma-separated `provider=prefix` pairs, any one matching. How a work is tied to another (a music video to its album) is the media type's own.
+	Linked *string `form:"linked,omitempty" json:"linked,omitempty"`
 
 	// Favorite Only the works the caller hearted.
 	Favorite *bool `form:"favorite,omitempty" json:"favorite,omitempty"`
@@ -28794,6 +28800,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "person_id", r.URL.Query(), &params.PersonId)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "person_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "linked" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "linked", r.URL.Query(), &params.Linked)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "linked", Err: err})
 		return
 	}
 
