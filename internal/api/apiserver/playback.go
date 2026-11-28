@@ -116,39 +116,8 @@ func (s *Server) fileKeptFrom(ctx context.Context, access authz.Access, mediaObj
 
 // playbackFile finds the file for the caller or writes the 404 the caller gets for a file it cannot read (ADR-27).
 func (s *Server) playbackFile(w http.ResponseWriter, r *http.Request) (PlaybackFile, string, bool) {
-	access, err := authz.FromContext(r.Context())
-	if err != nil {
-		writeError(w, s.logger, err)
-		return PlaybackFile{}, "", false
-	}
-	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a media object id must be a number")
-		return PlaybackFile{}, "", false
-	}
-	if s.playback == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the player is not available")
-		return PlaybackFile{}, "", false
-	}
-	files, err := s.playback.LocatePlayback(r.Context(), mediaObjectID)
-	if errors.Is(err, ErrNoSuchFile) {
-		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
-		return PlaybackFile{}, "", false
-	}
-	if err != nil {
-		writeError(w, s.logger, err)
-		return PlaybackFile{}, "", false
-	}
-	// A file placed in several roots is the caller's through any root they may read, not only its first.
-	visibleRoots, _ := s.visibleAt(access, settings.PermissionRead)
-	index := slices.IndexFunc(files, func(file PlaybackFile) bool { return slices.Contains(visibleRoots, file.RootFolderID) })
-	if index < 0 {
-		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
-		return PlaybackFile{}, "", false
-	}
-	file := files[index]
-	if s.fileKeptFrom(r.Context(), access, mediaObjectID) {
-		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
+	file, ok := s.visibleFile(w, r)
+	if !ok {
 		return PlaybackFile{}, "", false
 	}
 	kind := playbackKind(file)
@@ -157,6 +126,46 @@ func (s *Server) playbackFile(w http.ResponseWriter, r *http.Request) (PlaybackF
 		return PlaybackFile{}, "", false
 	}
 	return file, kind, true
+}
+
+// visibleFile finds the file for the caller, whatever it is, or writes the 404 the caller gets for a file it cannot read.
+func (s *Server) visibleFile(w http.ResponseWriter, r *http.Request) (PlaybackFile, bool) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return PlaybackFile{}, false
+	}
+	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a media object id must be a number")
+		return PlaybackFile{}, false
+	}
+	if s.playback == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the player is not available")
+		return PlaybackFile{}, false
+	}
+	files, err := s.playback.LocatePlayback(r.Context(), mediaObjectID)
+	if errors.Is(err, ErrNoSuchFile) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
+		return PlaybackFile{}, false
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return PlaybackFile{}, false
+	}
+	// A file placed in several roots is the caller's through any root they may read, not only its first.
+	visibleRoots, _ := s.visibleAt(access, settings.PermissionRead)
+	index := slices.IndexFunc(files, func(file PlaybackFile) bool { return slices.Contains(visibleRoots, file.RootFolderID) })
+	if index < 0 {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
+		return PlaybackFile{}, false
+	}
+	file := files[index]
+	if s.fileKeptFrom(r.Context(), access, mediaObjectID) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
+		return PlaybackFile{}, false
+	}
+	return file, true
 }
 
 // withProbedFacts fills what the library has not measured from ffprobe, so a file nobody probed yet still shows its
@@ -304,8 +313,12 @@ func nonEmpty(value string) *string {
 
 // routeStreamFile serves the bytes with Range support, which is all a browser needs to seek.
 func (s *Server) routeStreamFile(w http.ResponseWriter, r *http.Request) {
-	file, _, ok := s.playbackFile(w, r)
+	file, ok := s.visibleFile(w, r)
 	if !ok {
+		return
+	}
+	if playbackKind(file) == "" && !readableDocument(file.AbsolutePath) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "this file is neither audio, video nor a document the reader opens")
 		return
 	}
 	opened, err := s.fsys.Open(file.AbsolutePath)

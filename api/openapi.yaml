@@ -1406,6 +1406,86 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /files/{mediaObjectId}/pages:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getFilePages
+      tags: [library]
+      summary: How many pages a comic file (cbz, cbr, cb7, cbt) has, for the built-in reader.
+      responses:
+        "200":
+          description: The page count.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /files/{mediaObjectId}/pages/{index}:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: index
+        in: path
+        required: true
+        description: Zero-based page in reading order.
+        schema: { type: integer }
+    get:
+      operationId: getFilePage
+      tags: [library]
+      summary: One page image of a comic file, as stored in the archive.
+      responses:
+        "200":
+          description: The page image.
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /files/{mediaObjectId}/reading-position:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getReadingPosition
+      tags: [library]
+      summary: Where the caller stopped reading the file; 404 when they have not started.
+      responses:
+        "200":
+          description: The position.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadingPosition" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setReadingPosition
+      tags: [library]
+      summary: Keep where the caller stopped reading the file.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReadingPosition" }
+      responses:
+        "204": { description: Kept. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /files/{mediaObjectId}/subtitles/{track}:
     parameters:
       - name: mediaObjectId
@@ -11483,6 +11563,12 @@ components:
         last_cache_sync: { type: string, format: date-time }
         last_database_sync: { type: string, format: date-time }
         notice: { type: string, description: Why an option was switched off or not started, until the next save. }
+    ReadingPosition:
+      type: object
+      required: [position, progress]
+      properties:
+        position: { type: string, maxLength: 2048, description: "A page number for a comic or a PDF, an EPUB location (CFI) for an ebook." }
+        progress: { type: number, format: double, minimum: 0, maximum: 1, description: How far through the file the position is. }
     ImageSettings:
       type: object
       required: [cover_max_edge, cover_quality, preview_max_edge, preview_quality, format]

@@ -20,7 +20,7 @@ var openHandlers = []string{
 	"CreateFranchise", "DeleteFranchise", "SetMetadataProviderKey", "GetArrInstanceSyncOptions", "SetArrInstanceSyncOptions",
 	"ListArrInstanceIndexers", "ListArrInstanceDownloadClients", "GetArrInstancePull", "SetArrInstancePull", "GetOrganisation",
 	"GetAuthPolicy", "SetAuthPolicy", "GetTransportKey", "GetHealth", "GetReady", "GetAbout", "GetAboutLicense",
-	"GetAboutAttribution", "GetFilePlayback", "GetFileSubtitle", "SetTheAudioDBAPIKey", "SetTMDBAPIKey", "SetTVDBAPIKey",
+	"GetAboutAttribution", "GetFilePlayback", "GetFilePages", "GetFilePage", "GetReadingPosition", "SetReadingPosition", "GetFileSubtitle", "SetTheAudioDBAPIKey", "SetTMDBAPIKey", "SetTVDBAPIKey",
 	"ListWorkCandidates", "GetGeneralSettings",
 }
 

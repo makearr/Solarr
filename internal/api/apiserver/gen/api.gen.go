@@ -6763,6 +6763,15 @@ type ReadingListPreviewBooksMissing string
 // ReadingListPreviewBooksStatus defines model for ReadingListPreview.Books.Status.
 type ReadingListPreviewBooksStatus string
 
+// ReadingPosition defines model for ReadingPosition.
+type ReadingPosition struct {
+	// Position A page number for a comic or a PDF, an EPUB location (CFI) for an ebook.
+	Position string `json:"position"`
+
+	// Progress How far through the file the position is.
+	Progress float64 `json:"progress"`
+}
+
 // ReadyQueueLimit The ready queue's bound (acquire.ready_queue_limit).
 type ReadyQueueLimit struct {
 	// Limit Default 200.
@@ -10567,6 +10576,9 @@ type CreateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 // UpdateExclusionPatternJSONRequestBody defines body for UpdateExclusionPattern for application/json ContentType.
 type UpdateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 
+// SetReadingPositionJSONRequestBody defines body for SetReadingPosition for application/json ContentType.
+type SetReadingPositionJSONRequestBody = ReadingPosition
+
 // RemoveAndBlockFileJSONRequestBody defines body for RemoveAndBlockFile for application/json ContentType.
 type RemoveAndBlockFileJSONRequestBody = RemoveAndBlockRequest
 
@@ -11349,12 +11361,24 @@ type ServerInterface interface {
 	// Heart something. Hearting twice changes nothing.
 	// (PUT /favorites/{subjectType}/{id})
 	AddFavorite(w http.ResponseWriter, r *http.Request, subjectType FavoriteSubject, id int64)
+	// How many pages a comic file (cbz, cbr, cb7, cbt) has, for the built-in reader.
+	// (GET /files/{mediaObjectId}/pages)
+	GetFilePages(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// One page image of a comic file, as stored in the archive.
+	// (GET /files/{mediaObjectId}/pages/{index})
+	GetFilePage(w http.ResponseWriter, r *http.Request, mediaObjectId int64, index int)
 	// What the built-in player needs to know to play a file.
 	// (GET /files/{mediaObjectId}/playback)
 	GetFilePlayback(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
 	// A preview picture of a video file, made by the probe sweep when previews are on.
 	// (GET /files/{mediaObjectId}/preview/{kind})
 	GetFilePreview(w http.ResponseWriter, r *http.Request, mediaObjectId int64, kind string)
+	// Where the caller stopped reading the file; 404 when they have not started.
+	// (GET /files/{mediaObjectId}/reading-position)
+	GetReadingPosition(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// Keep where the caller stopped reading the file.
+	// (PUT /files/{mediaObjectId}/reading-position)
+	SetReadingPosition(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
 	// "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
 	// (POST /files/{mediaObjectId}/remove-block)
 	RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
@@ -13146,6 +13170,18 @@ func (_ Unimplemented) AddFavorite(w http.ResponseWriter, r *http.Request, subje
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// How many pages a comic file (cbz, cbr, cb7, cbt) has, for the built-in reader.
+// (GET /files/{mediaObjectId}/pages)
+func (_ Unimplemented) GetFilePages(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One page image of a comic file, as stored in the archive.
+// (GET /files/{mediaObjectId}/pages/{index})
+func (_ Unimplemented) GetFilePage(w http.ResponseWriter, r *http.Request, mediaObjectId int64, index int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // What the built-in player needs to know to play a file.
 // (GET /files/{mediaObjectId}/playback)
 func (_ Unimplemented) GetFilePlayback(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
@@ -13155,6 +13191,18 @@ func (_ Unimplemented) GetFilePlayback(w http.ResponseWriter, r *http.Request, m
 // A preview picture of a video file, made by the probe sweep when previews are on.
 // (GET /files/{mediaObjectId}/preview/{kind})
 func (_ Unimplemented) GetFilePreview(w http.ResponseWriter, r *http.Request, mediaObjectId int64, kind string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Where the caller stopped reading the file; 404 when they have not started.
+// (GET /files/{mediaObjectId}/reading-position)
+func (_ Unimplemented) GetReadingPosition(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Keep where the caller stopped reading the file.
+// (PUT /files/{mediaObjectId}/reading-position)
+func (_ Unimplemented) SetReadingPosition(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -19396,6 +19444,81 @@ func (siw *ServerInterfaceWrapper) AddFavorite(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetFilePages operation middleware
+func (siw *ServerInterfaceWrapper) GetFilePages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFilePages(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFilePage operation middleware
+func (siw *ServerInterfaceWrapper) GetFilePage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "index" -------------
+	var index int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "index", chi.URLParam(r, "index"), &index, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "index", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFilePage(w, r, mediaObjectId, index)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetFilePlayback operation middleware
 func (siw *ServerInterfaceWrapper) GetFilePlayback(w http.ResponseWriter, r *http.Request) {
 
@@ -19462,6 +19585,72 @@ func (siw *ServerInterfaceWrapper) GetFilePreview(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetFilePreview(w, r, mediaObjectId, kind)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReadingPosition operation middleware
+func (siw *ServerInterfaceWrapper) GetReadingPosition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReadingPosition(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetReadingPosition operation middleware
+func (siw *ServerInterfaceWrapper) SetReadingPosition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetReadingPosition(w, r, mediaObjectId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -30801,10 +30990,22 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/favorites/{subjectType}/{id}", wrapper.AddFavorite)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{mediaObjectId}/pages", wrapper.GetFilePages)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{mediaObjectId}/pages/{index}", wrapper.GetFilePage)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files/{mediaObjectId}/playback", wrapper.GetFilePlayback)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files/{mediaObjectId}/preview/{kind}", wrapper.GetFilePreview)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{mediaObjectId}/reading-position", wrapper.GetReadingPosition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/files/{mediaObjectId}/reading-position", wrapper.SetReadingPosition)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/files/{mediaObjectId}/remove-block", wrapper.RemoveAndBlockFile)

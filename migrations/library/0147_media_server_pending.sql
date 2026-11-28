@@ -217,3 +217,14 @@ CREATE TABLE file_defect (
   size_bytes      INTEGER NOT NULL,
   detected_at     INTEGER NOT NULL
 ) WITHOUT ROWID;
+
+-- Where each user stopped reading a file (a page number, an EPUB location, a PDF page); user_id has no foreign key, settings.db is another file.
+CREATE TABLE reading_position (
+  user_id         INTEGER NOT NULL,
+  media_object_id INTEGER NOT NULL REFERENCES media_object(id) ON DELETE CASCADE,
+  position        TEXT    NOT NULL,
+  progress        REAL    NOT NULL DEFAULT 0,
+  updated_at      INTEGER NOT NULL,
+  PRIMARY KEY (user_id, media_object_id)
+) WITHOUT ROWID;
+CREATE INDEX reading_position_by_file ON reading_position(media_object_id);

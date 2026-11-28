@@ -548,6 +548,7 @@ type Querier interface {
 	GetPlaybackSince(ctx context.Context, arg GetPlaybackSinceParams) (int64, error)
 	GetProbeFailureAttempts(ctx context.Context, mediaObjectID int64) (int64, error)
 	GetProbeFailureRaw(ctx context.Context, mediaObjectID int64) (string, error)
+	GetReadingPosition(ctx context.Context, arg GetReadingPositionParams) (ReadingPosition, error)
 	GetRecommendation(ctx context.Context, id int64) (Recommendation, error)
 	GetRecommendationFeed(ctx context.Context, arg GetRecommendationFeedParams) (RecommendationFeed, error)
 	GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error)
@@ -1508,6 +1509,7 @@ type Querier interface {
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	SetPhash(ctx context.Context, arg SetPhashParams) error
 	SetPlaybackSince(ctx context.Context, arg SetPlaybackSinceParams) error
+	SetReadingPosition(ctx context.Context, arg SetReadingPositionParams) error
 	SetRecommendationFeed(ctx context.Context, arg SetRecommendationFeedParams) error
 	SetRecycleBinPath(ctx context.Context, arg SetRecycleBinPathParams) error
 	// Progress mid-sweep: the cursor advances, the watermark does not.

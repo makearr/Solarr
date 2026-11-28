@@ -970,6 +970,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/files/{mediaObjectId}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        /** How many pages a comic file (cbz, cbr, cb7, cbt) has, for the built-in reader. */
+        get: operations["getFilePages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{mediaObjectId}/pages/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+                /** @description Zero-based page in reading order. */
+                index: number;
+            };
+            cookie?: never;
+        };
+        /** One page image of a comic file, as stored in the archive. */
+        get: operations["getFilePage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{mediaObjectId}/reading-position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        /** Where the caller stopped reading the file; 404 when they have not started. */
+        get: operations["getReadingPosition"];
+        /** Keep where the caller stopped reading the file. */
+        put: operations["setReadingPosition"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files/{mediaObjectId}/subtitles/{track}": {
         parameters: {
             query?: never;
@@ -7730,6 +7790,15 @@ export interface components {
             last_database_sync?: string;
             /** @description Why an option was switched off or not started */
             notice?: string;
+        };
+        ReadingPosition: {
+            /** @description A page number for a comic or a PDF, an EPUB location (CFI) for an ebook. */
+            position: string;
+            /**
+             * Format: double
+             * @description How far through the file the position is.
+             */
+            progress: number;
         };
         ImageSettings: {
             /**
@@ -15437,6 +15506,109 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getFilePages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The page count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getFilePage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+                /** @description Zero-based page in reading order. */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The page image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getReadingPosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The position. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPosition"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setReadingPosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingPosition"];
+            };
+        };
+        responses: {
+            /** @description Kept. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

@@ -824,6 +824,14 @@ type PlaybackSync struct {
 	Since        int64
 }
 
+type ReadingPosition struct {
+	UserID        int64
+	MediaObjectID int64
+	Position      string
+	Progress      float64
+	UpdatedAt     int64
+}
+
 type ReadyQueue struct {
 	CandidateID   int64
 	DesiredItemID int64

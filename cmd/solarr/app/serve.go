@@ -1097,6 +1097,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Packs:            adapters.Packs{Packs: library.NewPacks(p.library)},
 		RemoveAndBlocker: p.fileRemover(),
 		Playback:         adapters.Playback{Physical: library.NewPhysical(p.library), Cache: p.cache},
+		ComicPages:       &comic.PageReader{FS: p.fsys},
+		ReadingPlaces:    adapters.ReadingPlaces{Store: library.NewReadingPositions(p.library)},
 		Transcoder:       p.transcoder,
 		TranscodeItems: adapters.Transcode{
 			Library: library.NewTranscodeItems(p.library, clock.NewSystem()), Service: p.transcodeService(), Stats: statistics.NewTranscodes(p.statistics), Settings: p.cache,

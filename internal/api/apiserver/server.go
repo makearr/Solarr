@@ -283,6 +283,9 @@ type Config struct {
 	// Playback finds the file the built-in player opens; Transcoder converts it. Both optional: without them the player answers 503.
 	Playback   PlaybackLocator
 	Transcoder *transcode.Service
+	// ComicPages and ReadingPlaces serve the in-browser reader. Optional: nil answers 503.
+	ComicPages    ComicPages
+	ReadingPlaces ReadingPlaces
 	// TranscodeItems is the conversion pipeline behind the transcode page. Optional: nil answers 503.
 	TranscodeItems TranscodePipeline
 	// DatabaseMemory reports each database's page cache; optional.
@@ -472,6 +475,8 @@ type Server struct {
 	afterWrite              func()
 	memoryCopies            MemoryCopies
 	playback                PlaybackLocator
+	comicPages              ComicPages
+	readingPlaces           ReadingPlaces
 	transcoder              *transcode.Service
 	transcodeItems          TranscodePipeline
 	databaseMemory          DatabaseMemoryReader
@@ -642,6 +647,8 @@ func New(config Config) (*Server, error) {
 		afterWrite:              config.AfterWrite,
 		memoryCopies:            config.MemoryCopies,
 		playback:                config.Playback,
+		comicPages:              config.ComicPages,
+		readingPlaces:           config.ReadingPlaces,
 		watchState:              config.WatchState,
 		transcoder:              config.Transcoder,
 		transcodeItems:          config.TranscodeItems,
@@ -1108,6 +1115,10 @@ func New(config Config) (*Server, error) {
 			secured.Get("/files/{mediaObjectId}/playback", server.routeGetFilePlayback)
 			secured.Get("/files/{mediaObjectId}/preview/{kind}", server.routeGetFilePreview)
 			secured.Get("/files/{mediaObjectId}/stream", server.routeStreamFile)
+			secured.Get("/files/{mediaObjectId}/pages", server.routeGetFilePages)
+			secured.Get("/files/{mediaObjectId}/pages/{index}", server.routeGetFilePage)
+			secured.Get("/files/{mediaObjectId}/reading-position", server.routeGetReadingPosition)
+			secured.Put("/files/{mediaObjectId}/reading-position", server.routeSetReadingPosition)
 			secured.Get("/files/{mediaObjectId}/transcode", server.routeTranscodeFile)
 			secured.Get("/files/{mediaObjectId}/subtitles/{track}", server.routeSubtitleRequest)
 			secured.Get("/streaming", server.GetStreaming)
