@@ -145,6 +145,23 @@ func (p *process) acquisitionReleaseGroups(ctx context.Context, acquisitionID in
 	return groups, nil
 }
 
+// acquisitionVideo is the video work a download was grabbed for: its own provider id, which the import then resolves to the wanted work.
+func (p *process) acquisitionVideo(ctx context.Context, acquisitionID int64) (*music.VideoIdentity, error) {
+	acquisition, err := library.NewAcquisitions(p.library).Get(ctx, acquisitionID)
+	if err != nil || acquisition.DesiredItemID == nil {
+		return nil, err
+	}
+	item, err := library.NewDesired(p.library).Get(ctx, *acquisition.DesiredItemID)
+	if err != nil {
+		return nil, err
+	}
+	detail, err := library.NewWorks(p.library).Detail(ctx, item.WorkID)
+	if err != nil {
+		return nil, err
+	}
+	return music.WantedVideoIdentity(detail), nil
+}
+
 // importCommitter builds ADR-48's COMMIT step fresh per call (ask, don't cache), shared by import.inspect's inline placement and manualCommitter so they never drift.
 func (p *process) importCommitter() music.Committer {
 	desired := library.NewDesired(p.library)
@@ -278,7 +295,7 @@ func (p *process) comicImporter() comic.Importer {
 // musicImporter is Lidarr's import: tags, MusicBrainz search, album matching and fingerprints, placed by importCommitter.
 func (p *process) musicImporter() music.Importer {
 	return music.NewImporter(music.ImporterConfig{
-		Tool: p.mediaTool(), Search: p.musicBrainzProvider(), Albums: p.musicBrainzProvider(), AcoustID: p.acoustIDLookup(), Videos: p.musicBrainzProvider(), Kinds: p.libraryKind,
+		Tool: p.mediaTool(), Search: p.musicBrainzProvider(), Albums: p.musicBrainzProvider(), AcoustID: p.acoustIDLookup(), Videos: p.musicBrainzProvider(), WantedVideo: p.acquisitionVideo, Kinds: p.libraryKind,
 		Committer: pushingCommitter{inner: p.importCommitter(), push: p.afterPlacing}, Provenance: p.acquisitionReleaseGroups, Profile: p.musicProfileGate(), Logger: p.logger,
 	})
 }

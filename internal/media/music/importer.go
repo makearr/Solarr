@@ -45,6 +45,8 @@ type ImporterConfig struct {
 	AcoustID AcoustIDLookup
 	// Videos names the videos of a download from MusicBrainz; nil leaves them unverified.
 	Videos VideoLookup
+	// WantedVideo answers the video work a download was grabbed for, nil when it was grabbed for none.
+	WantedVideo func(ctx context.Context, acquisitionID int64) (*VideoIdentity, error)
 	// Kinds answers a library's kind (Concert videos, Music videos); nil for none.
 	Kinds     func(categoryID int64) string
 	Committer UnitCommitter
@@ -334,9 +336,20 @@ func (i Importer) decideVideoUnit(
 	identities := make([]*VideoIdentity, len(unit.Media))
 	named := 0
 	var confidence float64
+	// A download grabbed for one wanted video is that video, whatever its name says; with several files it cannot tell which.
+	var grabbedFor *VideoIdentity
+	if i.config.WantedVideo != nil && request.AcquisitionID != nil && len(unit.Media) == 1 {
+		var err error
+		if grabbedFor, err = i.config.WantedVideo(ctx, *request.AcquisitionID); err != nil {
+			i.logger.Warn("music: wanted video of a download not read", slog.Int64("acquisition_id", *request.AcquisitionID), slog.Any("error", err))
+		}
+	}
 	for at, file := range unit.Media {
 		claim := InspectVideo(file.RelPath, byPath[file.RelPath], kind)
-		identity, err := IdentifyVideo(ctx, i.config.Videos, claim, threshold)
+		identity, err := grabbedFor, error(nil)
+		if identity == nil {
+			identity, err = IdentifyVideo(ctx, i.config.Videos, claim, threshold)
+		}
 		if err != nil {
 			i.logger.Warn("music: video lookup failed", slog.String("path", file.RelPath), slog.Any("error", err))
 		}

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/inspect"
@@ -127,5 +128,57 @@ func TestCommitVideoUnit_ANamedMusicVideoIsItsRecordingAndLinksItsAlbum(t *testi
 	slices.Sort(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("external ids = %v, want %v", got, want)
+	}
+}
+
+// A grabbed video completes the wanted work it was grabbed for, in a library that wants videos: no second work, the item filled.
+func TestCommitVideoUnit_AGrabbedVideoCompletesTheWantedWork(t *testing.T) { completesWanted(t, true) }
+
+// Where videos are switched off the same download fills nothing.
+func TestCommitVideoUnit_AGrabbedVideoFillsNothingWhereVideosAreOff(t *testing.T) {
+	completesWanted(t, false)
+}
+
+func completesWanted(t *testing.T, videosOn bool) {
+	t.Helper()
+	committer, opened, fsys := newCommitterWith(t, true, func(config *music.CommitterConfig) {
+		config.Categories = fakeCategories{commitCategoryID: {ID: commitCategoryID, MusicVideos: videosOn}}
+	})
+	identity := library.NewIdentity(opened)
+	workIDs, err := identity.ResolveWorks(t.Context(), time.Unix(1, 0), []library.WorkLink{{
+		Provider: music.ProviderVideoRecording, ExternalID: "rec-1", Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Sesoge", SortTitle: "sesoge", Subtype: music.SubtypeMusicVideo},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := library.NewDesired(opened)
+	item, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{WorkID: workIDs[0], CategoryID: commitCategoryID, ProfileID: 42, Monitored: true, RequiredWithoutParts: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCommitSourceFile(t, fsys, "Rel/clip.mkv", []byte("video"))
+	unit := testUnit("Rel", []inspect.File{{RelPath: "Rel/clip.mkv", SizeBytes: 5}})
+	probes := []mediatool.Probe{{Tags: mediatool.Tags{"artist": "Katupoken", "title": "Sesoge"}}}
+	grabbed := &music.VideoIdentity{Provider: music.ProviderVideoRecording, ExternalID: "rec-1", Title: "Sesoge", Confidence: 1}
+
+	placed, err := committer.CommitVideoUnit(t.Context(), commitSourceRoot, unit, probes, []*music.VideoIdentity{grabbed}, commitCategoryID, nil)
+	if err != nil {
+		t.Fatalf("CommitVideoUnit: %v", err)
+	}
+	if placed.WorkID != workIDs[0] || placed.WorkCreated {
+		t.Fatalf("placed work = %d (created %v), want the wanted work %d", placed.WorkID, placed.WorkCreated, workIDs[0])
+	}
+	got, err := desired.Get(t.Context(), item.ID)
+	wantState, wantPresent := "MISSING", int64(0)
+	if videosOn {
+		wantState, wantPresent = "COMPLETE", 1
+	}
+	if err != nil || got.State != wantState || got.PresentCount != wantPresent {
+		t.Errorf("item = %+v, %v; want %s with %d files", got, err, wantState, wantPresent)
+	}
+	var works int
+	if err := opened.Read().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM work").Scan(&works); err != nil || works != 1 {
+		t.Errorf("works = %d (%v), want only the wanted one", works, err)
 	}
 }

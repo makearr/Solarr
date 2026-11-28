@@ -299,7 +299,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/acquiring/cutoff":   {"internal/db/library", "internal/db/settings", "internal/jobs"},
 	"internal/acquiring/dispatch": {"internal/db/statistics", "internal/acquiring/download", "internal/db/library", "internal/identify/model", "internal/identify/priority", "internal/platform/keyedlock", "internal/platform/httpx"},
 	"internal/media/music": {"internal/metadata/lrclib", "internal/moving/sidecar", "internal/metadata/specprovider", "internal/mediaserver", "internal/platform/iogate", "internal/platform/httpx", "internal/platform/filekind", "internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
-		"internal/media", "internal/acquiring/plan", "internal/acquiring/dispatch",
+		"internal/media", "internal/media/works", "internal/acquiring/releasefacts", "internal/identify/parsemovie", "internal/acquiring/plan", "internal/acquiring/dispatch",
 		"internal/acquiring/indexer", "internal/acquiring/download", "internal/identify/priority",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/importing/inspect", "internal/jobs", "internal/db/library",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/match"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
@@ -151,4 +152,17 @@ func titleOrCore(title string) string {
 		return core
 	}
 	return title
+}
+
+// WantedVideoIdentity is the identity of a wanted video work: its recording or live release group, with full confidence; nil for a work that is not one.
+func WantedVideoIdentity(detail library.WorkDetail) *VideoIdentity {
+	if !detail.Work.Subtype.Valid || !slices.Contains(VideoSubtypes(), detail.Work.Subtype.String) {
+		return nil
+	}
+	for _, external := range detail.ExternalIDs {
+		if external.Provider == ProviderVideoRecording || external.Provider == ProviderLiveVideo {
+			return &VideoIdentity{Provider: external.Provider, ExternalID: external.ExternalID, Title: detail.Work.CanonicalTitle, Confidence: 1}
+		}
+	}
+	return nil
 }

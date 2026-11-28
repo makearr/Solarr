@@ -77,8 +77,17 @@ func (c Consumer) observeVideos(ctx context.Context, root settings.RootFolder, c
 	if err := c.unidentified.Record(ctx, queue); err != nil {
 		return fmt.Errorf("music: %w", err)
 	}
+	wantsVideos := false
+	if c.categories != nil {
+		category, found := c.categories.Category(categoryID)
+		wantsVideos = found && category.MusicVideos
+	}
 	for index, workID := range workIDs {
-		if err := c.unmonitorWork(ctx, workID); err != nil {
+		if wantsVideos && identities[index] != nil {
+			if err := attachVideoFile(ctx, c.desired, categoryID, workID, mediaObjectIDs[index], now.Unix()); err != nil {
+				return fmt.Errorf("music: %w", err)
+			}
+		} else if err := c.unmonitorWork(ctx, workID); err != nil {
 			return fmt.Errorf("music: %w", err)
 		}
 		if err := linkVideoAlbum(ctx, c.identity, now, workID, identities[index]); err != nil {
@@ -131,4 +140,24 @@ func linkVideoAlbum(ctx context.Context, identity library.Identity, at time.Time
 		return nil
 	}
 	return identity.LinkExternalIDIfFree(ctx, at, workID, ProviderVideoAlbum, VideoAlbumID(named.ReleaseGroupMBID, named.ExternalID), named.Confidence)
+}
+
+// attachVideoFile fills the library's wanted item of a video work with the file that arrived, which completes it; a work nobody wants there is left alone.
+func attachVideoFile(ctx context.Context, desired *library.Desired, categoryID, workID, mediaObjectID, at int64) error {
+	if desired == nil {
+		return nil
+	}
+	items, err := desired.AlbumItemsForWork(ctx, workID)
+	if err != nil {
+		return fmt.Errorf("items of video work %d: %w", workID, err)
+	}
+	for _, item := range items {
+		if item.CategoryID != categoryID {
+			continue
+		}
+		if err := desired.RecordAlignment(ctx, item.ID, workID, []library.AlignedFile{{MediaObjectID: mediaObjectID}}, at); err != nil {
+			return fmt.Errorf("attach video file to item %d: %w", item.ID, err)
+		}
+	}
+	return nil
 }

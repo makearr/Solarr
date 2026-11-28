@@ -97,7 +97,12 @@ func (c Committer) CommitVideoUnit(
 		if err := linkVideoAlbum(ctx, c.identity, now, resolution.WorkID, identities[index]); err != nil {
 			return Placed{}, fmt.Errorf("music: video unit %q: %w", unit.Directory, err)
 		}
-		if claims[index].Artist == "" || c.people == nil {
+		if category, found := c.categories.Category(categoryID); found && category.MusicVideos && identities[index] != nil {
+			if err := attachVideoFile(ctx, c.desired, categoryID, resolution.WorkID, mediaObjectIDs[index], now.Unix()); err != nil {
+				return Placed{}, fmt.Errorf("music: video unit %q: %w", unit.Directory, err)
+			}
+		}
+		if (!resolution.WorkCreated && identities[index] != nil) || claims[index].Artist == "" || c.people == nil {
 			continue
 		}
 		personID, err := c.people.ResolveFolderArtist(ctx, now, ProviderLocalArtist, claims[index].Artist)
