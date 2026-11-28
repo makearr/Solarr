@@ -42,6 +42,7 @@ var CollectionPassDefinition = jobs.Definition{
 type CollectionSource interface {
 	AlbumFranchises(ctx context.Context, releaseGroups []string) (map[string][]wikidata.AlbumFranchise, error)
 	MusicSeriesItems(ctx context.Context, seriesMBIDs []string) (map[string]string, error)
+	ReleaseGroupItems(ctx context.Context, releaseGroups []string) (map[string]string, error)
 	ItemFranchises(ctx context.Context, qids []string) (map[string][]string, error)
 }
 
@@ -152,6 +153,7 @@ func (p CollectionPass) readFranchises(ctx context.Context) error {
 	if err != nil {
 		return jobs.Retryablef("music.collections", string(CollectionPassJobType), err)
 	}
+	p.linkAlbumItems(ctx, asked, works)
 	summaries, err := p.Franchises.Summaries(ctx, string(MediaType))
 	if err != nil {
 		return err
@@ -357,4 +359,22 @@ const CollectionPassActionKey = "music.collections"
 // EnqueueCollectionPass submits one pass; a second while one waits is the same work.
 func EnqueueCollectionPass(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
 	return queue.Enqueue(ctx, jobs.Request{Type: CollectionPassJobType, ActionKey: CollectionPassActionKey, Priority: jobs.PriorityLow})
+}
+
+// linkAlbumItems keeps the Wikidata item of each album, which is what links its English Wikipedia article; best effort,
+// since the franchises do not depend on it.
+func (p CollectionPass) linkAlbumItems(ctx context.Context, releaseGroups []string, works map[string][]int64) {
+	items, err := p.Wikidata.ReleaseGroupItems(ctx, releaseGroups)
+	if err != nil {
+		p.Logger.WarnContext(ctx, "album wikidata items not read", slog.Any("error", err))
+		return
+	}
+	for mbid, qid := range items {
+		for _, workID := range works[mbid] {
+			if err := p.Franchises.LinkWorkProviderID(ctx, workID, ProviderWikidata, qid); err != nil {
+				p.Logger.WarnContext(ctx, "album wikidata item not kept", slog.Int64("work_id", workID), slog.Any("error", err))
+				return
+			}
+		}
+	}
 }

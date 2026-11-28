@@ -56,6 +56,24 @@ func (f Fetcher) AlbumFranchises(ctx context.Context, releaseGroups []string) (m
 	return out, nil
 }
 
+// ReleaseGroupItems answers the Wikidata item of each MusicBrainz release group (P436); an album Wikidata does not know
+// is absent, and one with several items keeps the lowest.
+func (f Fetcher) ReleaseGroupItems(ctx context.Context, releaseGroups []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, batch := range quotedBatches(releaseGroups, mbidPattern) {
+		rows, err := f.sparql(ctx, `SELECT ?id ?a WHERE { VALUES ?id { `+batch+` } ?a wdt:P436 ?id . }`)
+		if err != nil {
+			return out, err
+		}
+		for _, row := range rows {
+			if qid := qidOf(row["a"].Value); qidPattern.MatchString(qid) && (out[row["id"].Value] == "" || qid < out[row["id"].Value]) {
+				out[row["id"].Value] = qid
+			}
+		}
+	}
+	return out, nil
+}
+
 // MusicSeriesItems answers the Wikidata item of each MusicBrainz series (P1407); one Wikidata does not know is absent.
 func (f Fetcher) MusicSeriesItems(ctx context.Context, seriesMBIDs []string) (map[string]string, error) {
 	out := map[string]string{}

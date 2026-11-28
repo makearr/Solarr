@@ -627,6 +627,8 @@ type Querier interface {
 	LinkOrganisationExternalID(ctx context.Context, arg LinkOrganisationExternalIDParams) error
 	LinkPersonExternalID(ctx context.Context, arg LinkPersonExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
+	// A provider id another work already holds stays with that work.
+	LinkWorkExternalIDIfFree(ctx context.Context, arg LinkWorkExternalIDIfFreeParams) error
 	// Every file a work was resolved from, each once. A row goes with its file
 	// (ON DELETE CASCADE).
 	LinkWorkFile(ctx context.Context, arg LinkWorkFileParams) error

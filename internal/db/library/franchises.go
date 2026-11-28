@@ -1018,3 +1018,16 @@ ORDER BY c.media_type, c.category_id, c.id`, FranchiseKind)
 	}
 	return byPlace, rows.Err()
 }
+
+// LinkWorkProviderID gives a work a provider id it lacks; one another work already holds stays with that work.
+func (f Franchises) LinkWorkProviderID(ctx context.Context, workID int64, provider, externalID string) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).LinkWorkExternalIDIfFree(ctx, librarydb.LinkWorkExternalIDIfFreeParams{
+			Provider: provider, ExternalID: externalID, WorkID: workID, Confidence: 1, FirstSeenAt: f.store.Now().Unix(),
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: link %s id to work %d: %w", provider, workID, err)
+	}
+	return nil
+}

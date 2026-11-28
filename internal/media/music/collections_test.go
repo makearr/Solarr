@@ -31,6 +31,10 @@ func (f fakeAlbumWikidata) MusicSeriesItems(context.Context, []string) (map[stri
 	return f.series, nil
 }
 
+func (f fakeAlbumWikidata) ReleaseGroupItems(context.Context, []string) (map[string]string, error) {
+	return nil, nil
+}
+
 func (f fakeAlbumWikidata) ItemFranchises(context.Context, []string) (map[string][]string, error) {
 	return f.parts, nil
 }

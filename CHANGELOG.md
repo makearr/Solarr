@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Albums keep the Wikidata item MusicBrainz lists for them (found with the collections pass), so an album page links its English Wikipedia article.
 - The maximum age of an account now also applies to Discover recommendations (rated above the limit, or unrated outside a Kids library), the calendar and collection lists.
 - *Arr connections: send what lies under one of the *Arr's root folders to another library (a Sonarr root for anime to the Anime library); imports, syncs, previews and adds to the *Arr (Companion mode) follow it, and a connection serves every library it has a root folder for.
 - Built-in reader: a Read button on comic (cbz, cbr, cb7, cbt), EPUB and PDF files opens them in the browser; comics have right-to-left reading for manga, two pages side by side and page turning by keys or the page edges; each user's place in each file is kept and resumed. Schema: new `reading_position` table in library.db (migration 0147, edit in place; recreate a dev library database).

@@ -63,6 +63,12 @@ ON CONFLICT (provider, external_id) DO UPDATE SET
   work_id = excluded.work_id,
   confidence = excluded.confidence;
 
+-- A provider id another work already holds stays with that work.
+-- name: LinkWorkExternalIDIfFree :exec
+INSERT INTO work_external_id (provider, external_id, work_id, confidence, first_seen_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (provider, external_id) DO NOTHING;
+
 -- name: ListWorkExternalIDs :many
 SELECT provider, external_id, work_id, confidence, first_seen_at
 FROM work_external_id WHERE work_id = ? ORDER BY provider, external_id;

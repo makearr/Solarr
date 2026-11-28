@@ -1148,6 +1148,32 @@ func (q *Queries) LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalID
 	return err
 }
 
+const linkWorkExternalIDIfFree = `-- name: LinkWorkExternalIDIfFree :exec
+INSERT INTO work_external_id (provider, external_id, work_id, confidence, first_seen_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (provider, external_id) DO NOTHING
+`
+
+type LinkWorkExternalIDIfFreeParams struct {
+	Provider    string
+	ExternalID  string
+	WorkID      int64
+	Confidence  float64
+	FirstSeenAt int64
+}
+
+// A provider id another work already holds stays with that work.
+func (q *Queries) LinkWorkExternalIDIfFree(ctx context.Context, arg LinkWorkExternalIDIfFreeParams) error {
+	_, err := q.db.ExecContext(ctx, linkWorkExternalIDIfFree,
+		arg.Provider,
+		arg.ExternalID,
+		arg.WorkID,
+		arg.Confidence,
+		arg.FirstSeenAt,
+	)
+	return err
+}
+
 const linkWorkPartExternalID = `-- name: LinkWorkPartExternalID :exec
 INSERT INTO work_part_external_id (provider, external_id, part_id, confidence)
 VALUES (?, ?, ?, ?)
