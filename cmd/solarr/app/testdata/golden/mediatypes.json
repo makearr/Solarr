@@ -276,6 +276,16 @@
         "help": "Live recordings, DJ mixes and mixtapes.",
         "key": "live",
         "label": "Live and DJ mixes"
+      },
+      {
+        "help": "Concert films: video works of an artist, kept with their live album.",
+        "key": "concert_videos",
+        "label": "Concert videos"
+      },
+      {
+        "help": "Music videos: video works of a track.",
+        "key": "music_videos",
+        "label": "Music videos"
       }
     ],
     "label": "Music",

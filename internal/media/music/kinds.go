@@ -21,4 +21,12 @@ var libraryKinds = []media.LibraryKind{
 		Rules: []settings.LibraryRule{{Conditions: []settings.RuleCondition{{Field: settings.RuleGenre, Value: "Children's Music"}}}},
 	},
 	{Key: "live", Label: "Live and DJ mixes", Help: "Live recordings, DJ mixes and mixtapes.", QualityProfiles: []string{"Lossy 320", "Lossless preferred", "Space conscious"}},
+	{
+		Key: "concert_videos", Label: "Concert videos", Help: "Concert films: video works of an artist, kept with their live album.",
+		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"},
+	},
+	{
+		Key: "music_videos", Label: "Music videos", Help: "Music videos: video works of a track.",
+		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"},
+	},
 }
