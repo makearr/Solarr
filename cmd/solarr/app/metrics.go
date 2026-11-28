@@ -94,7 +94,7 @@ func (p *process) minuteSamples(sampler *procstat.Sampler) []statistics.MetricSa
 	for _, stat := range p.timings.rec.Snapshot() {
 		switch stat.Kind {
 		case measure.Disk:
-			group := p.disks.GroupOfPath(stat.Key)
+			group := p.disks.GroupLabel(p.disks.GroupOfPath(stat.Key))
 			if groups[group] == nil {
 				groups[group] = &diskGroupFigures{}
 			}
@@ -114,7 +114,7 @@ func (p *process) minuteSamples(sampler *procstat.Sampler) []statistics.MetricSa
 	if p.watch != nil {
 		for root, count := range p.watch.Status().ByRoot {
 			if group, _, found := p.disks.GroupOfRoot(root); found {
-				watches[group] += count
+				watches[p.disks.GroupLabel(group)] += count
 			}
 		}
 	}

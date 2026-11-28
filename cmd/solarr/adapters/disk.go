@@ -82,17 +82,54 @@ func (a *DiskManager) GroupOfPath(path string) string {
 	if known, ok := a.pathGroups[path]; ok && a.Clock.Now().Sub(known.at) <= layoutTTL {
 		return known.group
 	}
-	group := disktopo.Detect(a.FS, []string{path})[0].Group()
+	layout := disktopo.Detect(a.FS, []string{path})[0]
+	group := layout.Group()
 	if a.pathGroups == nil {
 		a.pathGroups = map[string]pathGroup{}
 	}
-	a.pathGroups[path] = pathGroup{group: group, at: a.Clock.Now()}
+	a.pathGroups[path] = pathGroup{group: group, fallback: fallbackGroupName(layout.Group(), layout.FSType, layout.MountPoint), at: a.Clock.Now()}
 	return group
 }
 
 type pathGroup struct {
-	group string
-	at    time.Time
+	group    string
+	fallback string
+	at       time.Time
+}
+
+// GroupLabel is the readable name of a disk group for Statistics: the admin's name for it when a root folder carries
+// one, else the pool or disk name, else the filesystem type and mount point.
+func (a *DiskManager) GroupLabel(group string) string {
+	rows := a.cachedLayouts()
+	for _, row := range rows {
+		if row.Overridden && row.Group == group {
+			return group
+		}
+	}
+	for _, row := range rows {
+		if row.DetectedGroup == group {
+			if row.Overridden {
+				return row.Group
+			}
+			return fallbackGroupName(row.DetectedGroup, row.FSType, row.MountPoint)
+		}
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, known := range a.pathGroups {
+		if known.group == group {
+			return known.fallback
+		}
+	}
+	return group
+}
+
+// fallbackGroupName turns an anonymous "fs:<device id>" group into "<fstype> <mount point>"; named pools and disks stay.
+func fallbackGroupName(group, fsType, mountPoint string) string {
+	if !strings.HasPrefix(group, "fs:") || fsType == "" || mountPoint == "" {
+		return group
+	}
+	return fsType + " " + mountPoint
 }
 
 // PathOfGroup is a path that lives in the group, to probe its disk with.
