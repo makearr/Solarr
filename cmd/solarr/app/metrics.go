@@ -90,13 +90,15 @@ func (p *process) minuteSamples(sampler *procstat.Sampler) []statistics.MetricSa
 	}
 	var netBytes, netLatency float64
 	var netProviders int
+	groups := map[string]*diskGroupFigures{}
 	for _, stat := range p.timings.rec.Snapshot() {
 		switch stat.Kind {
 		case measure.Disk:
-			add("disk.calls_per_min", stat.Key, stat.OpsPerMin)
-			add("disk.latency_ms", stat.Key, float64(stat.Recent.Microseconds())/1000)
-			add("disk.bytes_per_sec", stat.Key, stat.BytesPerSec)
-			add("disk.degradation", stat.Key, stat.Degradation)
+			group := p.disks.GroupOfPath(stat.Key)
+			if groups[group] == nil {
+				groups[group] = &diskGroupFigures{}
+			}
+			groups[group].add(stat)
 		case measure.Net:
 			add("net.requests_per_min", stat.Key, stat.OpsPerMin)
 			add("net.latency_ms", stat.Key, float64(stat.Recent.Microseconds())/1000)
@@ -107,6 +109,23 @@ func (p *process) minuteSamples(sampler *procstat.Sampler) []statistics.MetricSa
 				netProviders++
 			}
 		}
+	}
+	watches := map[string]int{}
+	if p.watch != nil {
+		for root, count := range p.watch.Status().ByRoot {
+			if group, _, found := p.disks.GroupOfRoot(root); found {
+				watches[group] += count
+			}
+		}
+	}
+	for group, figures := range groups {
+		add("diskgroup.calls_per_min", group, figures.calls)
+		add("diskgroup.latency_ms", group, figures.meanLatencyMs())
+		add("diskgroup.bytes_per_sec", group, figures.bytesPerSec)
+		add("diskgroup.degradation", group, figures.degradation)
+	}
+	for group, count := range watches {
+		add("diskgroup.watches", group, float64(count))
 	}
 	add("net.bytes_per_sec", "", netBytes)
 	if netProviders > 0 {
@@ -145,6 +164,30 @@ func (p *process) minuteSamples(sampler *procstat.Sampler) []statistics.MetricSa
 	add("jobs.scans_per_min", "", float64(scans))
 	add("jobs.metadata_per_min", "", float64(metadata))
 	return samples
+}
+
+// diskGroupFigures is what Solarr's disk calls on every folder of one disk group add up to in a minute.
+type diskGroupFigures struct {
+	calls, bytesPerSec, degradation float64
+	latencyMs                       float64
+	timed                           int
+}
+
+func (g *diskGroupFigures) add(stat measure.Stat) {
+	g.calls += stat.OpsPerMin
+	g.bytesPerSec += stat.BytesPerSec
+	g.degradation = max(g.degradation, stat.Degradation)
+	if stat.Recent > 0 {
+		g.latencyMs += float64(stat.Recent.Microseconds()) / 1000
+		g.timed++
+	}
+}
+
+func (g *diskGroupFigures) meanLatencyMs() float64 {
+	if g.timed == 0 {
+		return 0
+	}
+	return g.latencyMs / float64(g.timed)
 }
 
 // libraryFigures are each library's item and file counts and the bytes on its folders.

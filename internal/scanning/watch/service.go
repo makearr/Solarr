@@ -346,13 +346,19 @@ type Status struct {
 	Watches     int
 	Directories int
 	BudgetShort bool
+	// ByRoot is how many of the watches lie in each root folder.
+	ByRoot map[int64]int
 }
 
 // Status reports the watches held and the directories they were chosen from.
 func (s *Service) Status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return Status{Watches: len(s.watched), Directories: s.directories, BudgetShort: s.budgetShort}
+	byRoot := map[int64]int{}
+	for _, where := range s.watched {
+		byRoot[where.root]++
+	}
+	return Status{Watches: len(s.watched), Directories: s.directories, BudgetShort: s.budgetShort, ByRoot: byRoot}
 }
 
 // Trust says whether the watch on a root has seen every change since lastScan, and how deep it reaches. It is false

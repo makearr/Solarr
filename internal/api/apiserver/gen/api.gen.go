@@ -7575,7 +7575,7 @@ type SystemMetricScope struct {
 	// Scope A library id, a root folder path or a provider; empty for the whole process.
 	Scope string `json:"scope"`
 
-	// Series What is measured, for example process.cpu_percent, disk.latency_ms, net.bytes_per_sec, jobs.scans_per_min, library.items.
+	// Series What is measured, for example process.cpu_percent, diskgroup.latency_ms, net.bytes_per_sec, jobs.scans_per_min, library.items.
 	Series string `json:"series"`
 }
 

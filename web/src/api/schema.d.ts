@@ -7519,7 +7519,7 @@ export interface components {
             error: string;
         };
         SystemMetricScope: {
-            /** @description What is measured, for example process.cpu_percent, disk.latency_ms, net.bytes_per_sec, jobs.scans_per_min, library.items. */
+            /** @description What is measured, for example process.cpu_percent, diskgroup.latency_ms, net.bytes_per_sec, jobs.scans_per_min, library.items. */
             series: string;
             /** @description A library id, a root folder path or a provider; empty for the whole process. */
             scope: string;

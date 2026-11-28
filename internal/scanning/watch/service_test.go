@@ -78,6 +78,13 @@ func TestReplan_WatchesTheShallowLevelsWithinTheBudget(t *testing.T) {
 	if status := service.Status(); status.Watches != 4 || status.Directories != 5 || !status.BudgetShort {
 		t.Fatalf("status = %+v, want 4 of 5 and short", status)
 	}
+	held := 0
+	for _, count := range service.Status().ByRoot {
+		held += count
+	}
+	if held != 4 {
+		t.Fatalf("watches by root add up to %d, want 4", held)
+	}
 }
 
 func TestEvents_AreRescannedOnceQuietAndABusyDirectoryDoesNotWaitForever(t *testing.T) {
