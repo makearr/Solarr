@@ -92,6 +92,8 @@ type WorksFilter struct {
 	// MediaTypes keeps only works of these types, nil any: the types the library holds, so a work whose file lies under the
 	// library's folder without being of its type is not listed in it.
 	MediaTypes []string
+	// Subtypes keeps only works of these subtypes, nil any; ExceptSubtypes leaves those out: a navigation level's own restriction.
+	Subtypes, ExceptSubtypes []string
 	// PersonID keeps only works the person is credited on, 0 any.
 	PersonID int64
 	// FavoriteUserID keeps only the works this user hearted, 0 any.

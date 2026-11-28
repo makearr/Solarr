@@ -41,7 +41,9 @@ const FILTER_KEYS: readonly string[] = ["monitored", "favorite", "where", "q"];
 /** Which levels open as a poster wall rather than a list -- the browse views
  *  a person actually looks at (Lidarr's own Artists and Albums), not Tracks,
  *  where a cover per row says nothing a tracklist does not. */
-const POSTER_LEVELS = new Set(["artists", "albums"]);
+// The levels that list works (music: Albums, Videos).
+const WORK_LEVELS: readonly string[] = ["albums", "videos"];
+const POSTER_LEVELS = new Set(["artists", ...WORK_LEVELS]);
 
 // What each level can be ordered by, and which way round the API wants it.
 // Title is every level's default; the rest are what the works list already
@@ -57,9 +59,9 @@ interface SortEntry {
 
 const SORTS: Record<SortKey, SortEntry> = {
   title: { label: "Name" },
-  artist: { label: "Artist", levels: ["albums"] },
-  year: { label: "Year", dir: "desc", levels: ["albums"] },
-  added: { label: "Recently added", dir: "desc", levels: ["albums"] },
+  artist: { label: "Artist", levels: WORK_LEVELS },
+  year: { label: "Year", dir: "desc", levels: WORK_LEVELS },
+  added: { label: "Recently added", dir: "desc", levels: WORK_LEVELS },
 };
 
 /** The orders one level offers, as the toolbar's choices. */
@@ -116,7 +118,7 @@ function imageSourceFor(level: string | undefined, item: LevelItem): { subject: 
 /** A level row as the index views show it. */
 function entryOf(level: string | undefined, item: LevelItem): IndexEntry {
   return {
-    id: item.id, kind: level === "artists" ? "artists" : level === "albums" ? "works" : "tracks",
+    id: item.id, kind: level === "artists" ? "artists" : level != null && WORK_LEVELS.includes(level) ? "works" : "tracks",
     title: item.title, subtitle: item.subtitle, year: item.year, status: item.status,
     presentCount: item.present_count, requiredCount: item.required_count, monitored: item.monitored,
     overview: item.overview, sizeBytes: item.size_bytes, artistCover: item.artist_cover,
@@ -187,7 +189,7 @@ export function LibraryLevelList() {
   return (
     <div ref={frameRef} className="flex h-full flex-col">
       <Toolbar title={<span className="capitalize">{level ?? "Library"}</span>}>
-        {(level === "artists" || level === "albums" || level === "tracks") && (
+        {(level === "artists" || level === "tracks" || (level != null && WORK_LEVELS.includes(level))) && (
           <ToolbarFavorites active={list.query.filters.favorite === "only"} onChange={(active) => list.filterBy("favorite", active ? "only" : "")} />
         )}
         {level === "artists" && (

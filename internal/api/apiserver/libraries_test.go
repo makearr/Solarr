@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -485,5 +486,34 @@ func TestListLibraries_NestsAFurtherMediaType(t *testing.T) {
 	}
 	if got := fixture.works.lastFilter.CategoryIDs; len(got) != 2 || got[0] != anime.ID || got[1] != movies.ID || fixture.works.lastFilter.MediaType != "movie" {
 		t.Errorf("All list asked for categories %v of type %q, want both of Anime, movies", got, fixture.works.lastFilter.MediaType)
+	}
+}
+
+// A level that is a subtype cut reaches the works reader with its subtypes, and shows no count of its own.
+func TestListLibraryLevel_SubtypeLevelsPassTheirCutToTheWorksReader(t *testing.T) {
+	navigation := fakeNavigation{"music": {
+		{Key: "albums", Label: "Albums", Entity: model.LevelEntityWork, ExceptSubtypes: []string{"Concert video"}},
+		{Key: "videos", Label: "Videos", Entity: model.LevelEntityWork, Subtypes: []string{"Concert video"}},
+	}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	for level, want := range map[string]apiserver.WorksFilter{
+		"albums": {ExceptSubtypes: []string{"Concert video"}},
+		"videos": {Subtypes: []string{"Concert video"}},
+	} {
+		recorder := fixture.do(authedGet(t, cookies, fmt.Sprintf("/api/v1/libraries/%d/%s", category.ID, level)))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s: status %d (%s)", level, recorder.Code, recorder.Body)
+		}
+		got := fixture.works.lastFilter
+		if !reflect.DeepEqual(got.Subtypes, want.Subtypes) || !reflect.DeepEqual(got.ExceptSubtypes, want.ExceptSubtypes) {
+			t.Errorf("%s: subtypes %v except %v, want %v except %v", level, got.Subtypes, got.ExceptSubtypes, want.Subtypes, want.ExceptSubtypes)
+		}
 	}
 }

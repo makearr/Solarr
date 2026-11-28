@@ -99,6 +99,8 @@ func (a Works) ListWorks(
 			OwnProfileOnly:  filter.OwnProfile,
 			MediaType:       filter.MediaType,
 			MediaTypes:      filter.MediaTypes,
+			Subtypes:        filter.Subtypes,
+			ExceptSubtypes:  filter.ExceptSubtypes,
 			PersonID:        filter.PersonID,
 			FavoriteUserID:  filter.FavoriteUserID,
 			Watched:         filter.Watched,

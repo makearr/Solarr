@@ -278,8 +278,34 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		}
 		credits = visibleCredits
 	}
-	detail.Credits = creditViews(credits, s.wall.Now())
+	detail.Credits = creditViews(s.withoutLeveledSubtypes(credits), s.wall.Now())
 	writeJSON(w, s.logger, http.StatusOK, detail)
+}
+
+// withoutLeveledSubtypes drops the credits whose work its media type lists on a level of its own (music's videos), so a discography holds one kind of work.
+func (s *Server) withoutLeveledSubtypes(credits []PersonCreditRow) []PersonCreditRow {
+	kept := make([]PersonCreditRow, 0, len(credits))
+	for _, credit := range credits {
+		if credit.Work.PrimaryType != nil && s.subtypeHasOwnLevel(credit.Work.MediaType, *credit.Work.PrimaryType) {
+			continue
+		}
+		kept = append(kept, credit)
+	}
+	return kept
+}
+
+// subtypeHasOwnLevel says the media type shows works of this subtype on a level that only lists subtypes.
+func (s *Server) subtypeHasOwnLevel(mediaType, subtype string) bool {
+	if s.navigation == nil {
+		return false
+	}
+	levels, _ := s.navigation.LevelsFor(mediaType)
+	for _, level := range levels {
+		if slices.Contains(level.Subtypes, subtype) {
+			return true
+		}
+	}
+	return false
 }
 
 // ListPersonKnownFor answers what one library's providers know a person for.

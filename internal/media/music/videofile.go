@@ -17,6 +17,9 @@ const (
 	SubtypeMusicVideo   = "Music video"
 )
 
+// VideoSubtypes are the subtypes of every video work, as the Albums and Videos levels tell them apart.
+func VideoSubtypes() []string { return []string{SubtypeConcertVideo, SubtypeMusicVideo} }
+
 // Library kinds that fix what a video is (kinds.go); any other music library decides by running time.
 const (
 	kindConcertVideos = "concert_videos"

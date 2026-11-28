@@ -343,5 +343,5 @@ A scan of a music library includes video features beside sound (`music.IsMusicFi
 `Concert video` or `Music video`, identity `local:video` keyed by the file path without extension, credited to the artist
 named by the tags, the `Artist - Title (year)` file name or the parent folder, unmonitored, and left in the Unidentified
 queue. The subtype follows the library kind (Concert videos, Music videos) and otherwise the running time (25 minutes or
-more is a concert). `InspectVideo` is the pure part. Not yet built: the MusicBrainz lookup that names these works (video
+more is a concert). `InspectVideo` is the pure part. The works are listed on the music module's Videos level (`Level.Subtypes`, a generic subtype filter of the works query); the Albums level (`Level.ExceptSubtypes`) and an artist's discography leave them out, and the Videos level shows no count. Not yet built: the MusicBrainz lookup that names these works (video
 recordings for music videos, artist and live release group for concerts), wanted monitoring, and the Videos section.

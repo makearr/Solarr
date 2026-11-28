@@ -171,6 +171,10 @@ func (s *Server) libraryLevels(category settings.Category, values map[string]int
 			Entity: gen.LibraryLevelEntity(level.Entity),
 			Count:  countFor(values, level.Entity),
 		}
+		// The works counter spans every subtype, so a level cut to some subtypes has no count of its own.
+		if len(level.Subtypes) > 0 {
+			views[index].Count = nil
+		}
 		if level.Role != "" {
 			role := level.Role
 			views[index].Role, views[index].Count = &role, nil
@@ -436,7 +440,7 @@ func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int
 	favoriteUser := favoriteViewer(params.Favorite, access)
 	switch found.Entity {
 	case model.LevelEntityWork:
-		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit, sort, direction, derefOr(params.Where, ""), favoriteUser)
+		s.listLibraryLevelWorks(w, r, found, rootFolderIDs, categoryIDs, cursor, limit, sort, direction, derefOr(params.Where, ""), favoriteUser)
 	case model.LevelEntityWorkPart:
 		s.listLibraryLevelTracks(w, r, TracksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: direction == SortDescending,
@@ -471,7 +475,7 @@ func (s *Server) findLevel(mediaType, key string) (model.Level, bool) {
 // existing WorksReader -- a level is a filter and a default sort, not a new
 // list implementation.
 func (s *Server) listLibraryLevelWorks(
-	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64,
+	w http.ResponseWriter, r *http.Request, level model.Level, rootFolderIDs, categoryIDs []int64,
 	cursor levelCursor, limit int, sort WorkSort, direction SortDirection, where string, favoriteUser int64,
 ) {
 	if s.works == nil {
@@ -492,6 +496,7 @@ func (s *Server) listLibraryLevelWorks(
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs,
 			Sort: sort, Direction: direction, Where: where, FavoriteUserID: favoriteUser,
+			Subtypes: level.Subtypes, ExceptSubtypes: level.ExceptSubtypes,
 			ViewerAge: viewerAge,
 		},
 		workCursor, limit+1)

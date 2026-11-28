@@ -8,7 +8,9 @@ const (
 	LevelArtists = "artists"
 	LevelAlbums  = "albums"
 	LevelTracks  = "tracks"
-	LevelLabels  = "labels"
+	// LevelVideos lists the concert and music videos kept with the artists.
+	LevelVideos = "videos"
+	LevelLabels = "labels"
 	// LevelCollections lists the collections made by hand, such as one composer's works.
 	LevelCollections = "collections"
 )
@@ -21,7 +23,8 @@ type Navigation struct{}
 func (Navigation) Levels() []model.Level {
 	return []model.Level{
 		{Key: LevelArtists, Label: "Artists", Entity: model.LevelEntityPerson, DefaultSort: "name"},
-		{Key: LevelAlbums, Label: "Albums", Entity: model.LevelEntityWork, DefaultSort: "title"},
+		{Key: LevelAlbums, Label: "Albums", Entity: model.LevelEntityWork, DefaultSort: "title", ExceptSubtypes: VideoSubtypes()},
+		{Key: LevelVideos, Label: "Videos", Entity: model.LevelEntityWork, DefaultSort: "title", Subtypes: VideoSubtypes()},
 		{Key: LevelTracks, Label: "Tracks", Entity: model.LevelEntityWorkPart, DefaultSort: "artist"},
 		{Key: LevelCollections, Label: "Collections", Entity: model.LevelEntityFranchise, DefaultSort: "name"},
 		{Key: LevelLabels, Label: "Labels", Entity: model.LevelEntityOrganisation, DefaultSort: "name"},

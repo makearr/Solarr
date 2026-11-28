@@ -32,6 +32,8 @@ type Level struct {
 	DefaultSort string
 	// Role opens a person level on one credit role, as Narrators beside Authors; empty opens it on the type's lead role.
 	Role string
+	// Subtypes keeps the level to works of these subtypes (Videos); ExceptSubtypes leaves works of these out (Albums), so the two levels never list the same work.
+	Subtypes, ExceptSubtypes []string
 }
 
 // NavigationLevels is an ADR-23 extension point: a media type declares what it can be browsed by, and core never names an album or season (Invariant 85).

@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
@@ -538,5 +539,37 @@ func TestGetPerson_LeavesOutCreditsOnWorksWithATagTheAccountIsBlockedFrom(t *tes
 	}
 	if len(body.Credits) != 1 || body.Credits[0].Work.ID != 41 {
 		t.Errorf("credits %+v, want only work 41", body.Credits)
+	}
+}
+
+// A work whose subtype has a level of its own (music videos) is no part of the discography.
+func TestGetPerson_LeavesOutWorksOfASubtypeWithItsOwnLevel(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "videos", Label: "Videos", Entity: model.LevelEntityWork, Subtypes: []string{"Concert video"}}}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	album, video := "Album", "Concert video"
+	fixture.people.detail = gen.PersonDetail{Id: 7, Name: "Vutu Doci", SortName: "Doci, Vutu", Ids: map[string]string{}}
+	fixture.people.credits = []apiserver.PersonCreditRow{
+		{CategoryID: 3, Role: "artist", Work: apiserver.PersonWorkRow{ID: 41, MediaType: "music", Title: "Cotevo of Love", PrimaryType: &album}},
+		{CategoryID: 3, Role: "artist", Work: apiserver.PersonWorkRow{ID: 42, MediaType: "music", Title: "Cotevo Live", PrimaryType: &video}},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		Credits []struct {
+			Work struct {
+				ID int64 `json:"id"`
+			} `json:"work"`
+		} `json:"credits"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Credits) != 1 || body.Credits[0].Work.ID != 41 {
+		t.Errorf("credits = %+v, want only work 41", body.Credits)
 	}
 }

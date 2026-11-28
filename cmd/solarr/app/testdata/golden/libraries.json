@@ -15,6 +15,12 @@
         "label": "Albums"
       },
       {
+        "default_sort": "title",
+        "entity": "work",
+        "key": "videos",
+        "label": "Videos"
+      },
+      {
         "default_sort": "artist",
         "entity": "work_part",
         "key": "tracks",

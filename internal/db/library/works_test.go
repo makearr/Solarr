@@ -1105,3 +1105,41 @@ func TestList_StatusFilterKeepsTheWorksWhoseRowShowsThatAvailability(t *testing.
 		}
 	}
 }
+
+// A level cut to subtypes lists only those; its sibling leaves them out and keeps a work with no subtype.
+func TestListWorks_SubtypeFiltersSplitAlbumsFromVideos(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	titles := map[string]string{"Nupu Live": "Concert video", "Kova Clip": "Music video", "Rada Songs": "Album", "Untyped": ""}
+	for title, subtype := range titles {
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			_, err := q.CreateWork(ctx, librarydb.CreateWorkParams{
+				MediaType: "music", CanonicalTitle: title, SortTitle: title, AddedAt: 1, UpdatedAt: 1,
+				Subtype: sql.NullString{String: subtype, Valid: subtype != ""},
+			})
+			return err
+		})
+	}
+	videos := []string{"Concert video", "Music video"}
+	list := func(filter library.WorkFilter) []string {
+		page, err := works.List(t.Context(), filter, library.WorkCursor{}, 100)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		var got []string
+		for _, work := range page {
+			got = append(got, work.CanonicalTitle)
+		}
+		slices.Sort(got)
+		return got
+	}
+	if got, want := list(library.WorkFilter{Subtypes: videos}), []string{"Kova Clip", "Nupu Live"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("videos = %v, want %v", got, want)
+	}
+	if got, want := list(library.WorkFilter{ExceptSubtypes: videos}), []string{"Rada Songs", "Untyped"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("albums = %v, want %v", got, want)
+	}
+	if got := list(library.WorkFilter{}); len(got) != 4 {
+		t.Errorf("unfiltered = %v, want all four", got)
+	}
+}

@@ -78,6 +78,8 @@ type WorkFilter struct {
 	MediaType string
 	// MediaTypes keeps only works of these types; nil any.
 	MediaTypes []string
+	// Subtypes keeps only works of these subtypes, nil any; ExceptSubtypes leaves those out (a work without a subtype stays).
+	Subtypes, ExceptSubtypes []string
 	// PersonID keeps only works the person is credited on; 0 any.
 	PersonID int64
 	// FavoriteUserID keeps only the works this user hearted; 0 any.
@@ -204,6 +206,14 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.MediaType != "", "media_type = ?", filter.MediaType)
 	if filter.MediaTypes != nil {
 		fragment, arguments, _ := membershipStrings("media_type IN (%s)", filter.MediaTypes)
+		predicates.Add(fragment, arguments...)
+	}
+	if filter.Subtypes != nil {
+		fragment, arguments, _ := membershipStrings("subtype IN (%s)", filter.Subtypes)
+		predicates.Add(fragment, arguments...)
+	}
+	if len(filter.ExceptSubtypes) > 0 {
+		fragment, arguments, _ := membershipStrings("(subtype IS NULL OR subtype NOT IN (%s))", filter.ExceptSubtypes)
 		predicates.Add(fragment, arguments...)
 	}
 	predicates.AddIf(filter.PersonID != 0, "EXISTS (SELECT 1 FROM credit pc WHERE pc.work_id = work.id AND pc.person_id = ?)", filter.PersonID)
