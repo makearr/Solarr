@@ -16,8 +16,10 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
+	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
@@ -1341,4 +1343,60 @@ func testArchiveLimits() archive.Limits {
 	limits := archive.DefaultLimits()
 	limits.MinFreeBytes = 0
 	return limits
+}
+
+// peekingImporter reads the session's units when the first batch reaches it, as the Import page would.
+type peekingImporter struct {
+	batch.Importer
+	sessions library.ImportSessions
+	seen     []library.Unit
+	peeked   bool
+}
+
+func (p *peekingImporter) InspectTags(ctx context.Context, root string, relPaths []string) (inspect.TagGrouper, error) {
+	return p.Importer.(batch.TagEvidence).InspectTags(ctx, root, relPaths)
+}
+
+func (p *peekingImporter) ImportBatch(ctx context.Context, request batch.Request) (batch.Result, error) {
+	if !p.peeked {
+		p.peeked = true
+		p.seen, _ = p.sessions.ListUnits(ctx, request.SessionID)
+	}
+	return p.Importer.ImportBatch(ctx, request)
+}
+
+// Every folder is on the session as "identifying" before the first one is read for tags, and none is left behind.
+func TestJob_ListsEveryFolderAsIdentifyingBeforeReadingAnyFile(t *testing.T) {
+	fx := newFixture(t, "Artist/One/01.flac", "Artist/Two/01.flac", "Artist/Three/01.flac")
+	peek := &peekingImporter{Importer: musicImporters(fx.tool, nil, nil)["music"], sessions: fx.sessions()}
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: fx.sessions(), Policy: fixedPolicy(0.9),
+		Importers: map[string]batch.Importer{"music": peek}, Unassigned: "music", Packs: library.NewPacks(fx.store),
+		Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	identifying := 0
+	for _, unit := range peek.seen {
+		if unit.Reason == model.ReasonIdentifying {
+			identifying++
+		}
+	}
+	if identifying < 2 {
+		t.Errorf("units marked identifying when the first batch arrived = %d of %d, want the folders still to come", identifying, len(peek.seen))
+	}
+	list, _ := fx.sessions().List(t.Context(), library.ImportDone, false)
+	units, err := fx.sessions().ListUnits(t.Context(), list[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unit := range units {
+		if unit.Reason == model.ReasonIdentifying {
+			t.Errorf("unit %q is still identifying after the run", unit.RelPath)
+		}
+	}
+	if len(units) != 3 {
+		t.Errorf("units after the run = %d, want 3", len(units))
+	}
 }

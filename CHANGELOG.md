@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Import: a folder's units are all listed as "Identifying" before the first file is read, so a big import shows its whole batch at once and the identified units replace them as each folder is read.
 - Users: a maximum age per account (All ages only, up to 6+, 12+, 16+) hides works rated above it from lists, search, detail pages, artwork, people credits and playback; unrated works stay hidden unless a Kids library holds them. Schema: `app_user.max_age` (edit in place; recreate a dev settings database).
 - Manage > Statistics: charts, per minute for two days and per hour for 90 days, of Solarr's own CPU, memory and IO, scans and metadata jobs finished per minute, each folder's disk latency and throughput, internet bandwidth and latency per provider, and each library's items, files and storage. Schema: new `metric_point` table in statistics.db (migration 0010).
 - Solarr measures its own disk calls per folder and its requests per provider, with no probe traffic: Settings > Disk shows how each folder answers against its usual speed, and scans and file checks start fewer jobs at once while a disk runs well below its normal.

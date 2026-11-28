@@ -324,3 +324,6 @@ DELETE FROM move_job WHERE id IN (
   WHERE j.state IN ('DONE', 'CANCELLED') AND j.finished_at IS NOT NULL AND j.finished_at < sqlc.arg(finished_before)
   ORDER BY j.id
   LIMIT sqlc.arg(row_limit));
+
+-- name: ListProvisionalImportUnits :many
+SELECT id, rel_path FROM import_unit WHERE session_id = ? AND decision = 'QUEUE' AND reason = 'IDENTIFYING' ORDER BY id;

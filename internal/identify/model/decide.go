@@ -23,6 +23,8 @@ const (
 	ReasonBlockedContent = "BLOCKED_CONTENT"
 	// ReasonDiscStructure holds a Blu-ray or DVD folder for a person; it is never placed automatically.
 	ReasonDiscStructure = "DISC_STRUCTURE"
+	// ReasonIdentifying marks a unit the listing pass found whose files the identifying pass has not read yet.
+	ReasonIdentifying = "IDENTIFYING"
 )
 
 // Decide is ADR-48's confidence half of DECIDE: commit if Best was set by the chain, else the manual queue; it exists so there is one named place to ask, not a second comparison.

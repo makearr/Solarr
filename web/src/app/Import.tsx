@@ -1323,7 +1323,7 @@ function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId
           <span className="font-mono text-sm text-ink">{unit.rel_path || "(this folder)"}</span>
           {matchedAlbum(unit) && <span className="text-ink">→ {matchedAlbum(unit)}</span>}
           <ShapeBadge shape={unit.shape} />
-          <DecisionBadge decision={unit.decision} />
+          <DecisionBadge decision={unit.decision} identifying={unit.reason === "IDENTIFYING"} />
           {unit.category_id != null && library && <span className="text-ink-muted">in {library.name}</span>}
           <span className="text-ink-muted">
             {unit.file_count} files, {Math.round(unit.confidence * 100)}% confidence
@@ -1387,7 +1387,7 @@ function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId
               <IdentificationCandidates candidates={unit.candidates} />
             </div>
           )}
-          {unit.reason && <span>Reason: {unit.reason}</span>}
+          {unit.reason && unit.reason !== "IDENTIFYING" && <span>Reason: {unit.reason}</span>}
         </div>
       )}
     </li>
@@ -1426,7 +1426,7 @@ function ShapeBadge({ shape }: { shape: ImportUnit["shape"] }) {
   );
 }
 
-function DecisionBadge({ decision }: { decision: ImportUnit["decision"] }) {
+function DecisionBadge({ decision, identifying }: { decision: ImportUnit["decision"]; identifying: boolean }) {
   return (
     <span
       className={`rounded-full border px-1.5 py-px text-[0.6875rem] ${
@@ -1437,7 +1437,7 @@ function DecisionBadge({ decision }: { decision: ImportUnit["decision"] }) {
             : "border-border-subtle text-ink-muted"
       }`}
     >
-      {decision}
+      {identifying ? t("import.identifying") : decision}
     </span>
   );
 }

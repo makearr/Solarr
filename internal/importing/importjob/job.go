@@ -14,7 +14,9 @@ import (
 	"maps"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -114,6 +116,9 @@ type Job struct {
 	logger      *slog.Logger
 	// releases keeps what a grabbed release said with the files it brought; records nothing without Config.Acquisitions.
 	releases releaseNotes
+	// provisional holds, per running session, the units the listing pass recorded that the identifying pass has not replaced yet.
+	provisionalMu sync.Mutex
+	provisional   map[int64]map[string]int64
 }
 
 // Config is what a Job needs. Every field is required except MediaTypeOf, Libraries, Workspace, ArchiveLimits, Events,
@@ -403,6 +408,10 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 	j.publishProgress(ctx, sessionID, importPhaseWalking, "")
 	j.reportProgress(ctx, sessionID, job.Progress)
 
+	if cursor == "" {
+		j.listFirst(ctx, sessionID, payload)
+		defer j.dropProvisional(sessionID)
+	}
 	var result inspect.WalkResult
 	if cursor != walkFinished {
 		result, err = inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
@@ -501,6 +510,9 @@ func (j *Job) resumeOrCreate(
 			units, err := j.sessions.ListUnits(ctx, session.ID)
 			if err != nil {
 				return 0, "", 0, false, fmt.Errorf("importjob: list units for session %d: %w", session.ID, err)
+			}
+			for len(units) > 0 && units[len(units)-1].Reason == model.ReasonIdentifying {
+				units = units[:len(units)-1]
 			}
 			if len(units) > 0 {
 				cursor = units[len(units)-1].RelPath
@@ -703,6 +715,7 @@ func (j *Job) commitCluster(
 			newUnits[i].Media = unitMedia(route.unit)
 		}
 	}
+	j.replaceProvisional(ctx, sessionID, routes)
 	ids, err := j.sessions.AddUnits(ctx, sessionID, newUnits)
 	if err != nil {
 		return fmt.Errorf("importjob: add units: %w", err)
@@ -981,4 +994,90 @@ func (j *Job) walkOptions(payload Payload) inspect.WalkOptions {
 		}
 	}
 	return options
+}
+
+// listFirst records every unit the folder holds by what a listing shows (folders and file names, no tag or content read)
+// before the identifying pass starts, so the whole batch is visible as "identifying" at once. A failure only costs that
+// early view: the identifying pass finds the same units.
+func (j *Job) listFirst(ctx context.Context, sessionID int64, payload Payload) {
+	options := j.walkOptions(payload)
+	if options.TagsFor == nil {
+		return
+	}
+	options.TagsFor = nil
+	if stale, err := j.sessions.ProvisionalUnits(ctx, sessionID); err == nil && len(stale) > 0 {
+		_ = j.sessions.DeleteUnits(ctx, sessionID, slices.Collect(maps.Values(stale)))
+	}
+	found := map[string]int64{}
+	_, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{}, options,
+		func(ctx context.Context, batch []inspect.Unit) error {
+			units := make([]library.NewUnit, len(batch))
+			for i, unit := range batch {
+				evidence, err := json.Marshal(unit.Evidence)
+				if err != nil {
+					return err
+				}
+				var bytes int64
+				for _, file := range unit.Media {
+					bytes += file.SizeBytes
+				}
+				units[i] = library.NewUnit{
+					RelPath: unit.Directory, Shape: string(inspect.ShapeOf(unit)), FileCount: int64(len(unit.Media)), Bytes: bytes,
+					EvidenceJSON: string(evidence), Reason: model.ReasonIdentifying,
+				}
+			}
+			ids, err := j.sessions.AddUnits(ctx, sessionID, units)
+			if err != nil {
+				return err
+			}
+			for i, id := range ids {
+				if _, taken := found[batch[i].Directory]; taken {
+					// A second unit in one folder cannot be told from the first by name; it stays until the pass ends.
+					found[batch[i].Directory+"\x00"+strconv.FormatInt(id, 10)] = id
+					continue
+				}
+				found[batch[i].Directory] = id
+			}
+			j.provisionalMu.Lock()
+			if j.provisional == nil {
+				j.provisional = map[int64]map[string]int64{}
+			}
+			j.provisional[sessionID] = found
+			j.provisionalMu.Unlock()
+			return nil
+		})
+	if err != nil {
+		j.logger.Warn("import listing pass failed; identifying goes on without it",
+			slog.Int64("session_id", sessionID), slog.Any("error", err))
+	}
+}
+
+// replaceProvisional removes the provisional units of the folders a cluster is about to record for real, so the
+// session never shows a folder twice and the units stay in walk order.
+func (j *Job) replaceProvisional(ctx context.Context, sessionID int64, routes []routed) {
+	j.provisionalMu.Lock()
+	known := j.provisional[sessionID]
+	var drop []int64
+	for _, route := range routes {
+		if id, found := known[route.unit.Directory]; found {
+			drop = append(drop, id)
+			delete(known, route.unit.Directory)
+		}
+	}
+	j.provisionalMu.Unlock()
+	if len(drop) > 0 {
+		_ = j.sessions.DeleteUnits(ctx, sessionID, drop)
+	}
+}
+
+// dropProvisional removes what the identifying pass never replaced: a folder it found nothing in, or a split.
+func (j *Job) dropProvisional(sessionID int64) {
+	j.provisionalMu.Lock()
+	left := j.provisional[sessionID]
+	delete(j.provisional, sessionID)
+	j.provisionalMu.Unlock()
+	if len(left) == 0 {
+		return
+	}
+	_ = j.sessions.DeleteUnits(context.WithoutCancel(context.Background()), sessionID, slices.Collect(maps.Values(left)))
 }

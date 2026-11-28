@@ -216,6 +216,19 @@ func (s ImportSessions) AddUnits(ctx context.Context, sessionID int64, units []N
 	return ids, nil
 }
 
+// ProvisionalUnits maps the folder of each unit still waiting to be identified to its id.
+func (s ImportSessions) ProvisionalUnits(ctx context.Context, sessionID int64) (map[string]int64, error) {
+	rows, err := librarydb.New(s.store.Read()).ListProvisionalImportUnits(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("library: list provisional units of import session %d: %w", sessionID, err)
+	}
+	found := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		found[row.RelPath] = row.ID
+	}
+	return found, nil
+}
+
 // DeleteUnits removes units a pass recorded but could not finish, so a resumed walk, which starts after the last unit
 // recorded, inspects them again.
 func (s ImportSessions) DeleteUnits(ctx context.Context, sessionID int64, ids []int64) error {

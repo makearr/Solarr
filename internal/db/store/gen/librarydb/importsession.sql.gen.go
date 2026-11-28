@@ -1029,6 +1029,38 @@ func (q *Queries) ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPa
 	return items, nil
 }
 
+const listProvisionalImportUnits = `-- name: ListProvisionalImportUnits :many
+SELECT id, rel_path FROM import_unit WHERE session_id = ? AND decision = 'QUEUE' AND reason = 'IDENTIFYING' ORDER BY id
+`
+
+type ListProvisionalImportUnitsRow struct {
+	ID      int64
+	RelPath string
+}
+
+func (q *Queries) ListProvisionalImportUnits(ctx context.Context, sessionID int64) ([]ListProvisionalImportUnitsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listProvisionalImportUnits, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProvisionalImportUnitsRow{}
+	for rows.Next() {
+		var i ListProvisionalImportUnitsRow
+		if err := rows.Scan(&i.ID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSessionsWithUnplacedCommits = `-- name: ListSessionsWithUnplacedCommits :many
 SELECT DISTINCT u.session_id
 FROM import_unit u

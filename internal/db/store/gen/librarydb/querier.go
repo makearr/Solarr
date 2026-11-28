@@ -971,6 +971,7 @@ type Querier interface {
 	ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error)
 	// One root's present files by name, paged on the unique (root_folder_id, rel_path) index so no page sorts the root.
 	ListPresentRelPathsInRoot(ctx context.Context, arg ListPresentRelPathsInRootParams) ([]ListPresentRelPathsInRootRow, error)
+	ListProvisionalImportUnits(ctx context.Context, sessionID int64) ([]ListProvisionalImportUnitsRow, error)
 	// Parts nothing holds on to: no file covers them, no event across series lists them, and no broadcast is shared through them.
 	ListPrunableWorkParts(ctx context.Context, workID int64) ([]ListPrunableWorkPartsRow, error)
 	// One page of queued files with what their newest attempt concluded. The caller

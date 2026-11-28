@@ -835,6 +835,7 @@ const catalogue = {
   "rootFolders.orPercent": "or",
   "users.manageLink": "Manage users, access and sign-in",
   "nav.users": "Users",
+  "import.identifying": "Identifying",
   "users.maxAge": "Maximum age",
   "users.maxAgeHelp": "Hides works rated above this age from the account, in lists, search, detail pages and playback. Unrated works stay hidden unless a Kids library holds them.",
   "users.maxAgeFor": "Maximum age for {who}",
