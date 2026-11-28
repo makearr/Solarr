@@ -115,3 +115,17 @@ func (p *process) forgetRecordsOfRemovedLists(ctx context.Context) {
 		p.logger.Warn("import list cleanup not recorded", slog.Any("error", err))
 	}
 }
+
+// certificationAge is the age a certification text means in a library, -1 when it is empty or unreadable.
+func (p *process) certificationAge(categoryID int64, certification string) int64 {
+	category, found := p.cache.Snapshot().Category(categoryID)
+	if !found {
+		return -1
+	}
+	if reader, ok := media.Capability[media.Rating](p.media, media.Key(category.MediaType)); ok {
+		if age, known := reader.RatingAge(certification); known {
+			return age
+		}
+	}
+	return -1
+}

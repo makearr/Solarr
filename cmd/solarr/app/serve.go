@@ -1066,7 +1066,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		VideoPictures:            videoPictures{process: p},
 		DiscoverRefresher:        discoverRefresher{process: p},
 		DiscoverAutoAddPreviewer: discoverPreviewer{process: p},
-		DiscoverPool:             adapters.Recommendations{Pool: library.NewRecommendations(p.library)},
+		DiscoverPool:             adapters.Recommendations{Pool: library.NewRecommendations(p.library), AgeOf: p.certificationAge},
 		UnreadableFiles:          unreadableFiles{process: p},
 		ConfigPath:               p.configPath,
 		People: adapters.People{

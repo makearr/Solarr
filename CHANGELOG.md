@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- The maximum age of an account now also applies to Discover recommendations (rated above the limit, or unrated outside a Kids library), the calendar and collection lists.
 - *Arr connections: send what lies under one of the *Arr's root folders to another library (a Sonarr root for anime to the Anime library); imports, syncs, previews and adds to the *Arr (Companion mode) follow it, and a connection serves every library it has a root folder for.
 - Built-in reader: a Read button on comic (cbz, cbr, cb7, cbt), EPUB and PDF files opens them in the browser; comics have right-to-left reading for manga, two pages side by side and page turning by keys or the page edges; each user's place in each file is kept and resumed. Schema: new `reading_position` table in library.db (migration 0147, edit in place; recreate a dev library database).
 - Book and audiobook series: the collection lists the whole series (Wikidata, completed by Hardcover when its key is set), shows how many books it has in all and which are missing, and Monitor adds them even when Wikidata has no Open Library id for them.

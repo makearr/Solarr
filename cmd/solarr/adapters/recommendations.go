@@ -9,10 +9,18 @@ import (
 )
 
 // Recommendations satisfies apiserver.DiscoverPool over library.db's recommendation pool.
-type Recommendations struct{ Pool library.Recommendations }
+type Recommendations struct {
+	Pool library.Recommendations
+	// AgeOf reads an item's certification with its library's media type; -1 when unrated or unreadable. Nil reads none.
+	AgeOf func(categoryID int64, certification string) int64
+}
 
-func discoverItem(row library.PoolRecommendation) apiserver.DiscoverItem {
-	return apiserver.DiscoverItem{
+func (a Recommendations) discoverItem(row library.PoolRecommendation) apiserver.DiscoverItem {
+	age := int64(-1)
+	if a.AgeOf != nil && row.Certification != "" {
+		age = a.AgeOf(row.CategoryID, row.Certification)
+	}
+	return apiserver.DiscoverItem{Age: age,
 		ID: row.ID, CategoryID: row.CategoryID, Kind: row.Kind, Provider: row.Provider, ExternalID: row.ExternalID, Title: row.Title, Subtitle: row.Subtitle,
 		Overview: row.Overview, PosterURL: row.PosterURL, Year: row.Year, Votes: row.Votes, WorkID: row.WorkID, Popularity: row.Popularity, Rating: row.Rating,
 		Genres: row.Genres, Types: row.Types,
@@ -33,7 +41,7 @@ func (a Recommendations) List(ctx context.Context, query apiserver.DiscoverQuery
 	}
 	out := make([]apiserver.DiscoverItem, len(rows))
 	for index, row := range rows {
-		out[index] = discoverItem(row)
+		out[index] = a.discoverItem(row)
 	}
 	return out, nil
 }
@@ -44,7 +52,7 @@ func (a Recommendations) Item(ctx context.Context, id int64) (apiserver.Discover
 	if err != nil || !found {
 		return apiserver.DiscoverItem{}, false, err
 	}
-	return discoverItem(row), true, nil
+	return a.discoverItem(row), true, nil
 }
 
 // Genres implements apiserver.DiscoverPool.

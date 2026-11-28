@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -104,6 +105,9 @@ func (s *Server) ListCalendar(w http.ResponseWriter, r *http.Request, params gen
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
+	}
+	if viewerRestricted(access) {
+		rows = slices.DeleteFunc(rows, func(row CalendarRow) bool { return s.keptFromWork(r.Context(), access, row.WorkID) })
 	}
 	views := make([]gen.CalendarEntry, len(rows))
 	for i, row := range rows {

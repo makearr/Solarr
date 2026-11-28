@@ -104,7 +104,7 @@ func (s *Server) ListFranchises(w http.ResponseWriter, r *http.Request, params g
 	}
 	ignored := s.ignoredIn(r.Context(), category.MediaType)
 	for i := range franchises {
-		franchises[i] = withoutIgnoredMembers(franchises[i], ignored)
+		franchises[i] = s.withoutKeptMembers(r.Context(), access, withoutIgnoredMembers(franchises[i], ignored))
 	}
 	writeJSON(w, s.logger, http.StatusOK, struct {
 		Franchises []gen.Franchise `json:"franchises"`
@@ -147,9 +147,28 @@ func (s *Server) ListWorkFranchises(w http.ResponseWriter, r *http.Request, id i
 		s.writeFranchiseError(w, err)
 		return
 	}
+	for i := range franchises {
+		franchises[i] = s.withoutKeptMembers(r.Context(), access, franchises[i])
+	}
 	writeJSON(w, s.logger, http.StatusOK, struct {
 		Franchises []gen.Franchise `json:"franchises"`
 	}{franchises})
+}
+
+// withoutKeptMembers leaves out the held works the account's age limit and blocked tags keep from it.
+func (s *Server) withoutKeptMembers(ctx context.Context, access authz.Access, franchise gen.Franchise) gen.Franchise {
+	if !viewerRestricted(access) {
+		return franchise
+	}
+	kept := make([]gen.FranchiseMember, 0, len(franchise.Members))
+	for _, member := range franchise.Members {
+		if member.WorkId != nil && s.keptFromWork(ctx, access, *member.WorkId) {
+			continue
+		}
+		kept = append(kept, member)
+	}
+	franchise.Members = kept
+	return franchise
 }
 
 // GetFranchise answers one collection with every work of it, those the library lacks included.
@@ -172,7 +191,8 @@ func (s *Server) GetFranchise(w http.ResponseWriter, r *http.Request, id int64, 
 		}
 		franchise.Links = &readable
 	}
-	writeJSON(w, s.logger, http.StatusOK, withoutIgnoredMembers(franchise, s.ignoredIn(r.Context(), category.MediaType)))
+	access, _ := authz.FromContext(r.Context())
+	writeJSON(w, s.logger, http.StatusOK, s.withoutKeptMembers(r.Context(), access, withoutIgnoredMembers(franchise, s.ignoredIn(r.Context(), category.MediaType))))
 }
 
 // CreateFranchise makes an empty collection by hand.

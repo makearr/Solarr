@@ -20,6 +20,8 @@ type DiscoverItem struct {
 	Year, Votes, WorkID                         int64
 	Popularity, Rating                          float64
 	Genres, Types                               []string
+	// Age is the age the item is rated for, -1 when it is unrated.
+	Age int64
 }
 
 // DiscoverQuery asks one page of the pool for one person.
@@ -197,7 +199,8 @@ func (s *Server) ListRecommendations(w http.ResponseWriter, r *http.Request, par
 		next := encodeDiscoverCursor(items[len(items)-1])
 		page.NextCursor = &next
 	}
-	for _, item := range items {
+	// The cursor is the page's last item as stored; the viewer's age limit only leaves some of the page out.
+	for _, item := range s.withinViewerAge(access, items) {
 		page.Items = append(page.Items, recommendationView(item))
 	}
 	writeJSON(w, s.logger, http.StatusOK, page)
@@ -262,7 +265,7 @@ func (s *Server) GetDiscoverDashboard(w http.ResponseWriter, r *http.Request, pa
 			writeError(w, s.logger, err)
 			return
 		}
-		lists = append(lists, items)
+		lists = append(lists, s.withinViewerAge(access, items))
 	}
 	out := []gen.Recommendation{}
 	for round := 0; len(out) < limit; round++ {
@@ -365,4 +368,23 @@ func (s *Server) LoadMoreRecommendations(w http.ResponseWriter, r *http.Request)
 		Added     int  `json:"added"`
 		Exhausted bool `json:"exhausted"`
 	}{added, exhausted})
+}
+
+// withinViewerAge leaves out the recommendations rated above the account's age limit, and the unrated ones unless a
+// library of the kids kind holds them; an account with no limit sees them all.
+func (s *Server) withinViewerAge(access authz.Access, items []DiscoverItem) []DiscoverItem {
+	return withinAge(viewerAgeOf(access), items)
+}
+
+func withinAge(limit *ViewerAge, items []DiscoverItem) []DiscoverItem {
+	if limit == nil {
+		return items
+	}
+	kept := make([]DiscoverItem, 0, len(items))
+	for _, item := range items {
+		if item.Age >= 0 && item.Age <= limit.MaxAge || item.Age < 0 && slices.Contains(limit.KidsCategoryIDs, item.CategoryID) {
+			kept = append(kept, item)
+		}
+	}
+	return kept
 }
