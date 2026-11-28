@@ -13195,6 +13195,17 @@ components:
             properties:
               from: { type: string }
               to: { type: string }
+        root_libraries:
+          type: array
+          description: Sends what lies under an *Arr root folder (as the *Arr names it) to a library other than the connection's own; imports, syncs and adds to the *Arr use it.
+          items: { $ref: "#/components/schemas/ArrRootLibrary" }
+
+    ArrRootLibrary:
+      type: object
+      required: [root, library_id]
+      properties:
+        root: { type: string, description: The root folder as the *Arr names it. }
+        library_id: { type: integer, format: int64 }
 
     ProwlarrSyncResult:
       type: object

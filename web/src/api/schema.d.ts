@@ -9418,6 +9418,14 @@ export interface components {
                 from: string;
                 to: string;
             }[];
+            /** @description Sends what lies under an *Arr root folder (as the *Arr names it) to a library other than the connection's own; imports, syncs and adds to the *Arr use it. */
+            root_libraries?: components["schemas"]["ArrRootLibrary"][];
+        };
+        ArrRootLibrary: {
+            /** @description The root folder as the *Arr names it. */
+            root: string;
+            /** Format: int64 */
+            library_id: number;
         };
         ProwlarrSyncResult: {
             /** Format: int64 */

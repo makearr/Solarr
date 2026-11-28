@@ -2108,6 +2108,9 @@ type ArrPullOptions struct {
 	// RootFolders Its root folders
 	RootFolders bool `json:"root_folders"`
 
+	// RootLibraries Sends what lies under an *Arr root folder (as the *Arr names it) to a library other than the connection's own; imports, syncs and adds to the *Arr use it.
+	RootLibraries *[]ArrRootLibrary `json:"root_libraries,omitempty"`
+
 	// Unmonitored Items the *Arr does not monitor; they stay unmonitored here.
 	Unmonitored bool `json:"unmonitored"`
 }
@@ -2119,6 +2122,14 @@ type ArrPullOptionsAlbums string
 type ArrRootFolder struct {
 	// Path As the *Arr instance's own container sees it.
 	Path string `json:"path"`
+}
+
+// ArrRootLibrary defines model for ArrRootLibrary.
+type ArrRootLibrary struct {
+	LibraryId int64 `json:"library_id"`
+
+	// Root The root folder as the *Arr names it.
+	Root string `json:"root"`
 }
 
 // ArrSettingChange defines model for ArrSettingChange.

@@ -369,6 +369,7 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
   const current = options.data;
   const change = (patch: Partial<PullOptions>) => current && save.mutate({ ...current, ...patch });
   const rewrites = current?.path_rewrites ?? [];
+  const rootLibraries = current?.root_libraries ?? [];
   const needsLibrary = current?.root_folders || current?.import_lists;
   const box = (choice: { key: PullKey; label: string; hint: string }) => (
     <label key={choice.key} className="flex items-center gap-1.5" title={choice.hint}>
@@ -438,6 +439,32 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
         <button type="button" className={button} disabled={!current}
           onClick={() => change({ path_rewrites: [...rewrites, { from: "/", to: "/" }] })}>
           {t("arrConnectionTools.addAPath")}
+        </button>
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="text-ink-muted">{t("arrConnectionTools.rootLibrariesHint")}</span>
+        {rootLibraries.map((entry, index) => (
+          <div key={`${index}-${entry.root}`} className="flex items-center gap-1">
+            <input className={input} defaultValue={entry.root} aria-label={t("arrConnectionTools.rootInTheArr")}
+              onBlur={(event) => change({ root_libraries: rootLibraries.map((old, i) => (i === index ? { ...old, root: event.target.value } : old)) })} />
+            <span className="text-ink-muted">→</span>
+            <select
+              className={input}
+              value={entry.library_id}
+              aria-label={t("arrConnectionTools.libraryForTheRoot")}
+              disabled={save.isPending}
+              onChange={(event) => change({ root_libraries: rootLibraries.map((old, i) => (i === index ? { ...old, library_id: Number(event.target.value) } : old)) })}
+            >
+              {(libraries.data ?? []).map((library) => (
+                <option key={library.id} value={library.id}>{libraryLabel(library)}</option>
+              ))}
+            </select>
+            <button type="button" className={button} onClick={() => change({ root_libraries: rootLibraries.filter((_, i) => i !== index) })}>{t("arrConnectionTools.removeRootLibrary")}</button>
+          </div>
+        ))}
+        <button type="button" className={button} disabled={!current || (libraries.data ?? []).length === 0}
+          onClick={() => change({ root_libraries: [...rootLibraries, { root: "/", library_id: (libraries.data ?? [])[0]?.id ?? 0 }] })}>
+          {t("arrConnectionTools.addRootLibrary")}
         </button>
       </div>
       <label className="flex items-center gap-1.5" title="Pull every hour; otherwise only when you press Pull now.">

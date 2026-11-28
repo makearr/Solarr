@@ -240,3 +240,21 @@ func TestSetNetworkSettings_SealsTheProxyCredentials(t *testing.T) {
 		t.Errorf("after clearing: %q", got)
 	}
 }
+
+func TestArrPull_RootLibrariesSendAPathToTheLibraryOfTheLongestRootItLiesUnder(t *testing.T) {
+	pull := settings.ArrPull{RootLibraries: []settings.ArrRootLibrary{{Root: "/tv", LibraryID: 1}, {Root: "/tv/anime/", LibraryID: 2}}}
+	for path, want := range map[string]int64{"/tv/anime": 2, "/tv/anime/show": 2, "/tv/shows": 1, "/tv": 1} {
+		if got, found := pull.LibraryOfRoot(path); !found || got != want {
+			t.Errorf("LibraryOfRoot(%q) = %d, %v; want %d", path, got, found, want)
+		}
+	}
+	if _, found := pull.LibraryOfRoot("/tvshows"); found {
+		t.Error("/tvshows is not under /tv")
+	}
+	if root, found := pull.RootOfLibrary(2); !found || root != "/tv/anime/" {
+		t.Errorf("RootOfLibrary(2) = %q, %v", root, found)
+	}
+	if _, found := pull.RootOfLibrary(9); found {
+		t.Error("a library with no root chosen has none")
+	}
+}

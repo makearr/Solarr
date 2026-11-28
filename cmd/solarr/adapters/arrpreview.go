@@ -47,7 +47,7 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 			id := folder.ID
 			root.RootFolderID = &id
 		}
-		if categoryID, placed := a.categoryFor(instance, local, roots); placed {
+		if categoryID, placed := a.categoryFor(instance, path, local, roots); placed {
 			root.LibraryID = &categoryID
 		} else if options.NewFoldersLibrary != nil {
 			root.LibraryID = options.NewFoldersLibrary

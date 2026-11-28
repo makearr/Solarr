@@ -205,7 +205,7 @@ func (a ArrSync) run(importID int64, instance settings.ArrInstance, client arrim
 			MonitoringOnly: options.MonitoringOnly, Limit: options.Limit,
 		},
 		Place: func(rootFolder string) (int64, bool) {
-			return a.categoryFor(instance, rewritePath(rootFolder, options.PathRewrites), a.Cache.Snapshot().RootFolders())
+			return a.categoryFor(instance, rootFolder, rewritePath(rootFolder, options.PathRewrites), a.Cache.Snapshot().RootFolders())
 		},
 		Progress: func(done, total int64) { a.Progress.set(importID, done, total) },
 		Counted:  func(counts library.ArrImportCounts) { a.Progress.setCounts(importID, counts) },
@@ -438,8 +438,11 @@ func arrImportItemView(item library.ArrImportItem) apiserver.ArrImportItem {
 	}
 }
 
-// categoryFor picks a Lidarr artist's category: instance.CategoryID wins when set (ADR-52), else the longest-matching configured root folder (fsx.Within).
-func (a ArrSync) categoryFor(instance settings.ArrInstance, rootFolderPath string, roots []settings.RootFolder) (int64, bool) {
+// categoryFor picks a Lidarr artist's category: the library chosen for its root folder wins, then instance.CategoryID when set (ADR-52), else the longest-matching configured root folder (fsx.Within).
+func (a ArrSync) categoryFor(instance settings.ArrInstance, arrRootPath, rootFolderPath string, roots []settings.RootFolder) (int64, bool) {
+	if libraryID, chosen := instance.Pull().LibraryOfRoot(arrRootPath); chosen {
+		return libraryID, true
+	}
 	if instance.CategoryID != nil {
 		return *instance.CategoryID, true
 	}

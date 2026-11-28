@@ -46,6 +46,7 @@ func (a ArrSync) Added(ctx context.Context, added apiserver.AddedWork) error {
 	if err != nil || !found || !sendsAdds(a.SafeMode, a.Cache.Snapshot().SolarrMode(), instance) {
 		return err
 	}
+	ctx = withArrRoot(ctx, instance, added.CategoryID)
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instance.ID)
 	if err != nil {
 		return err
@@ -112,7 +113,7 @@ func (a ArrSync) companionInstance(ctx context.Context, app settings.ArrApp, cat
 		}
 	}
 	for _, instance := range ofApp {
-		if instance.CategoryID != nil && *instance.CategoryID == categoryID {
+		if instance.TakesLibrary(categoryID) {
 			return instance, true, nil
 		}
 	}
@@ -177,7 +178,7 @@ func (a ArrSync) radarrDefaults(ctx context.Context, radarr arrimport.RadarrClie
 		}
 		root = folders[0].Path
 	}
-	return profile, root, nil
+	return profile, preferredRoot(ctx, root), nil
 }
 
 // companionSeries is companionMovie for Sonarr.
@@ -224,6 +225,7 @@ func (a ArrSync) companionSeries(ctx context.Context, sonarr arrimport.SonarrCli
 		}
 		root = folders[0].Path
 	}
+	root = preferredRoot(ctx, root)
 	monitor, warning := sonarrMonitor(added.MonitorOption)
 	id, err := sonarr.AddSeries(ctx, arrimport.SonarrAdd{
 		Title: added.Title, TVDBID: tvdbID, QualityProfileID: profile, LanguageProfileID: mostUsed(languages), RootFolderPath: root,
@@ -302,6 +304,7 @@ func (a ArrSync) companionMedia(ctx context.Context, added apiserver.AddedWork, 
 	if err != nil || !found || !sendsAdds(a.SafeMode, a.Cache.Snapshot().SolarrMode(), instance) {
 		return err
 	}
+	ctx = withArrRoot(ctx, instance, added.CategoryID)
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instance.ID)
 	if err != nil {
 		return err
@@ -388,6 +391,7 @@ func (a ArrSync) readarrDefaults(ctx context.Context, readarr arrimport.ReadarrC
 		}
 		defaults.RootFolderPath = folders[0].Path
 	}
+	defaults.RootFolderPath = preferredRoot(ctx, defaults.RootFolderPath)
 	return defaults, nil
 }
 
@@ -482,6 +486,7 @@ func (a ArrSync) lidarrDefaults(ctx context.Context, lidarr arrimport.LidarrClie
 		}
 		defaults.RootFolderPath = folders[0].Path
 	}
+	defaults.RootFolderPath = preferredRoot(ctx, defaults.RootFolderPath)
 	return defaults, nil
 }
 
@@ -552,6 +557,24 @@ func (a ArrSync) companionKnownScene(ctx context.Context, whisparr arrimport.Whi
 		return 0, errors.Join(err, errors.New("the Whisparr has no root folder to add into"))
 	}
 	return whisparr.AddScene(ctx, scene, arrimport.AddDefaults{
-		QualityProfileID: profiles[0].ID, RootFolderPath: folders[0].Path, Monitored: added.Monitored, Search: added.Monitored && added.Search,
+		QualityProfileID: profiles[0].ID, RootFolderPath: preferredRoot(ctx, folders[0].Path), Monitored: added.Monitored, Search: added.Monitored && added.Search,
 	})
+}
+
+type arrRootKey struct{}
+
+// withArrRoot carries the *Arr root folder chosen for a library into the add that follows.
+func withArrRoot(ctx context.Context, instance settings.ArrInstance, libraryID int64) context.Context {
+	if root, chosen := instance.Pull().RootOfLibrary(libraryID); chosen {
+		return context.WithValue(ctx, arrRootKey{}, root)
+	}
+	return ctx
+}
+
+// preferredRoot is the root folder chosen for the library when there is one, else the one the add would have used.
+func preferredRoot(ctx context.Context, fallback string) string {
+	if root, chosen := ctx.Value(arrRootKey{}).(string); chosen && root != "" {
+		return root
+	}
+	return fallback
 }

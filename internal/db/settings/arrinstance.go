@@ -108,6 +108,46 @@ type ArrPull struct {
 	// Albums is "all", "missing" or "complete" (Lidarr only).
 	Albums       string        `json:"albums,omitempty"`
 	PathRewrites []ArrPathRead `json:"path_rewrites,omitempty"`
+	// RootLibraries send what lies under an *Arr root folder to a library other than the connection's own.
+	RootLibraries []ArrRootLibrary `json:"root_libraries,omitempty"`
+}
+
+// ArrRootLibrary sends what lies under one *Arr root folder (as the *Arr names it) to a library.
+type ArrRootLibrary struct {
+	Root      string `json:"root"`
+	LibraryID int64  `json:"library_id"`
+}
+
+// LibraryOfRoot is the library an *Arr path is sent to by the longest root it lies under; false when no root claims it.
+func (p ArrPull) LibraryOfRoot(arrPath string) (int64, bool) {
+	best, bestLength, found := int64(0), -1, false
+	for _, one := range p.RootLibraries {
+		root := strings.TrimRight(one.Root, "/")
+		if root == "" || (arrPath != root && !strings.HasPrefix(arrPath, root+"/")) || len(root) <= bestLength {
+			continue
+		}
+		best, bestLength, found = one.LibraryID, len(root), true
+	}
+	return best, found
+}
+
+// RootOfLibrary is the *Arr root folder a library's works are added under; false when none is chosen for it.
+func (p ArrPull) RootOfLibrary(libraryID int64) (string, bool) {
+	for _, one := range p.RootLibraries {
+		if one.LibraryID == libraryID && strings.TrimSpace(one.Root) != "" {
+			return one.Root, true
+		}
+	}
+	return "", false
+}
+
+// TakesLibrary says the connection serves the library: as its own, or through one of its root folders.
+func (i ArrInstance) TakesLibrary(libraryID int64) bool {
+	if i.CategoryID != nil && *i.CategoryID == libraryID {
+		return true
+	}
+	_, mapped := i.Pull().RootOfLibrary(libraryID)
+	return mapped
 }
 
 // ArrPathRead reads an *Arr path prefix as another here.

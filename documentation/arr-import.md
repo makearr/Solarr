@@ -92,3 +92,11 @@ entry to an address Solarr can reach. A proxy an indexer uses cannot be removed.
 
 FlareSolverr is asked only when a site answers with a Cloudflare or DDoS-Guard challenge; its clearance cookies and user
 agent are then reused for the site's next requests, so downloads still go straight to the site.
+
+## One library per root folder
+
+A connection has one library (its media type's, chosen on the connection). Its pull options (`ArrPull.root_libraries`, Connections > Arr apps)
+can send what lies under one of the *Arr's own root folders (as the *Arr names it, before the path rewrites) to another library of the same
+media type: the library of the longest matching root wins over the connection's (`ArrSync.categoryFor`, used by imports, syncs and the
+preview). Adding a work to the *Arr when Solarr adds one (Companion mode) uses the *Arr root folder chosen for that library, and a connection
+serves every library it has a root for (`ArrInstance.TakesLibrary`).

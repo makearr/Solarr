@@ -734,6 +734,11 @@ func pullOptionsView(pull settings.ArrPull) gen.ArrPullOptions {
 		rewrites[index].From, rewrites[index].To = rewrite.From, rewrite.To
 	}
 	view.PathRewrites = &rewrites
+	roots := make([]gen.ArrRootLibrary, len(pull.RootLibraries))
+	for index, one := range pull.RootLibraries {
+		roots[index] = gen.ArrRootLibrary{Root: one.Root, LibraryId: one.LibraryID}
+	}
+	view.RootLibraries = &roots
 	return view
 }
 
@@ -779,6 +784,11 @@ func (s *Server) SetArrInstancePull(w http.ResponseWriter, r *http.Request, id i
 	for _, rewrite := range derefOr(body.PathRewrites, nil) {
 		if strings.TrimSpace(rewrite.From) != "" && strings.TrimSpace(rewrite.To) != "" {
 			pull.PathRewrites = append(pull.PathRewrites, settings.ArrPathRead{From: strings.TrimSpace(rewrite.From), To: strings.TrimSpace(rewrite.To)})
+		}
+	}
+	for _, one := range derefOr(body.RootLibraries, nil) {
+		if root := strings.TrimSpace(one.Root); root != "" && one.LibraryId > 0 {
+			pull.RootLibraries = append(pull.RootLibraries, settings.ArrRootLibrary{Root: root, LibraryID: one.LibraryId})
 		}
 	}
 	instance, err := s.auth.Settings.GetArrInstance(r.Context(), id)
