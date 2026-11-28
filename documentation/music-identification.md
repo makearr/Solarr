@@ -335,3 +335,13 @@ Lidarr's flat quality enum (ADR-18, ADR-40). The golden corpus in `testdata/rele
 - **Claims.** A container (M4A) is claimed on `Attributes.Container`, not as a codec. A barcode run is discarded from the title and not stored;
   `EnrichJob` sets it once a release is matched. Bare fixed-rate MP3 numbers ("320") and scene abbreviations (VLS, CDM, CDS) are public format
   conventions, not upstream code.
+
+## Video works in a music library
+
+A scan of a music library includes video features beside sound (`music.IsMusicFile`; extras and sample folders stay out).
+`Consumer.observeVideos` registers each video and makes it one unverified work of media type `music` and subtype
+`Concert video` or `Music video`, identity `local:video` keyed by the file path without extension, credited to the artist
+named by the tags, the `Artist - Title (year)` file name or the parent folder, unmonitored, and left in the Unidentified
+queue. The subtype follows the library kind (Concert videos, Music videos) and otherwise the running time (25 minutes or
+more is a concert). `InspectVideo` is the pure part. Not yet built: the MusicBrainz lookup that names these works (video
+recordings for music videos, artist and live release group for concerts), wanted monitoring, and the Videos section.

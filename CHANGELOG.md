@@ -4,7 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
-- Music libraries can be of the kinds Concert videos and Music videos (the video works themselves follow).
+- Music libraries can be of the kinds Concert videos and Music videos; a scan now picks up the video files in a music library as video works (named from tags or the file name, credited to their artist, unverified until a lookup names them).
 - Manage > Statistics: one chart shows a line per library (Libraries) or per disk group (Disks) with a legend that hides single lines; Disks adds up Solarr's disk calls per disk group and charts the inotify watches each disk holds; Overview gains gauges for current CPU, memory, storage, network and download speed, and its bandwidth chart adds the download clients next to Solarr's own calls.
 - Statistics > Disks names a disk group the way you named it in Settings > Disk, otherwise by its filesystem type and mount point, instead of a device id.
 - A book collection lists only the books in the languages its library prefers (translations are left out), and Hardcover translations filed as copies of another book are skipped.

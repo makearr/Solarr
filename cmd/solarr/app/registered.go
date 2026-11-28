@@ -143,7 +143,7 @@ func (p *process) musicModule() music.Module {
 	}
 	return music.Module{Feeds: p.musicFeeds(), AcoustIDConfigured: func() bool { return p.cache.Snapshot().AcoustIDConfigured() }, Registrations: p.musicJobs(), Realign: realign, Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
-		Include:  scan.IsAudio,
+		Include:  music.IsMusicFile,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
 			FS: p.fsys, Categories: adapters.Categories{Cache: p.cache}, Roots: adapters.DrainRoots{Cache: p.cache},
 			Affinity: p.cache, Desired: &desired, Subscriptions: library.NewSubscriptions(p.library),

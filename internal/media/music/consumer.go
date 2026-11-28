@@ -136,41 +136,19 @@ func (c Consumer) Observe(
 			readable = append(readable, observed)
 		}
 	}
+	readable, videos := splitVideos(readable)
+	if err := c.observeVideos(ctx, root, categoryID, videos); err != nil {
+		return err
+	}
 	if len(readable) == 0 {
 		return nil
 	}
 
+	readable, mediaObjectIDs, err := c.register(ctx, root, readable)
+	if err != nil || len(readable) == 0 {
+		return err
+	}
 	now := c.clock.Now()
-	files := make([]library.PhysicalFile, 0, len(readable))
-	kept := readable[:0:0]
-	for _, observed := range readable {
-		absolute := path.Join(root.Path, observed.File.RelPath)
-		hash, err := library.QuickHash(c.fsys, absolute, observed.File.SizeBytes)
-		if library.FileVanished(err) {
-			c.logger.Debug("file gone or shorter than scanned; left for the next scan", slog.String("path", observed.File.RelPath), slog.Any("error", err))
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("music: %w", err)
-		}
-		kept = append(kept, observed)
-		files = append(files, library.PhysicalFile{
-			RelPath: observed.File.RelPath, SizeBytes: observed.File.SizeBytes,
-			QuickHash: hash, FirstSeenAt: now,
-		})
-	}
-	if readable = kept; len(readable) == 0 {
-		return nil
-	}
-
-	registered, err := c.physical.RegisterBatch(ctx, root.ID, files)
-	if err != nil {
-		return fmt.Errorf("music: %w", err)
-	}
-	mediaObjectIDs := make([]int64, len(registered))
-	for index, file := range registered {
-		mediaObjectIDs[index] = file.MediaObjectID
-	}
 	if err := c.recordClaimedAttributes(ctx, readable, mediaObjectIDs); err != nil {
 		return fmt.Errorf("music: %w", err)
 	}
@@ -233,6 +211,41 @@ func (c Consumer) Observe(
 		slog.Int64("root_folder_id", root.ID), slog.Int("files", len(readable)),
 		slog.Int("identified", len(resolved)), slog.Int("queued", len(queued)), slog.Int("unverified", len(links)-len(resolved)))
 	return nil
+}
+
+// register hashes the readable files and records them as media objects; a file that vanished since the scan is left for the next one.
+func (c Consumer) register(ctx context.Context, root settings.RootFolder, readable []scan.Observed) ([]scan.Observed, []int64, error) {
+	now := c.clock.Now()
+	files := make([]library.PhysicalFile, 0, len(readable))
+	kept := readable[:0:0]
+	for _, observed := range readable {
+		absolute := path.Join(root.Path, observed.File.RelPath)
+		hash, err := library.QuickHash(c.fsys, absolute, observed.File.SizeBytes)
+		if library.FileVanished(err) {
+			c.logger.Debug("file gone or shorter than scanned; left for the next scan", slog.String("path", observed.File.RelPath), slog.Any("error", err))
+			continue
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("music: %w", err)
+		}
+		kept = append(kept, observed)
+		files = append(files, library.PhysicalFile{
+			RelPath: observed.File.RelPath, SizeBytes: observed.File.SizeBytes,
+			QuickHash: hash, FirstSeenAt: now,
+		})
+	}
+	if len(kept) == 0 {
+		return nil, nil, nil
+	}
+	registered, err := c.physical.RegisterBatch(ctx, root.ID, files)
+	if err != nil {
+		return nil, nil, fmt.Errorf("music: %w", err)
+	}
+	mediaObjectIDs := make([]int64, len(registered))
+	for index, file := range registered {
+		mediaObjectIDs[index] = file.MediaObjectID
+	}
+	return kept, mediaObjectIDs, nil
 }
 
 // settleUnverified keeps a new unverified album unmonitored with its artist credited (D6), and takes
