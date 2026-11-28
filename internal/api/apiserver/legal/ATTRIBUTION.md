@@ -239,6 +239,8 @@ a user offered the Corresponding Source should be able to see what the binary li
 | `github.com/ulikunitz/xz` | BSD-3-Clause | Pure-Go xz decompression (ADR-49), for `.tar.xz` |
 | `github.com/dlclark/regexp2` | MIT | .NET-compatible regular expressions (lookaround, backreferences, duplicate group names) so Sonarr's TV parser patterns run as written (ADR-18, stage 8). Go's `regexp` rejects all three |
 | `@noble/curves`, `@noble/hashes`, `@noble/ciphers` (npm, bundled into the web interface) | MIT | X25519, HKDF-SHA256 and AES-256-GCM in the browser, sealing passwords and API keys before they are sent (`web/src/api/seal.ts`). WebCrypto is unavailable on plain-HTTP pages, the very case this is for; audited, dependency-free |
+| `epubjs` (npm, loaded only by the reader) and its dependencies (`jszip` used under its MIT option, `@xmldom/xmldom`, `localforage`, `lodash`, `core-js` and others) | BSD-2-Clause, MIT, Apache-2.0, ISC | Opens and paginates EPUB files in the web interface's reader (`web/src/app/reader/EpubReader.tsx`) |
+| `pdfjs-dist` (npm, loaded only by the reader; Mozilla PDF.js) | Apache-2.0 | Renders PDF files in the web interface's reader (`web/src/app/reader/PdfReader.tsx`) |
 
 Bundling `unrar` or p7zip was considered and rejected (ADR-49): the UnRAR licence forbids using
 the source to recreate the RAR compression algorithm, which is exactly the kind of licence

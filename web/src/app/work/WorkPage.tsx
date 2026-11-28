@@ -46,6 +46,7 @@ import { useShowCollections } from "@/lib/useShowCollections";
 import { WorkCollections } from "./WorkCollections";
 import { WorkSearchTab, runInteractiveKey } from "./WorkSearchTab";
 import { PlayButton } from "../player/PlayButton";
+import { ReadButton } from "../reader/ReadButton";
 
 type Work = components["schemas"]["WorkDetail"];
 type Group = components["schemas"]["WorkGroup"];
@@ -815,6 +816,7 @@ function WholeFiles({ work, expert }: { work: Work; expert?: ExpertFiles }) {
             <div className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex items-center gap-2">
               <PlayButton extension={file.extension} item={{ mediaObjectId: file.media_object_id, title: work.title, durationMs: work.runtime_ms ?? undefined, file }} />
+              <ReadButton mediaObjectId={file.media_object_id} extension={file.extension} title={work.title} />
               {file.path && <span className="break-all font-mono text-xs">{file.path}</span>}
             </span>
             <span className="flex flex-wrap items-center gap-1">

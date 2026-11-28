@@ -16,6 +16,7 @@ import { useShowThumbnails } from "@/lib/interfacePreferences";
 
 import { FileThumb, isVideoType } from "../FileThumb";
 import { PlayButton } from "../player/PlayButton";
+import { ReadButton } from "../reader/ReadButton";
 import { TargetChip } from "./TargetChip";
 import { fileTagChips, formatDuration, formatMinutes, partState, sceneNumber, type PartState } from "./workFormat";
 
@@ -287,7 +288,10 @@ function PartRow({
           </Button>
         )}
         {part.file && (
-          <PlayButton extension={part.file.extension} item={{ mediaObjectId: part.file.media_object_id, title, durationMs: part.runtime_ms ?? undefined, file: part.file }} />
+          <>
+            <PlayButton extension={part.file.extension} item={{ mediaObjectId: part.file.media_object_id, title, durationMs: part.runtime_ms ?? undefined, file: part.file }} />
+            <ReadButton mediaObjectId={part.file.media_object_id} extension={part.file.extension} title={title} />
+          </>
         )}
         {actions.onCrossover && (
           <Button variant="icon" title={t("crossover.action")} aria-label={`${t("crossover.action")} ${title}`} onClick={() => actions.onCrossover?.(part)}>

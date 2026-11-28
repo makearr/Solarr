@@ -100,3 +100,19 @@ services:
 Not yet in the portable settings export.
 
 The player has a mute button and a volume slider; the volume is remembered in the browser.
+
+## The reader (comics, EPUB, PDF)
+
+A file row of a work with a `.cbz .cbr .cb7 .cbt .epub .pdf` file has a Read button (`/read/<file id>`, `web/src/app/reader/`),
+beside Play. All three read from the file in the library, through the same access checks as Play (library permission, age limit).
+
+- **Comics** are our own reader. The server lists the page images of the archive in reading order (a page named `cover` first, the rest numbered
+  naturally; `comic.PageReader`, which reads archives through `archive.Peek` and keeps the page list of the last 16 files) and streams one page
+  per request (`GET /files/{id}/pages`, `/pages/{index}`). The reader turns pages with arrow keys, space, page keys or the left and right quarters
+  of the picture, shows two pages side by side (the cover alone), and reads right to left (the default for a manga library; both switches are
+  stored per user as preferences `reader.double_page` and `reader.right_to_left`).
+- **EPUB** is epub.js (BSD-2-Clause) and **PDF** is PDF.js (Apache-2.0), both loaded only when the reader opens and fetching the file from
+  `GET /files/{id}/stream` (range requests; the stream route serves EPUB and PDF besides audio and video). Licences are in `ATTRIBUTION.md`;
+  `@xmldom/xmldom` is pinned to 0.8.13 by an npm override, epub.js asking for the old, flawed 0.7.
+- **Place**: one row per user and file in `library.db` (`reading_position`: a page number for comics and PDFs, the EPUB's own CFI for an ebook, and
+  how far through the file it is), kept a moment after the last page turn (`GET/PUT /files/{id}/reading-position`) and resumed on open.
