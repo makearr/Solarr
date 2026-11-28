@@ -95,6 +95,7 @@ func (p *process) musicModule() music.Module {
 		Fingerprints: p.tool,
 		AcoustID:     p.acoustIDLookup(),
 		Tracks:       provider,
+		Videos:       provider,
 		Clock:        clock.NewSystem(),
 		Logger:       p.logger,
 		// One identification threshold for scan and import (2026-09-24).

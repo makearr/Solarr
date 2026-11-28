@@ -178,6 +178,11 @@ type RecordingSearcher interface {
 	SearchRecordingReleaseGroups(ctx context.Context, artist, title string, limit int) ([]RecordingMatch, error)
 }
 
+// VideoRecordingSearcher is an optional Source capability: recordings MusicBrainz marks as video (music videos), with their release groups.
+type VideoRecordingSearcher interface {
+	SearchVideoRecordings(ctx context.Context, artist, title string, limit int) ([]RecordingMatch, error)
+}
+
 // RecordingLookup is an optional Source capability: one recording by id and the release groups it is on.
 type RecordingLookup interface {
 	Recording(ctx context.Context, mbid string) (RecordingMatch, error)

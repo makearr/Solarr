@@ -17,18 +17,18 @@ import (
 
 // VideoCommitter places the video files of a download as unverified video works, the way a scan records them.
 type VideoCommitter interface {
-	CommitVideoUnit(ctx context.Context, sourceRoot string, unit inspect.Unit, probes []mediatool.Probe, categoryID int64, ladder []string) (Placed, error)
+	CommitVideoUnit(ctx context.Context, sourceRoot string, unit inspect.Unit, probes []mediatool.Probe, identities []*VideoIdentity, categoryID int64, ladder []string) (Placed, error)
 }
 
 var _ VideoCommitter = Committer{}
 
 // CommitVideoUnit places each video of the unit under its artist's folder, named "Artist - Title (year)", and records
 // it as one unverified `local:video` work credited to that artist, as the scan does for a video already in the library.
-// probes parallels unit.Media. The result describes the whole unit; its work is the first video's.
+// probes and identities (nil: not named by MusicBrainz) parallel unit.Media. The result describes the whole unit; its work is the first video's.
 func (c Committer) CommitVideoUnit(
-	ctx context.Context, sourceRoot string, unit inspect.Unit, probes []mediatool.Probe, categoryID int64, ladder []string,
+	ctx context.Context, sourceRoot string, unit inspect.Unit, probes []mediatool.Probe, identities []*VideoIdentity, categoryID int64, ladder []string,
 ) (Placed, error) {
-	if len(unit.Media) == 0 || len(probes) != len(unit.Media) {
+	if len(unit.Media) == 0 || len(probes) != len(unit.Media) || len(identities) != len(unit.Media) {
 		return Placed{}, fmt.Errorf("music: commit video unit %q: %d files, %d probes", unit.Directory, len(unit.Media), len(probes))
 	}
 	quickHashes, err := c.quickHashesChecked(ctx, sourceRoot, unit)
@@ -87,19 +87,16 @@ func (c Committer) CommitVideoUnit(
 	libraryPathIDs := make([]int64, len(registered))
 	for index, file := range registered {
 		mediaObjectIDs[index], libraryPathIDs[index] = file.MediaObjectID, file.LibraryPathID
-		links[index] = library.WorkLink{
-			Provider: ProviderLocalVideo, ExternalID: localVideoKey(destRoot.Path, destRelPaths[index]), Confidence: unverifiedConfidence,
-			Work: library.WorkIdentity{
-				MediaType: "music", CanonicalTitle: claims[index].Title, SortTitle: library.SortTitle(claims[index].Title), Subtype: claims[index].Subtype,
-			},
-			RootFolderID: destRoot.ID, MediaObjectID: file.MediaObjectID,
-		}
+		links[index] = videoLink(claims[index], identities[index], localVideoKey(destRoot.Path, destRelPaths[index]), destRoot.ID, file.MediaObjectID)
 	}
 	resolutions, err := c.identity.ResolveWorksDetailed(ctx, now, links)
 	if err != nil {
 		return undo(fmt.Errorf("music: resolve identity for video unit %q: %w", unit.Directory, err))
 	}
 	for index, resolution := range resolutions {
+		if err := linkVideoAlbum(ctx, c.identity, now, resolution.WorkID, identities[index]); err != nil {
+			return Placed{}, fmt.Errorf("music: video unit %q: %w", unit.Directory, err)
+		}
 		if claims[index].Artist == "" || c.people == nil {
 			continue
 		}

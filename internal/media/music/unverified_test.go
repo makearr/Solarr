@@ -2,6 +2,8 @@ package music_test
 
 import (
 	"path"
+	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -74,7 +76,7 @@ func TestCommitVideoUnit_PlacesAnUnverifiedVideoWorkUnderItsArtist(t *testing.T)
 	unit := testUnit("Rel", []inspect.File{{RelPath: "Rel/Katupoken - Sesoge (2011).mkv", SizeBytes: 5}})
 	probes := []mediatool.Probe{{Path: path.Join(commitSourceRoot, "Rel/Katupoken - Sesoge (2011).mkv"), Measured: mediatool.Measured{Duration: 4 * time.Minute}}}
 
-	placed, err := committer.CommitVideoUnit(t.Context(), commitSourceRoot, unit, probes, commitCategoryID, nil)
+	placed, err := committer.CommitVideoUnit(t.Context(), commitSourceRoot, unit, probes, []*music.VideoIdentity{nil}, commitCategoryID, nil)
 	if err != nil {
 		t.Fatalf("CommitVideoUnit: %v", err)
 	}
@@ -97,5 +99,33 @@ func TestCommitVideoUnit_PlacesAnUnverifiedVideoWorkUnderItsArtist(t *testing.T)
 	}
 	if len(placed.MediaObjectIDs) != 1 || len(placed.LibraryPathIDs) != 1 {
 		t.Errorf("placed = %+v, want one file", placed)
+	}
+}
+
+// A video MusicBrainz named is that recording's work, tied to the release group of its track.
+func TestCommitVideoUnit_ANamedMusicVideoIsItsRecordingAndLinksItsAlbum(t *testing.T) {
+	committer, opened, fsys := newCommitter(t, true)
+	writeCommitSourceFile(t, fsys, "Rel/clip.mkv", []byte("video"))
+	unit := testUnit("Rel", []inspect.File{{RelPath: "Rel/clip.mkv", SizeBytes: 5}})
+	probes := []mediatool.Probe{{Tags: mediatool.Tags{"artist": "Katupoken", "title": "Sesoge"}}}
+	named := &music.VideoIdentity{Provider: music.ProviderVideoRecording, ExternalID: "rec-1", Title: "Sesoge", ReleaseGroupMBID: "rg-1", Confidence: 0.97}
+
+	placed, err := committer.CommitVideoUnit(t.Context(), commitSourceRoot, unit, probes, []*music.VideoIdentity{named}, commitCategoryID, nil)
+	if err != nil {
+		t.Fatalf("CommitVideoUnit: %v", err)
+	}
+	ids, err := librarydb.New(opened.Read()).ListWorkExternalIDs(t.Context(), placed.WorkID)
+	if err != nil {
+		t.Fatalf("ListWorkExternalIDs: %v", err)
+	}
+	var got []string
+	for _, id := range ids {
+		got = append(got, id.Provider+"="+id.ExternalID)
+	}
+	want := []string{music.ProviderVideoRecording + "=rec-1", music.ProviderVideoAlbum + "=rg-1"}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("external ids = %v, want %v", got, want)
 	}
 }

@@ -41,7 +41,7 @@ type recordingVideoCommitter struct {
 	units []inspect.Unit
 }
 
-func (r *recordingVideoCommitter) CommitVideoUnit(_ context.Context, _ string, unit inspect.Unit, _ []mediatool.Probe, _ int64, _ []string) (music.Placed, error) {
+func (r *recordingVideoCommitter) CommitVideoUnit(_ context.Context, _ string, unit inspect.Unit, _ []mediatool.Probe, _ []*music.VideoIdentity, _ int64, _ []string) (music.Placed, error) {
 	r.units = append(r.units, unit)
 	return music.Placed{WorkID: 42, WorkCreated: true}, nil
 }

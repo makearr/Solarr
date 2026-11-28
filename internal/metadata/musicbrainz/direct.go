@@ -451,10 +451,20 @@ func (recording directRecording) toMatch() RecordingMatch {
 
 // SearchRecordingReleaseGroups implements RecordingSearcher; an empty artist searches the title alone.
 func (d direct) SearchRecordingReleaseGroups(ctx context.Context, artist, title string, limit int) ([]RecordingMatch, error) {
+	return d.searchRecordings(ctx, artist, title, "", limit)
+}
+
+// SearchVideoRecordings implements VideoRecordingSearcher: the same search narrowed to recordings flagged video.
+func (d direct) SearchVideoRecordings(ctx context.Context, artist, title string, limit int) ([]RecordingMatch, error) {
+	return d.searchRecordings(ctx, artist, title, " AND video:true", limit)
+}
+
+func (d direct) searchRecordings(ctx context.Context, artist, title, narrowing string, limit int) ([]RecordingMatch, error) {
 	query := "recording:" + luceneQuoted(title)
 	if artist != "" {
 		query += " AND artist:" + luceneQuoted(artist)
 	}
+	query += narrowing
 	requestURL := fmt.Sprintf("%s/recording/?query=%s&fmt=json&limit=%d", d.baseURL, url.QueryEscape(query), limit)
 
 	var parsed directRecordingSearchResponse

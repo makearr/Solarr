@@ -39,10 +39,14 @@ type UnverifiedCommitter interface {
 // ImporterConfig is what an Importer needs; Tool is required. Without a Committer units are identified and placed
 // nowhere; Search, Albums, AcoustID and Provenance each add a rung of identification when set.
 type ImporterConfig struct {
-	Tool      mediatool.Tool
-	Search    Searcher
-	Albums    AlbumLookup
-	AcoustID  AcoustIDLookup
+	Tool     mediatool.Tool
+	Search   Searcher
+	Albums   AlbumLookup
+	AcoustID AcoustIDLookup
+	// Videos names the videos of a download from MusicBrainz; nil leaves them unverified.
+	Videos VideoLookup
+	// Kinds answers a library's kind (Concert videos, Music videos); nil for none.
+	Kinds     func(categoryID int64) string
 	Committer UnitCommitter
 	// Provenance answers the release groups a download was grabbed for, which album identification always scores.
 	Provenance func(ctx context.Context, acquisitionID int64) ([]string, error)
@@ -212,10 +216,11 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	decisions := make([]library.UnitDecision, len(request.Units))
 	results := make([]model.ChainResult, len(request.Units))
 	matched := make([]*AlbumPlacement, len(request.Units))
+	videoIdentities := make([][]*VideoIdentity, len(request.Units))
 	identifiers := i.identifiers(request.SourcePath, tags)
 	identified := parallel.Do(ctx, len(request.Units), identifyParallelism, func(ctx context.Context, index int) error {
 		if isVideoUnit(request.Units[index]) {
-			decisions[index] = library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: ReasonVideoUnit}
+			decisions[index] = i.decideVideoUnit(ctx, request, index, relPaths, probes, videoIdentities, cfg.AmbiguityThreshold)
 			return nil
 		}
 		decisions[index], results[index], matched[index] = identifyUnit(ctx, request.UnitIDs[index], request.Units[index], identifiers, cfg, refine)
@@ -244,6 +249,16 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	}
 	claimless := i.claimless(ctx, request)
 	for index, decision := range decisions {
+		if decision.Decision == library.UnitCommit && isVideoUnit(request.Units[index]) {
+			placed, err := i.commitVideoUnit(ctx, request, index, relPaths, probes, videoIdentities[index])
+			if err != nil {
+				i.logger.Warn("import commit: could not place video unit", slog.Int64("unit_id", request.UnitIDs[index]), slog.Any("error", err))
+				decisions[index].Decision, decisions[index].Reason = library.UnitFailed, err.Error()
+				continue
+			}
+			placements[index] = i.placement(request.UnitIDs[index], placed)
+			continue
+		}
 		if decision.Decision != library.UnitCommit || results[index].Best == nil {
 			continue
 		}
@@ -279,7 +294,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			var placed Placed
 			var err error
 			if isVideoUnit(request.Units[index]) {
-				placed, err = i.commitVideoUnit(ctx, request, index, relPaths, probes)
+				placed, err = i.commitVideoUnit(ctx, request, index, relPaths, probes, videoIdentities[index])
 			} else {
 				placed, err = unverified.CommitUnverifiedUnit(ctx, request.SourcePath, request.Units[index], tags, request.CategoryID, request.Ladder)
 			}
@@ -302,8 +317,46 @@ func isVideoUnit(unit inspect.Unit) bool {
 	return len(unit.Media) > 0 && !slices.ContainsFunc(unit.Media, func(file inspect.File) bool { return !IsVideoFile(file.RelPath) })
 }
 
+// decideVideoUnit names each video of a unit by MusicBrainz; the unit commits when every one is named at the threshold,
+// else it waits unmatched and is added unverified. videoIdentities[index] receives what was found.
+func (i Importer) decideVideoUnit(
+	ctx context.Context, request batch.Request, index int, relPaths []string, probes []mediatool.Probe, videoIdentities [][]*VideoIdentity, threshold float64,
+) library.UnitDecision {
+	unit := request.Units[index]
+	kind := ""
+	if i.config.Kinds != nil {
+		kind = i.config.Kinds(request.CategoryID)
+	}
+	byPath := make(map[string]mediatool.Probe, len(probes))
+	for at, probe := range probes {
+		byPath[relPaths[at]] = probe
+	}
+	identities := make([]*VideoIdentity, len(unit.Media))
+	named := 0
+	var confidence float64
+	for at, file := range unit.Media {
+		claim := InspectVideo(file.RelPath, byPath[file.RelPath], kind)
+		identity, err := IdentifyVideo(ctx, i.config.Videos, claim, threshold)
+		if err != nil {
+			i.logger.Warn("music: video lookup failed", slog.String("path", file.RelPath), slog.Any("error", err))
+		}
+		identities[at] = identity
+		if identity != nil {
+			named++
+			confidence = identity.Confidence
+		}
+	}
+	videoIdentities[index] = identities
+	if named == len(unit.Media) && !request.Preview {
+		return library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitCommit, Confidence: confidence}
+	}
+	return library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: ReasonVideoUnit, Confidence: confidence}
+}
+
 // commitVideoUnit adds a video unit as unverified video works; the committer must be a VideoCommitter.
-func (i Importer) commitVideoUnit(ctx context.Context, request batch.Request, index int, relPaths []string, probes []mediatool.Probe) (Placed, error) {
+func (i Importer) commitVideoUnit(
+	ctx context.Context, request batch.Request, index int, relPaths []string, probes []mediatool.Probe, identities []*VideoIdentity,
+) (Placed, error) {
 	committer, ok := i.config.Committer.(VideoCommitter)
 	if !ok {
 		return Placed{}, errors.New("music: the committer places no video")
@@ -317,7 +370,7 @@ func (i Importer) commitVideoUnit(ctx context.Context, request batch.Request, in
 	for at, file := range unit.Media {
 		unitProbes[at] = byPath[file.RelPath]
 	}
-	return committer.CommitVideoUnit(ctx, request.SourcePath, unit, unitProbes, request.CategoryID, request.Ladder)
+	return committer.CommitVideoUnit(ctx, request.SourcePath, unit, unitProbes, identities, request.CategoryID, request.Ladder)
 }
 
 // CommitHeld implements batch.HeldCommitter: the album a person named, or the unit's own top candidate. A unit

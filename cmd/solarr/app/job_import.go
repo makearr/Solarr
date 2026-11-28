@@ -278,7 +278,7 @@ func (p *process) comicImporter() comic.Importer {
 // musicImporter is Lidarr's import: tags, MusicBrainz search, album matching and fingerprints, placed by importCommitter.
 func (p *process) musicImporter() music.Importer {
 	return music.NewImporter(music.ImporterConfig{
-		Tool: p.mediaTool(), Search: p.musicBrainzProvider(), Albums: p.musicBrainzProvider(), AcoustID: p.acoustIDLookup(),
+		Tool: p.mediaTool(), Search: p.musicBrainzProvider(), Albums: p.musicBrainzProvider(), AcoustID: p.acoustIDLookup(), Videos: p.musicBrainzProvider(), Kinds: p.libraryKind,
 		Committer: pushingCommitter{inner: p.importCommitter(), push: p.afterPlacing}, Provenance: p.acquisitionReleaseGroups, Profile: p.musicProfileGate(), Logger: p.logger,
 	})
 }
@@ -454,6 +454,16 @@ func (c pushingCommitter) CommitUnverifiedUnit(
 	return placed, err
 }
 
+func (c pushingCommitter) CommitVideoUnit(
+	ctx context.Context, sourceRoot string, unit inspect.Unit, probes []mediatool.Probe, identities []*music.VideoIdentity, categoryID int64, ladder []string,
+) (music.Placed, error) {
+	placed, err := c.inner.CommitVideoUnit(ctx, sourceRoot, unit, probes, identities, categoryID, ladder)
+	if err == nil {
+		c.push(ctx, categoryID, placed.WorkID)
+	}
+	return placed, err
+}
+
 func (c pushingCommitter) IdentifyUnverified(ctx context.Context, fromWorkID int64, best model.Identification, categoryID int64) (music.Placed, error) {
 	placed, err := c.inner.IdentifyUnverified(ctx, fromWorkID, best, categoryID)
 	if err == nil {
@@ -488,4 +498,13 @@ func (p *process) musicProfileGate() *music.ProfileGate {
 			return accepts, known
 		},
 	}
+}
+
+// libraryKind is a library's kind (Concert videos, Music videos), empty for none or an unknown library.
+func (p *process) libraryKind(categoryID int64) string {
+	category, found := p.cache.Snapshot().Category(categoryID)
+	if !found {
+		return ""
+	}
+	return category.Kind
 }

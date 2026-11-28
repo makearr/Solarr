@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -48,20 +49,26 @@ func (c Consumer) observeVideos(ctx context.Context, root settings.RootFolder, c
 		}
 	}
 	now := c.clock.Now()
+	threshold := DefaultAmbiguityThreshold
+	if c.threshold != nil {
+		threshold = c.threshold()
+	}
 	links := make([]library.WorkLink, len(videos))
 	artists := make([]string, len(videos))
-	queue := make([]library.QueueEntry, len(videos))
+	identities := make([]*VideoIdentity, len(videos))
+	var queue []library.QueueEntry
 	for index, observed := range videos {
 		claim := InspectVideo(observed.File.RelPath, observed.Probe, kind)
 		artists[index] = claim.Artist
-		links[index] = library.WorkLink{
-			Provider: ProviderLocalVideo, ExternalID: localVideoKey(root.Path, observed.File.RelPath), Confidence: unverifiedConfidence,
-			Work: library.WorkIdentity{
-				MediaType: "music", CanonicalTitle: claim.Title, SortTitle: library.SortTitle(claim.Title), Subtype: claim.Subtype,
-			},
-			RootFolderID: root.ID, MediaObjectID: mediaObjectIDs[index],
+		identity, err := IdentifyVideo(ctx, c.videos, claim, threshold)
+		if err != nil {
+			c.logger.Warn("video lookup failed; left unverified", slog.String("path", observed.File.RelPath), slog.Any("error", err))
 		}
-		queue[index] = library.QueueEntry{MediaObjectID: mediaObjectIDs[index], RootFolderID: root.ID, RelPath: observed.File.RelPath, At: now.Unix()}
+		identities[index] = identity
+		links[index] = videoLink(claim, identity, localVideoKey(root.Path, observed.File.RelPath), root.ID, mediaObjectIDs[index])
+		if identity == nil {
+			queue = append(queue, library.QueueEntry{MediaObjectID: mediaObjectIDs[index], RootFolderID: root.ID, RelPath: observed.File.RelPath, At: now.Unix()})
+		}
 	}
 	workIDs, err := c.identity.ResolveWorks(ctx, now, links)
 	if err != nil {
@@ -72,6 +79,9 @@ func (c Consumer) observeVideos(ctx context.Context, root settings.RootFolder, c
 	}
 	for index, workID := range workIDs {
 		if err := c.unmonitorWork(ctx, workID); err != nil {
+			return fmt.Errorf("music: %w", err)
+		}
+		if err := linkVideoAlbum(ctx, c.identity, now, workID, identities[index]); err != nil {
 			return fmt.Errorf("music: %w", err)
 		}
 		if artists[index] == "" || c.people == nil {
@@ -92,4 +102,28 @@ func (c Consumer) observeVideos(ctx context.Context, root settings.RootFolder, c
 // localVideoKey is one unverified video work per file: the same file seen again is the same work.
 func localVideoKey(sourceRoot, relPath string) string {
 	return strings.ToLower(path.Join(sourceRoot, strings.TrimSuffix(relPath, path.Ext(relPath))))
+}
+
+// videoLink is the work a video belongs to: what MusicBrainz named it when it did, else the one named by its file (D6 for video).
+func videoLink(claim VideoClaim, identity *VideoIdentity, localKey string, rootFolderID, mediaObjectID int64) library.WorkLink {
+	link := library.WorkLink{
+		Provider: ProviderLocalVideo, ExternalID: localKey, Confidence: unverifiedConfidence,
+		Work: library.WorkIdentity{
+			MediaType: "music", CanonicalTitle: claim.Title, SortTitle: library.SortTitle(claim.Title), Subtype: claim.Subtype,
+		},
+		RootFolderID: rootFolderID, MediaObjectID: mediaObjectID,
+	}
+	if identity != nil {
+		link.Provider, link.ExternalID, link.Confidence = identity.Provider, identity.ExternalID, identity.Confidence
+		link.Work.CanonicalTitle, link.Work.SortTitle = identity.Title, library.SortTitle(identity.Title)
+	}
+	return link
+}
+
+// linkVideoAlbum ties a music video to the release group of its track; a concert is already keyed by its live album.
+func linkVideoAlbum(ctx context.Context, identity library.Identity, at time.Time, workID int64, named *VideoIdentity) error {
+	if named == nil || named.Provider != ProviderVideoRecording || named.ReleaseGroupMBID == "" {
+		return nil
+	}
+	return identity.LinkExternalIDIfFree(ctx, at, workID, ProviderVideoAlbum, named.ReleaseGroupMBID, named.Confidence)
 }

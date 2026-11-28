@@ -492,6 +492,15 @@ func (i Identity) WorkIdentityOf(ctx context.Context, workID int64) (WorkIdentit
 	return WorkIdentity{MediaType: work.MediaType, CanonicalTitle: work.CanonicalTitle, SortTitle: work.SortTitle}, nil
 }
 
+// LinkExternalIDIfFree gives a work one more provider id; an id another work already holds stays with that work.
+func (i Identity) LinkExternalIDIfFree(ctx context.Context, at time.Time, workID int64, provider, externalID string, confidence float64) error {
+	return i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).LinkWorkExternalIDIfFree(ctx, librarydb.LinkWorkExternalIDIfFreeParams{
+			Provider: provider, ExternalID: externalID, WorkID: workID, Confidence: confidence, FirstSeenAt: at.Unix(),
+		})
+	})
+}
+
 // ExternalIDsOf answers the provider ids a work holds, the first of each provider.
 func (i Identity) ExternalIDsOf(ctx context.Context, workID int64) (map[string]string, error) {
 	rows, err := librarydb.New(i.store.Read()).ListWorkExternalIDs(ctx, workID)

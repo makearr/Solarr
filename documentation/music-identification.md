@@ -343,5 +343,13 @@ A scan of a music library includes video features beside sound (`music.IsMusicFi
 `Concert video` or `Music video`, identity `local:video` keyed by the file path without extension, credited to the artist
 named by the tags, the `Artist - Title (year)` file name or the parent folder, unmonitored, and left in the Unidentified
 queue. The subtype follows the library kind (Concert videos, Music videos) and otherwise the running time (25 minutes or
-more is a concert). `InspectVideo` is the pure part. The works are listed on the music module's Videos level (`Level.Subtypes`, a generic subtype filter of the works query); the Albums level (`Level.ExceptSubtypes`) and an artist's discography leave them out, and the Videos level shows no count. An import of video files (`Importer.ImportBatch`) queues a unit of video as such, never matching it as an album, and with unidentified units added places it through `Committer.CommitVideoUnit`: `Artist/Artist - Title (year).ext` under the library's artist folder format, one `local:video` work per file, credited to the artist, no wanted item; `Importer.Fit` rates a video-only folder possible, below a movie library. A unit with several videos reports only the first work in its placement. Not yet built: the MusicBrainz lookup that names these works (video
-recordings for music videos, artist and live release group for concerts), wanted monitoring, and the Videos section.
+more is a concert). `InspectVideo` is the pure part. The works are listed on the music module's Videos level (`Level.Subtypes`, a generic subtype filter of the works query); the Albums level (`Level.ExceptSubtypes`) and an artist's discography leave them out, and the Videos level shows no count. An import of video files (`Importer.ImportBatch`) queues a unit of video as such, never matching it as an album, and with unidentified units added places it through `Committer.CommitVideoUnit`: `Artist/Artist - Title (year).ext` under the library's artist folder format, one `local:video` work per file, credited to the artist, no wanted item; `Importer.Fit` rates a video-only folder possible, below a movie library. A unit with several videos reports only the first work in its placement. 
+
+`IdentifyVideo` names a video from MusicBrainz before it is recorded (scan and import alike; the same 0.90 threshold,
+and a second candidate within 0.05 leaves the choice to a person). A music video searches recordings flagged `video`
+(`SearchVideoRecordings`, `video:true`) of the artist: the work is keyed `musicbrainz-video-recording` by the recording
+and also holds `musicbrainz-video-album`, the earliest release group of that recording. A concert searches release
+groups of the artist with the secondary type Live: the work is keyed `musicbrainz-live-video` by that group (a claimed
+year more than one off the album's costs 0.15). Confidence is one minus the mean of the title and artist edit penalties;
+a claim without an artist is never committed. Sound already in the library is not re-examined: a video recorded before
+this lookup existed stays `local:video`.

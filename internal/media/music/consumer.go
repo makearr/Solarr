@@ -51,6 +51,7 @@ type Consumer struct {
 	fingerprints Fingerprinter
 	acoustID     AcoustIDLookup
 	tracks       TrackLookup
+	videos       VideoLookup
 	clock        clock.Clock
 	chain        model.ChainConfig
 	logger       *slog.Logger
@@ -84,6 +85,8 @@ type ConsumerConfig struct {
 	AcoustID     AcoustIDLookup
 	// Tracks identifies a file on its own when its folder settles as no album. Nil leaves it out.
 	Tracks TrackLookup
+	// Videos names the video files of a music library from MusicBrainz. Nil leaves them unverified.
+	Videos VideoLookup
 	Clock  clock.Clock
 	// Chain tunes RunChain (model.ChainConfig). The zero value takes the package
 	// defaults above.
@@ -117,7 +120,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	return Consumer{
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
 		unidentified: config.Unidentified, attempts: config.Attempts, search: config.Search, servers: config.Servers, albums: config.Albums,
-		fingerprints: config.Fingerprints, acoustID: config.AcoustID, tracks: config.Tracks,
+		fingerprints: config.Fingerprints, acoustID: config.AcoustID, tracks: config.Tracks, videos: config.Videos,
 		clock: config.Clock, chain: chain, threshold: config.Threshold, logger: logger,
 		desired: config.Desired, categories: config.Categories, defaultProfileID: config.DefaultProfileID,
 		people: config.People,
