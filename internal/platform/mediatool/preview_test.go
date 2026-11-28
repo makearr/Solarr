@@ -1,10 +1,10 @@
 package mediatool
 
 import (
-	"bytes"
 	"image"
-	"image/jpeg"
 	"testing"
+
+	"github.com/makearr/Solarr/internal/platform/artwork"
 )
 
 func TestPictureSize_FittedKeepsTheShapeAndNeverGrows(t *testing.T) {
@@ -61,11 +61,11 @@ func TestPreviewOf_SheetIsThreeByThreeAndSingleIsFromTheFirstThird(t *testing.T)
 		grey[slot] = [][]byte{greyOf(frame, cell)}
 	}
 	preview := previewOf(moments, grey, cell)
-	sheet, err := jpeg.Decode(bytes.NewReader(preview.Sheet))
+	sheet, err := artwork.Decode(preview.Sheet)
 	if err != nil || sheet.Bounds() != image.Rect(0, 0, 192, 108) {
 		t.Fatalf("sheet %v %v, want 192x108", sheet.Bounds(), err)
 	}
-	frame, err := jpeg.Decode(bytes.NewReader(preview.Frame))
+	frame, err := artwork.Decode(preview.Frame)
 	if err != nil || frame.Bounds() != image.Rect(0, 0, 64, 36) {
 		t.Fatalf("frame %v %v, want 64x36", frame.Bounds(), err)
 	}

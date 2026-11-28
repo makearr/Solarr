@@ -98,13 +98,15 @@ func (s *Server) SetImageSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.decodeBody(w, r, maxUserBody, &body, "expected the four picture figures") {
 		return
 	}
-	err := s.auth.Registry.LookupAll(settings.KeyCoverMaxEdge, settings.KeyCoverQuality, settings.KeyPreviewMaxEdge, settings.KeyPreviewQuality)
+	err := s.auth.Registry.LookupAll(settings.KeyCoverMaxEdge, settings.KeyCoverQuality, settings.KeyPreviewMaxEdge, settings.KeyPreviewQuality, settings.KeyImageFormat)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
+	formatBefore := s.auth.Settings.Snapshot().ImageSettings().Format
 	err = s.auth.Settings.SetImageSettings(r.Context(), s.auth.Clock, settings.ImageSettings{
 		CoverMaxEdge: body.CoverMaxEdge, CoverQuality: body.CoverQuality, PreviewMaxEdge: body.PreviewMaxEdge, PreviewQuality: body.PreviewQuality,
+		Format: string(body.Format),
 	})
 	var problems config.Problems
 	if errors.As(err, &problems) {
@@ -116,6 +118,10 @@ func (s *Server) SetImageSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.databaseAdmin.ImagesChanged()
+	if s.auth.Settings.Snapshot().ImageSettings().Format != formatBefore {
+		// The stored pictures are converted in the background; a run already going keeps on and a later one takes the rest.
+		s.databaseAdmin.StartRecompress(r.Context())
+	}
 	writeJSON(w, s.logger, http.StatusOK, s.imageSettingsView())
 }
 
@@ -143,7 +149,7 @@ func (s *Server) imageSettingsView() gen.ImageSettings {
 	images := s.auth.Settings.Snapshot().ImageSettings()
 	view := gen.ImageSettings{
 		CoverMaxEdge: images.CoverMaxEdge, CoverQuality: images.CoverQuality,
-		PreviewMaxEdge: images.PreviewMaxEdge, PreviewQuality: images.PreviewQuality,
+		PreviewMaxEdge: images.PreviewMaxEdge, PreviewQuality: images.PreviewQuality, Format: gen.ImageSettingsFormat(images.Format),
 	}
 	status := s.databaseAdmin.RecompressStatus()
 	if status.Running || status.StartedAt != nil {

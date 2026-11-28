@@ -387,7 +387,7 @@ func (j *ArtworkJob) writeSizes(ctx context.Context, cacheKey string, source []b
 		return artwork.Image{}, fmt.Errorf("create %s: %w", j.imagesDir, err)
 	}
 	for size, image := range sizes {
-		destination, err := artwork.ShardedFor(j.fs, j.imagesDir, fmt.Sprintf("%s-%s.webp", cacheKey, artworkSizeName(size)))
+		destination, err := artwork.ShardedFor(j.fs, j.imagesDir, fmt.Sprintf("%s-%s%s", cacheKey, artworkSizeName(size), artwork.Ext()))
 		if err != nil {
 			return artwork.Image{}, fmt.Errorf("create the cover folder: %w", err)
 		}

@@ -54,7 +54,7 @@ const recompressedMarker = ".recompressed"
 
 func (r *imageRecompress) run(ctx context.Context) {
 	images := r.images()
-	figures := fmt.Sprintf("cover %d/%d preview %d/%d", images.CoverMaxEdge, images.CoverQuality, images.PreviewMaxEdge, images.PreviewQuality)
+	figures := fmt.Sprintf("cover %d/%d preview %d/%d %s", images.CoverMaxEdge, images.CoverQuality, images.PreviewMaxEdge, images.PreviewQuality, r.formatOf(images))
 	var since time.Time
 	if marker := filepath.Join(r.coverDir, recompressedMarker); r.read2(marker) == figures {
 		if info, err := r.fs.Stat(marker); err == nil {
@@ -93,7 +93,15 @@ func (r *imageRecompress) update(change func(*apiserver.RecompressStatus)) {
 	change(&r.status)
 }
 
-// listFiles are the stored covers (.webp, one folder) and the previews (.jpg, a folder per thousand ids).
+// formatOf is the format the pictures are to be in; one not set is the default.
+func (r *imageRecompress) formatOf(images settings.ImageSettings) artwork.Format {
+	if format, ok := artwork.ParseFormat(images.Format); ok {
+		return format
+	}
+	return artwork.FormatWebP
+}
+
+// listFiles are the stored covers (one folder, then its shards) and the previews (a folder per thousand ids), in any format.
 func (r *imageRecompress) listFiles(ctx context.Context, since time.Time) []string {
 	var files []string
 	coverFolders := []string{r.coverDir}
@@ -110,7 +118,7 @@ func (r *imageRecompress) listFiles(ctx context.Context, since time.Time) []stri
 			continue
 		}
 		for _, entry := range entries {
-			if !entry.IsDir && strings.HasSuffix(entry.Name, ".webp") && r.madeSince(filepath.Join(folder, entry.Name), since) {
+			if !entry.IsDir && artwork.IsPictureName(entry.Name) && r.madeSince(filepath.Join(folder, entry.Name), since) {
 				files = append(files, filepath.Join(folder, entry.Name))
 			}
 		}
@@ -128,7 +136,7 @@ func (r *imageRecompress) listFiles(ctx context.Context, since time.Time) []stri
 			continue
 		}
 		for _, entry := range entries {
-			if path := filepath.Join(r.previewsDir, folder.Name, entry.Name); !entry.IsDir && strings.HasSuffix(entry.Name, ".jpg") && r.madeSince(path, since) {
+			if path := filepath.Join(r.previewsDir, folder.Name, entry.Name); !entry.IsDir && artwork.IsPictureName(entry.Name) && r.madeSince(path, since) {
 				files = append(files, path)
 			}
 		}
@@ -136,7 +144,8 @@ func (r *imageRecompress) listFiles(ctx context.Context, since time.Time) []stri
 	return files
 }
 
-// recompress rewrites one picture when the result is smaller and answers the bytes saved.
+// recompress rewrites one picture and answers the bytes saved. A picture in another format than the one set is converted
+// whatever its size; one already in it is rewritten only when the result is smaller.
 func (r *imageRecompress) recompress(path string, images settings.ImageSettings) (int64, error) {
 	info, err := r.fs.Stat(path)
 	if err != nil {
@@ -146,23 +155,39 @@ func (r *imageRecompress) recompress(path string, images settings.ImageSettings)
 	if err != nil {
 		return 0, err
 	}
-	var rewritten []byte
-	if strings.HasSuffix(path, ".webp") {
-		rewritten, err = artwork.Reencode(source, coverEdge(path, int(images.CoverMaxEdge)))
-	} else {
-		rewritten, err = reencodePreview(source, int(images.PreviewMaxEdge), int(images.PreviewQuality))
-	}
-	if err != nil || int64(len(rewritten)) >= info.Size {
+	img, err := artwork.Decode(source)
+	if err != nil {
 		return 0, err
 	}
-	if err := fsx.WriteAtomic(r.fs, path, func(w io.Writer) error { _, err := w.Write(rewritten); return err }); err != nil {
+	format := r.formatOf(images)
+	target := strings.TrimSuffix(path, filepath.Ext(path)) + format.Ext()
+	converting := target != path
+	var rewritten []byte
+	if r.isPreview(path) {
+		rewritten, err = artwork.EncodeAt(artwork.ResizeLongestEdge(img, int(images.PreviewMaxEdge)), format, int(images.PreviewQuality))
+	} else {
+		rewritten, err = artwork.EncodeAt(artwork.ResizeLongestEdge(img, coverEdge(path, int(images.CoverMaxEdge))), format, int(images.CoverQuality))
+	}
+	if err != nil || (!converting && int64(len(rewritten)) >= info.Size) {
+		return 0, err
+	}
+	if err := fsx.WriteAtomic(r.fs, target, func(w io.Writer) error { _, err := w.Write(rewritten); return err }); err != nil {
 		return 0, err
 	}
 	// The picture keeps its age, or the next run would take it for one made since and lossy formats would lose a little more.
-	if err := r.fs.Chtimes(path, info.ModTime); err != nil {
+	if err := r.fs.Chtimes(target, info.ModTime); err != nil {
 		return 0, err
 	}
+	if converting {
+		if err := r.fs.Remove(path); err != nil {
+			return 0, err
+		}
+	}
 	return info.Size - int64(len(rewritten)), nil
+}
+
+func (r *imageRecompress) isPreview(path string) bool {
+	return r.previewsDir != "" && strings.HasPrefix(path, strings.TrimSuffix(r.previewsDir, "/")+"/")
 }
 
 // madeSince says a picture is newer than the last full run; without a last run every picture is.
@@ -194,19 +219,12 @@ func (r *imageRecompress) read(path string) ([]byte, error) {
 
 // coverEdge is the longest edge a stored cover is held to: Thumb and Small keep theirs, Full follows the setting.
 func coverEdge(path string, full int) int {
+	stem := strings.TrimSuffix(path, filepath.Ext(path))
 	switch {
-	case strings.HasSuffix(path, "-thumb.webp"):
+	case strings.HasSuffix(stem, "-thumb"):
 		return int(artwork.Thumb)
-	case strings.HasSuffix(path, "-small.webp"):
+	case strings.HasSuffix(stem, "-small"):
 		return int(artwork.Small)
 	}
 	return full
-}
-
-func reencodePreview(source []byte, maxEdge, quality int) ([]byte, error) {
-	img, err := artwork.Decode(source)
-	if err != nil {
-		return nil, err
-	}
-	return artwork.EncodeJPEGAt(artwork.ResizeLongestEdge(img, maxEdge), quality)
 }

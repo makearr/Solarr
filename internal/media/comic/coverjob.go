@@ -155,7 +155,7 @@ func (j *CoverJob) one(ctx context.Context, candidate library.EmbeddedArtworkCan
 		return err
 	}
 	for size, image := range sizes {
-		destination, err := artwork.ShardedFor(j.config.FS, j.config.ImagesDir, cacheKey+"-"+coverSizeName(size)+".webp")
+		destination, err := artwork.ShardedFor(j.config.FS, j.config.ImagesDir, cacheKey+"-"+coverSizeName(size)+artwork.Ext())
 		if err != nil {
 			return err
 		}

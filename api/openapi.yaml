@@ -11485,12 +11485,13 @@ components:
         notice: { type: string, description: Why an option was switched off or not started, until the next save. }
     ImageSettings:
       type: object
-      required: [cover_max_edge, cover_quality, preview_max_edge, preview_quality]
+      required: [cover_max_edge, cover_quality, preview_max_edge, preview_quality, format]
       properties:
+        format: { type: string, enum: [webp, jpg, png], description: The one format stored item pictures and video previews are written in; changing it converts the stored ones. }
         cover_max_edge: { type: integer, format: int64, minimum: 400, maximum: 4000, description: Longest edge in pixels of the largest stored picture of a library item. }
-        cover_quality: { type: integer, format: int64, minimum: 30, maximum: 95, description: WebP quality. }
+        cover_quality: { type: integer, format: int64, minimum: 30, maximum: 95, description: Quality of the lossy formats (webp, jpg); png is lossless. }
         preview_max_edge: { type: integer, format: int64, minimum: 320, maximum: 4000, description: Longest edge of a video preview picture; frames are read 1280 wide. }
-        preview_quality: { type: integer, format: int64, minimum: 30, maximum: 95, description: JPEG quality. }
+        preview_quality: { type: integer, format: int64, minimum: 30, maximum: 95, description: Quality of the lossy formats (webp, jpg); png is lossless. }
         recompress:
           type: object
           description: Read only. The running or last recompress; absent before the first.

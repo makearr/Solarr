@@ -17,7 +17,7 @@ func Folder(dir string, mediaObjectID int64) string {
 	return filepath.Join(dir, strconv.FormatInt(mediaObjectID/1000, 10))
 }
 
-// Path is one picture of a file, a JPEG.
-func Path(dir string, mediaObjectID int64, kind string) string {
-	return filepath.Join(Folder(dir, mediaObjectID), strconv.FormatInt(mediaObjectID, 10)+"-"+kind+".jpg")
+// Path is one picture of a file in the format of the extension (with its dot).
+func Path(dir string, mediaObjectID int64, kind, ext string) string {
+	return filepath.Join(Folder(dir, mediaObjectID), strconv.FormatInt(mediaObjectID, 10)+"-"+kind+ext)
 }

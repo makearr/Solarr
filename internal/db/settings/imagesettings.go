@@ -2,9 +2,9 @@ package settings
 
 import (
 	"context"
+	"slices"
 	"strconv"
 
-	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
@@ -15,15 +15,23 @@ const (
 	KeyCoverQuality    = "images.cover_quality"
 	KeyPreviewMaxEdge  = "images.preview_max_edge"
 	KeyPreviewQuality  = "images.preview_quality"
+	KeyImageFormat     = "images.format"
 	DefaultCoverEdge   = 1000
 	DefaultCoverWebP   = 82
 	DefaultPreviewEdge = 1280
 	DefaultPreviewJPEG = 80
+	// DefaultImageFormat is the format of stored pictures and video previews until a person picks another.
+	DefaultImageFormat = "webp"
 )
 
-// ImageSettings are the longest edge and quality of the pictures of library items and of video previews.
+// ImageFormats are the formats stored pictures and video previews can be written in.
+var ImageFormats = []string{"webp", "jpg", "png"}
+
+// ImageSettings are the longest edge and quality of the pictures of library items and of video previews, and the one
+// format both are written in.
 type ImageSettings struct {
 	CoverMaxEdge, CoverQuality, PreviewMaxEdge, PreviewQuality int64
+	Format                                                     string
 }
 
 // ImageSettings reads the configured figures.
@@ -31,11 +39,22 @@ func (s *Snapshot) ImageSettings() ImageSettings {
 	return ImageSettings{
 		CoverMaxEdge: s.policyInt(KeyCoverMaxEdge, DefaultCoverEdge), CoverQuality: s.policyInt(KeyCoverQuality, DefaultCoverWebP),
 		PreviewMaxEdge: s.policyInt(KeyPreviewMaxEdge, DefaultPreviewEdge), PreviewQuality: s.policyInt(KeyPreviewQuality, DefaultPreviewJPEG),
+		Format: s.imageFormat(),
 	}
+}
+
+func (s *Snapshot) imageFormat() string {
+	if format := s.policy[KeyImageFormat]; slices.Contains(ImageFormats, format) {
+		return format
+	}
+	return DefaultImageFormat
 }
 
 func validateImageSettings(images ImageSettings) config.Problems {
 	var problems config.Problems
+	if !slices.Contains(ImageFormats, images.Format) {
+		problems = append(problems, config.Problem{Path: KeyImageFormat, Value: images.Format, Expectation: "one of webp, jpg, png"})
+	}
 	for _, check := range []struct {
 		key           string
 		value, lo, hi int64
@@ -56,18 +75,9 @@ func (c *Cache) SetImageSettings(ctx context.Context, cl clock.Clock, images Ima
 	if problems := validateImageSettings(images); len(problems) > 0 {
 		return problems
 	}
-	values := map[string]int64{
-		KeyCoverMaxEdge: images.CoverMaxEdge, KeyCoverQuality: images.CoverQuality,
-		KeyPreviewMaxEdge: images.PreviewMaxEdge, KeyPreviewQuality: images.PreviewQuality,
-	}
-	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		for key, value := range values {
-			if err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
-				Key: key, ValueJson: strconv.FormatInt(value, 10), UpdatedAt: cl.Now().Unix(),
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
+	return c.setPolicies(ctx, cl, map[string]string{
+		KeyCoverMaxEdge: strconv.FormatInt(images.CoverMaxEdge, 10), KeyCoverQuality: strconv.FormatInt(images.CoverQuality, 10),
+		KeyPreviewMaxEdge: strconv.FormatInt(images.PreviewMaxEdge, 10), KeyPreviewQuality: strconv.FormatInt(images.PreviewQuality, 10),
+		KeyImageFormat: images.Format,
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"io/fs"
 	"path/filepath"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -60,7 +61,7 @@ func ShardCovers(fsys fsx.FS, dir string) (int, error) {
 	}
 	moved := 0
 	for _, entry := range entries {
-		if entry.IsDir || filepath.Ext(entry.Name) != ".webp" {
+		if entry.IsDir || !IsPictureName(entry.Name) {
 			continue
 		}
 		destination, err := ShardedFor(fsys, dir, entry.Name)
@@ -75,4 +76,10 @@ func ShardCovers(fsys fsx.FS, dir string) (int, error) {
 		}
 	}
 	return moved, nil
+}
+
+// IsPictureName says a file name is a stored picture of any format.
+func IsPictureName(name string) bool {
+	_, ok := ParseFormat(strings.TrimPrefix(filepath.Ext(name), "."))
+	return ok
 }

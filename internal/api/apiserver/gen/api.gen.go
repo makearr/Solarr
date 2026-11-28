@@ -428,6 +428,13 @@ const (
 	IgnoreHeldRequestSubjectWork   IgnoreHeldRequestSubject = "work"
 )
 
+// Defines values for ImageSettingsFormat.
+const (
+	ImageSettingsFormatJpg  ImageSettingsFormat = "jpg"
+	ImageSettingsFormatPng  ImageSettingsFormat = "png"
+	ImageSettingsFormatWebp ImageSettingsFormat = "webp"
+)
+
 // Defines values for ImportDecisionRecordOutcome.
 const (
 	ImportDecisionRecordOutcomeIMPORT      ImportDecisionRecordOutcome = "IMPORT"
@@ -4092,13 +4099,16 @@ type ImageSettings struct {
 	// CoverMaxEdge Longest edge in pixels of the largest stored picture of a library item.
 	CoverMaxEdge int64 `json:"cover_max_edge"`
 
-	// CoverQuality WebP quality.
+	// CoverQuality Quality of the lossy formats (webp
 	CoverQuality int64 `json:"cover_quality"`
+
+	// Format The one format stored item pictures and video previews are written in; changing it converts the stored ones.
+	Format ImageSettingsFormat `json:"format"`
 
 	// PreviewMaxEdge Longest edge of a video preview picture; frames are read 1280 wide.
 	PreviewMaxEdge int64 `json:"preview_max_edge"`
 
-	// PreviewQuality JPEG quality.
+	// PreviewQuality Quality of the lossy formats (webp
 	PreviewQuality int64 `json:"preview_quality"`
 
 	// Recompress Read only. The running or last recompress; absent before the first.
@@ -4112,6 +4122,9 @@ type ImageSettings struct {
 		Total      int64      `json:"total"`
 	} `json:"recompress,omitempty"`
 }
+
+// ImageSettingsFormat The one format stored item pictures and video previews are written in; changing it converts the stored ones.
+type ImageSettingsFormat string
 
 // ImportCandidate One IDENTIFY strategy's ranked answer for a unit.
 type ImportCandidate struct {

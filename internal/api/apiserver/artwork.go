@@ -133,7 +133,7 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 		raw := string(*params.Size)
 		size = &raw
 	}
-	file, err := s.openLibraryImage(cacheKey, artworkSizeSuffix(size))
+	file, contentType, err := s.openLibraryImage(cacheKey, artworkSizeSuffix(size))
 	if err != nil {
 		// The DB row exists but the cache file does not -- a cache wipe between
 		// Record and now, not a caller error. Same 404 either way: the image is
@@ -143,7 +143,7 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 	}
 	defer func() { _ = file.Close() }()
 
-	w.Header().Set("Content-Type", "image/webp")
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", imageCacheControl(r, "private, max-age=3600"))
 	http.ServeContent(w, r, "", time.Time{}, file)
 }
@@ -197,14 +197,14 @@ func (s *Server) GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int
 		raw := string(*params.Size)
 		size = &raw
 	}
-	file, err := s.openLibraryImage(row.CacheKey, artworkSizeSuffix(size))
+	file, contentType, err := s.openLibraryImage(row.CacheKey, artworkSizeSuffix(size))
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no image for this person")
 		return
 	}
 	defer func() { _ = file.Close() }()
 
-	w.Header().Set("Content-Type", "image/webp")
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", imageCacheControl(r, "private, max-age=3600"))
 	http.ServeContent(w, r, "", time.Time{}, file)
 }

@@ -7733,13 +7733,18 @@ export interface components {
         };
         ImageSettings: {
             /**
+             * @description The one format stored item pictures and video previews are written in; changing it converts the stored ones.
+             * @enum {string}
+             */
+            format: "webp" | "jpg" | "png";
+            /**
              * Format: int64
              * @description Longest edge in pixels of the largest stored picture of a library item.
              */
             cover_max_edge: number;
             /**
              * Format: int64
-             * @description WebP quality.
+             * @description Quality of the lossy formats (webp
              */
             cover_quality: number;
             /**
@@ -7749,7 +7754,7 @@ export interface components {
             preview_max_edge: number;
             /**
              * Format: int64
-             * @description JPEG quality.
+             * @description Quality of the lossy formats (webp
              */
             preview_quality: number;
             /** @description Read only. The running or last recompress; absent before the first. */

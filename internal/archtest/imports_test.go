@@ -326,7 +326,7 @@ var allowedInternalImports = map[string][]string{
 	// from internal/scanning/scan (todo 4.2, confirmed with the user), so it imports
 	// no more than scan itself does.
 	"internal/scanning/probe": {
-		"internal/platform/iogate",
+		"internal/platform/iogate", "internal/platform/artwork",
 		"internal/platform/clock", "internal/platform/filekind", "internal/jobs", "internal/db/library", "internal/platform/mediatool",
 		"internal/db/settings", "internal/platform/fsx", "internal/identify/parsetv", "internal/platform/previewstore", "internal/identify/quality",
 	},

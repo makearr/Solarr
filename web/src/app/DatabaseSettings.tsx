@@ -104,9 +104,21 @@ function PicturesCard() {
   return (
     <Card
       title="Pictures"
-      help="The longest edge and the compression of the stored pictures of library items (WebP) and of video previews (JPEG). New pictures use the figures at once; Recompress makes the stored ones again, and a picture that would not come out smaller is left alone."
+      help="The format, the longest edge and the compression of the stored pictures of library items and of video previews. New pictures use the figures at once; changing the format converts the stored ones in the background, and Recompress makes them again at the figures (a picture that would not come out smaller is left alone)."
     >
       <div className="flex flex-wrap items-start gap-4">
+        <Field label="Format" help="Item pictures and video previews, WebP by default." className="w-40">
+          <select
+            value={current.format}
+            disabled={save.isPending}
+            onChange={(event) => change({ format: event.target.value as ImageSettings["format"] })}
+            className={numberStyle}
+          >
+            <option value="webp">WebP</option>
+            <option value="jpg">JPEG</option>
+            <option value="png">PNG (lossless)</option>
+          </select>
+        </Field>
         <Field label="Cover size (px)" help="Largest side, 400 to 4000." className="w-40">
           {number(current.cover_max_edge, (cover_max_edge) => change({ cover_max_edge }), 400, 4000)}
         </Field>

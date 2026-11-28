@@ -527,12 +527,12 @@ func TestJob_RunKeepsPreviewPicturesBesideTheHashWhenPreviewsAreOn(t *testing.T)
 		t.Fatalf("Run: %v", err)
 	}
 	for kind, want := range map[string]string{previewstore.Frame: "frame:a.mkv", previewstore.Sheet: "sheet:a.mkv"} {
-		got, err := os.ReadFile(previewstore.Path(previews, ids[0].MediaObjectID, kind))
+		got, err := os.ReadFile(previewstore.Path(previews, ids[0].MediaObjectID, kind, ".webp"))
 		if err != nil || string(got) != want {
 			t.Errorf("%s = %q, %v; want %q", kind, got, err, want)
 		}
 	}
-	if _, err := os.Stat(previewstore.Path(previews, ids[1].MediaObjectID, previewstore.Frame)); !os.IsNotExist(err) {
+	if _, err := os.Stat(previewstore.Path(previews, ids[1].MediaObjectID, previewstore.Frame, ".webp")); !os.IsNotExist(err) {
 		t.Errorf("the video that could not be read has a preview: %v", err)
 	}
 	var recorded int
@@ -582,7 +582,7 @@ func TestJob_ForcedPicturesAreMadeWhateverTheSettingsSay(t *testing.T) {
 			if err != nil || len(rows) != 1 {
 				t.Errorf("hashed videos = %d, %v; want 1", len(rows), err)
 			}
-			_, statErr := os.Stat(previewstore.Path(previews, ids[0].MediaObjectID, previewstore.Frame))
+			_, statErr := os.Stat(previewstore.Path(previews, ids[0].MediaObjectID, previewstore.Frame, ".webp"))
 			if made := statErr == nil; made != (mode == probe.PicturesWithPreviews) {
 				t.Errorf("frame made = %v in mode %s", made, mode)
 			}

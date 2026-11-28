@@ -1370,7 +1370,7 @@ func (p *process) frameDecodeArgs() []string {
 // applyImageSettings sets the size and quality new pictures are made with from the stored figures.
 func (p *process) applyImageSettings() {
 	images := p.cache.Snapshot().ImageSettings()
-	artwork.Configure(artwork.Options{FullEdge: int(images.CoverMaxEdge), Quality: int(images.CoverQuality)})
+	artwork.Configure(artwork.Options{FullEdge: int(images.CoverMaxEdge), Quality: int(images.CoverQuality), Format: artwork.Format(images.Format)})
 	mediatool.ConfigurePreview(mediatool.PreviewOptions{MaxEdge: int(images.PreviewMaxEdge), Quality: int(images.PreviewQuality)})
 }
 

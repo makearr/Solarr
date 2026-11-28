@@ -153,13 +153,13 @@ func (c *Cache) renew(key string) {
 	if c.Clock == nil {
 		return
 	}
-	info, err := c.FS.Stat(c.path(key, artwork.Full))
+	info, err := c.FS.Stat(c.storedPath(key, artwork.Full))
 	now := c.Clock.Now()
 	if err != nil || now.Sub(info.ModTime) < usedRenewal {
 		return
 	}
 	for _, size := range []artwork.Size{artwork.Thumb, artwork.Small, artwork.Full} {
-		_ = c.FS.Chtimes(c.path(key, size), now)
+		_ = c.FS.Chtimes(c.storedPath(key, size), now)
 	}
 }
 
@@ -193,8 +193,8 @@ func (c *Cache) stored(key string) bool {
 	if c.CoverDir == "" {
 		return false
 	}
-	_, err := c.FS.Stat(artwork.ReadPath(c.FS, c.CoverDir, FileName(key, artwork.Full)))
-	return err == nil
+	_, found := artwork.FindFile(c.FS, c.CoverDir, stemOf(key, artwork.Full))
+	return found
 }
 
 // MoveLibraryCovers moves the covers of albums and people (work-N and person-N keys) from the cache directory to
@@ -225,10 +225,10 @@ func MoveLibraryCovers(fsys fsx.FS, from, to string) (int, error) {
 	return moved, nil
 }
 
-// FileName is a picture's file name at a size.
-func FileName(key string, size artwork.Size) string {
+// stemOf is a picture's file name at a size, without its extension: the format it is stored in varies.
+func stemOf(key string, size artwork.Size) string {
 	name := map[artwork.Size]string{artwork.Thumb: "thumb", artwork.Small: "small", artwork.Full: "full"}[size]
-	return key + "-" + name + ".webp"
+	return key + "-" + name
 }
 
 // PromoteFiles moves a key's pictures, the full size last so a half-moved set reads as absent, from one directory to
@@ -238,8 +238,8 @@ func PromoteFiles(fsys fsx.FS, from, to, key string) error {
 		return err
 	}
 	for _, size := range []artwork.Size{artwork.Thumb, artwork.Small, artwork.Full} {
-		source := filepath.Join(from, FileName(key, size))
-		destination, err := artwork.ShardedFor(fsys, to, FileName(key, size))
+		source, _ := artwork.FindFile(fsys, from, stemOf(key, size))
+		destination, err := artwork.ShardedFor(fsys, to, stemOf(key, size)+filepath.Ext(source))
 		if err != nil {
 			return err
 		}
@@ -271,16 +271,23 @@ func (c *Cache) Original(ctx context.Context, address string) ([]byte, error) {
 	return c.fetch(ctx, address)
 }
 
+// path is where a picture of the cache is written, in the format in force.
 func (c *Cache) path(key string, size artwork.Size) string {
-	return filepath.Join(c.Dir, FileName(key, size))
+	return filepath.Join(c.Dir, stemOf(key, size)+artwork.Ext())
+}
+
+// storedPath is where a picture of the cache is, in whatever format it was written in.
+func (c *Cache) storedPath(key string, size artwork.Size) string {
+	found, _ := artwork.FindFile(c.FS, c.Dir, stemOf(key, size))
+	return found
 }
 
 // Cached says whether the picture at the address is already stored at every size.
 func (c *Cache) Cached(address string) bool { return c.cached(Key(address)) }
 
 func (c *Cache) cached(key string) bool {
-	_, err := c.FS.Stat(c.path(key, artwork.Full))
-	return err == nil
+	_, found := artwork.FindFile(c.FS, c.Dir, stemOf(key, artwork.Full))
+	return found
 }
 
 func (c *Cache) lockFor(key string) func() {

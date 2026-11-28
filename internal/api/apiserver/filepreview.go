@@ -6,6 +6,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/makearr/Solarr/internal/platform/artwork"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/previewstore"
 )
 
@@ -28,8 +30,15 @@ func (s *Server) routeGetFilePreview(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no preview for this file")
 		return
 	}
-	target := previewstore.Path(s.previewsDir, file.MediaObjectID, kind)
-	opened, err := s.fsys.Open(target)
+	var target string
+	var opened fsx.File
+	var err error
+	for _, format := range artwork.Preferred() {
+		target = previewstore.Path(s.previewsDir, file.MediaObjectID, kind, format.Ext())
+		if opened, err = s.fsys.Open(target); err == nil {
+			break
+		}
+	}
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no preview for this file")
 		return
@@ -39,7 +48,7 @@ func (s *Server) routeGetFilePreview(w http.ResponseWriter, r *http.Request) {
 	if info, err := s.fsys.Stat(target); err == nil {
 		modified = info.ModTime
 	}
-	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Type", artwork.ContentTypeOfPath(target))
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	http.ServeContent(w, r, "", modified, opened)
 }

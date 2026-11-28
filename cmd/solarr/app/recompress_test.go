@@ -31,12 +31,12 @@ func TestRecompress_ShrinksCoversAndPreviewsToTheNewFiguresAndNeverGrowsOne(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	preview, err := artwork.EncodeJPEGAt(noisy(1280, 720), 95)
+	preview, err := artwork.EncodeAt(noisy(1280, 720), artwork.FormatWebP, 95)
 	if err != nil {
 		t.Fatal(err)
 	}
 	putFile(t, fsys, "/mediacover/work-1-cover-full.webp", string(cover))
-	putFile(t, fsys, "/previews/0/5-frame.jpg", string(preview))
+	putFile(t, fsys, "/previews/0/5-frame.webp", string(preview))
 
 	run := &imageRecompress{
 		fs: fsys, clock: fake, coverDir: "/mediacover", previewsDir: "/previews", logger: slog.New(slog.DiscardHandler),
@@ -66,7 +66,7 @@ func TestRecompress_ShrinksCoversAndPreviewsToTheNewFiguresAndNeverGrowsOne(t *t
 	if width, _ := sizeOf("/mediacover/work-1-cover-full.webp"); width != 500 {
 		t.Errorf("cover width = %d, want 500", width)
 	}
-	if width, _ := sizeOf("/previews/0/5-frame.jpg"); width != 640 {
+	if width, _ := sizeOf("/previews/0/5-frame.webp"); width != 640 {
 		t.Errorf("preview width = %d, want 640", width)
 	}
 
@@ -105,5 +105,37 @@ func TestRecompress_ARewrittenPictureKeepsItsModificationTime(t *testing.T) {
 	}
 	if !after.ModTime.Equal(made.ModTime) {
 		t.Errorf("modification time = %v after the rewrite, want %v", after.ModTime, made.ModTime)
+	}
+}
+
+// A format change converts what is stored: covers and previews come out in the new format, the old files go.
+func TestRecompress_ConvertsStoredPicturesToTheChosenFormat(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	cover, err := artwork.EncodeWebP(noisy(600, 600))
+	if err != nil {
+		t.Fatal(err)
+	}
+	putFile(t, fsys, "/mediacover/ab/work-1-cover-small.webp", string(cover))
+	putFile(t, fsys, "/previews/0/5-sheet.webp", string(cover))
+	run := &imageRecompress{
+		fs: fsys, clock: fake, coverDir: "/mediacover", previewsDir: "/previews", logger: slog.New(slog.DiscardHandler),
+		images: func() settings.ImageSettings {
+			return settings.ImageSettings{CoverMaxEdge: 1000, CoverQuality: 80, PreviewMaxEdge: 1280, PreviewQuality: 80, Format: "jpg"}
+		},
+	}
+	run.run(t.Context())
+	for _, want := range []string{"/mediacover/ab/work-1-cover-small.jpg", "/previews/0/5-sheet.jpg"} {
+		if _, err := fsys.Stat(want); err != nil {
+			t.Errorf("converted picture %s: %v", want, err)
+		}
+	}
+	for _, gone := range []string{"/mediacover/ab/work-1-cover-small.webp", "/previews/0/5-sheet.webp"} {
+		if _, err := fsys.Stat(gone); err == nil {
+			t.Errorf("%s is still there after conversion", gone)
+		}
+	}
+	if status := run.Status(); status.Done != 2 || status.Failed != 0 {
+		t.Errorf("status = %+v, want 2 done and none failed", status)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -22,22 +21,27 @@ type RemoteImages interface {
 	Promote(ctx context.Context, address string) (string, error)
 }
 
-// openImage opens a picture of a key, from the library's directory first and the cache second.
-func (s *Server) openImage(key, size string) (fsx.File, error) {
-	name := key + "-" + size + ".webp"
+// openImage opens a picture of a key, from the library's directory first and the cache second, in whatever format it
+// is stored in; contentType is that format's.
+func (s *Server) openImage(key, size string) (file fsx.File, contentType string, err error) {
+	stem := key + "-" + size
 	if s.mediaCoverDir != "" {
-		if file, err := s.fsys.Open(artwork.ReadPath(s.fsys, s.mediaCoverDir, name)); err == nil {
-			return file, nil
+		if stored, found := artwork.FindFile(s.fsys, s.mediaCoverDir, stem); found {
+			if file, err := s.fsys.Open(stored); err == nil {
+				return file, artwork.ContentTypeOfPath(stored), nil
+			}
 		}
 	}
-	return s.fsys.Open(filepath.Join(s.imagesDir, name))
+	cached, _ := artwork.FindFile(s.fsys, s.imagesDir, stem)
+	file, err = s.fsys.Open(cached)
+	return file, artwork.ContentTypeOfPath(cached), err
 }
 
 // openLibraryImage is openImage for a library item: a picture found only in the cache is moved to the library's
 // directory first, so the cache budget cannot evict it.
-func (s *Server) openLibraryImage(key, size string) (fsx.File, error) {
+func (s *Server) openLibraryImage(key, size string) (fsx.File, string, error) {
 	if s.mediaCoverDir != "" {
-		if _, err := s.fsys.Stat(artwork.ReadPath(s.fsys, s.mediaCoverDir, key+"-full.webp")); err != nil {
+		if _, found := artwork.FindFile(s.fsys, s.mediaCoverDir, key+"-full"); !found {
 			_ = remoteimage.PromoteFiles(s.fsys, s.imagesDir, s.mediaCoverDir, key)
 		}
 	}
@@ -83,13 +87,13 @@ func (s *Server) GetRemoteImage(w http.ResponseWriter, r *http.Request, params g
 		raw := string(*params.Size)
 		size = &raw
 	}
-	file, err := s.openImage(key, artworkSizeSuffix(size))
+	file, contentType, err := s.openImage(key, artworkSizeSuffix(size))
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "the picture is not available")
 		return
 	}
 	defer func() { _ = file.Close() }()
-	w.Header().Set("Content-Type", "image/webp")
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", imageCacheControl(r, "private, max-age=86400"))
 	http.ServeContent(w, r, "", time.Time{}, file)
 }

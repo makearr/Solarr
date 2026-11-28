@@ -1,10 +1,8 @@
 package mediatool
 
 import (
-	"bytes"
 	"image"
 	"image/draw"
-	"image/jpeg"
 	"math"
 	"sync/atomic"
 
@@ -48,7 +46,7 @@ func CurrentPreview() PreviewOptions {
 	return DefaultPreviewOptions
 }
 
-// Preview is the pictures made from the frames a hash was made from, as JPEG; empty where none could be made.
+// Preview is the pictures made from the frames a hash was made from, in the image format in force; empty where none could be made.
 type Preview struct {
 	Frame, Sheet []byte
 }
@@ -155,7 +153,7 @@ func previewOf(moments []moment, grey [][][]byte, cell pictureSize) Preview {
 			paste(sheet, image.Pt(column*cell.width, row*cell.height), resized(picked[slot], one.size, cell), cell)
 		}
 	}
-	out := Preview{Sheet: encodeJPEG(sheet)}
+	out := Preview{Sheet: encodePicture(sheet)}
 	// The single frame is the one at singleSlot, else the nearest earlier moment, then any later one.
 	for _, slot := range append([]int{singleSlot, 1, 0}, laterSlots(len(moments))...) {
 		if picked[slot] == nil {
@@ -163,7 +161,7 @@ func previewOf(moments []moment, grey [][][]byte, cell pictureSize) Preview {
 		}
 		full := image.NewRGBA(image.Rect(0, 0, moments[slot].size.width, moments[slot].size.height))
 		paste(full, image.Point{}, picked[slot], moments[slot].size)
-		out.Frame = encodeJPEG(full)
+		out.Frame = encodePicture(full)
 		break
 	}
 	return out
@@ -188,11 +186,12 @@ func paste(into *image.RGBA, at image.Point, rgb []byte, size pictureSize) {
 	}
 }
 
-func encodeJPEG(picture image.Image) []byte {
+// encodePicture writes a preview picture in the image format in force.
+func encodePicture(picture image.Image) []byte {
 	picture = artwork.ResizeLongestEdge(picture, CurrentPreview().MaxEdge)
-	var out bytes.Buffer
-	if err := jpeg.Encode(&out, picture, &jpeg.Options{Quality: CurrentPreview().Quality}); err != nil {
+	encoded, err := artwork.EncodeAt(picture, artwork.Current().Format, CurrentPreview().Quality)
+	if err != nil {
 		return nil
 	}
-	return out.Bytes()
+	return encoded
 }

@@ -21,7 +21,7 @@ const (
 // one (section 21.6).
 var sizes = [...]Size{Thumb, Small, Full}
 
-// Image is one resized-and-encoded output: WebP bytes plus the pixel
+// Image is one resized-and-encoded output: bytes in the stored format plus the pixel
 // dimensions actually produced, which may be smaller than Size since
 // ResizeLongestEdge never upscales.
 type Image struct {
@@ -44,7 +44,7 @@ func acquire(ctx context.Context) (release func(), err error) {
 	}
 }
 
-// Process decodes source and returns it resized and WebP-encoded at Thumb,
+// Process decodes source and returns it resized and encoded at Thumb,
 // Small and Full -- the whole pipeline a caller needs to populate the
 // artwork table's three cache_key sizes from one fetched image.
 func Process(ctx context.Context, source []byte) (map[Size]Image, error) {
@@ -78,7 +78,7 @@ func processImage(img image.Image) (map[Size]Image, error) {
 	for index := len(sizes) - 1; index >= 0; index-- {
 		size := sizes[index]
 		img = ResizeLongestEdge(img, edgeOf(size))
-		encoded, err := EncodeWebP(img)
+		encoded, err := Encode(img)
 		if err != nil {
 			return nil, err
 		}

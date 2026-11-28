@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -367,8 +368,14 @@ func (j *Job) keepPreview(ctx context.Context, mediaObjectID int64, preview medi
 		if len(data) == 0 {
 			continue
 		}
-		if err := j.writePreview(previewstore.Path(j.previewsDir, mediaObjectID, kind), data); err != nil {
+		if err := j.writePreview(previewstore.Path(j.previewsDir, mediaObjectID, kind, artwork.Ext()), data); err != nil {
 			return err
+		}
+		// A picture of the same kind in another format is the older one: the conversion has not reached it yet.
+		for _, format := range artwork.Formats {
+			if format.Ext() != artwork.Ext() {
+				_ = j.fs.Remove(previewstore.Path(j.previewsDir, mediaObjectID, kind, format.Ext()))
+			}
 		}
 	}
 	return j.physical.SetVideoPreview(ctx, mediaObjectID, len(preview.Frame) > 0, len(preview.Sheet) > 0, j.clock.Now().Unix())

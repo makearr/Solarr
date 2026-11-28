@@ -2,15 +2,16 @@ package artwork
 
 import "sync/atomic"
 
-// Options are the two figures a person sets for stored covers (Settings -> Database): the longest edge of the Full size
-// and the WebP quality of all three.
+// Options are what a person sets for stored pictures (Settings -> Database): the longest edge of the Full size, the
+// quality of all three sizes and the image format.
 type Options struct {
 	FullEdge int
 	Quality  int
+	Format   Format
 }
 
 // DefaultOptions are what stored covers were made with before they could be set.
-var DefaultOptions = Options{FullEdge: int(Full), Quality: encodeQuality}
+var DefaultOptions = Options{FullEdge: int(Full), Quality: encodeQuality, Format: FormatWebP}
 
 var configured atomic.Pointer[Options]
 
@@ -21,6 +22,9 @@ func Configure(options Options) {
 	}
 	if options.Quality <= 0 {
 		options.Quality = DefaultOptions.Quality
+	}
+	if _, known := ParseFormat(string(options.Format)); !known {
+		options.Format = DefaultOptions.Format
 	}
 	configured.Store(&options)
 }
@@ -47,5 +51,5 @@ func Reencode(source []byte, longestEdge int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return EncodeWebP(ResizeLongestEdge(img, longestEdge))
+	return Encode(ResizeLongestEdge(img, longestEdge))
 }
