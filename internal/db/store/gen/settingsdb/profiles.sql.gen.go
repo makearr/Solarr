@@ -347,6 +347,33 @@ func (q *Queries) ListCategoryMetadataSources(ctx context.Context) ([]CategoryMe
 	return items, nil
 }
 
+const listCategoryMusicVideos = `-- name: ListCategoryMusicVideos :many
+SELECT category_id, enabled FROM category_music_videos
+`
+
+func (q *Queries) ListCategoryMusicVideos(ctx context.Context) ([]CategoryMusicVideo, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryMusicVideos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoryMusicVideo{}
+	for rows.Next() {
+		var i CategoryMusicVideo
+		if err := rows.Scan(&i.CategoryID, &i.Enabled); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCategoryQualityProfiles = `-- name: ListCategoryQualityProfiles :many
 SELECT category_id, quality_profile_id, ord FROM category_quality_profile ORDER BY category_id, ord
 `
@@ -589,6 +616,21 @@ type SetCategoryLanguageProfileParams struct {
 
 func (q *Queries) SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error {
 	_, err := q.db.ExecContext(ctx, setCategoryLanguageProfile, arg.LanguageProfileID, arg.ID)
+	return err
+}
+
+const setCategoryMusicVideos = `-- name: SetCategoryMusicVideos :exec
+INSERT INTO category_music_videos (category_id, enabled) VALUES (?, ?)
+ON CONFLICT (category_id) DO UPDATE SET enabled = excluded.enabled
+`
+
+type SetCategoryMusicVideosParams struct {
+	CategoryID int64
+	Enabled    int64
+}
+
+func (q *Queries) SetCategoryMusicVideos(ctx context.Context, arg SetCategoryMusicVideosParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryMusicVideos, arg.CategoryID, arg.Enabled)
 	return err
 }
 

@@ -140,6 +140,7 @@ type Querier interface {
 	ListCategoryDiscoverTypes(ctx context.Context) ([]CategoryDiscoverType, error)
 	ListCategoryFileManagement(ctx context.Context) ([]CategoryFileManagement, error)
 	ListCategoryMetadataSources(ctx context.Context) ([]CategoryMetadataSource, error)
+	ListCategoryMusicVideos(ctx context.Context) ([]CategoryMusicVideo, error)
 	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
 	ListCategoryTargetAuto(ctx context.Context) ([]int64, error)
@@ -202,6 +203,7 @@ type Querier interface {
 	SetCategoryLibrary(ctx context.Context, arg SetCategoryLibraryParams) error
 	SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error
 	SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error
+	SetCategoryMusicVideos(ctx context.Context, arg SetCategoryMusicVideosParams) error
 	SetCategoryNamingProfile(ctx context.Context, arg SetCategoryNamingProfileParams) error
 	SetCategoryProtocolDelay(ctx context.Context, arg SetCategoryProtocolDelayParams) error
 	SetCategoryQualityCutoff(ctx context.Context, arg SetCategoryQualityCutoffParams) error

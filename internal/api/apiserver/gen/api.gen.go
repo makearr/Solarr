@@ -4963,6 +4963,9 @@ type LibraryMetadataSources struct {
 	// IncludeBootlegOnly The library lists release groups that only exist as bootlegs; off by default.
 	IncludeBootlegOnly *bool `json:"include_bootleg_only,omitempty"`
 
+	// MusicVideos A music library wants video works: listed as wanted, searched and grabbed; off by default, on for the video kinds.
+	MusicVideos *bool `json:"music_videos,omitempty"`
+
 	// Sources The providers asked
 	Sources []string `json:"sources"`
 }
@@ -9180,6 +9183,9 @@ type MergeCategoryJSONBody struct {
 type SetLibraryMetadataSourcesJSONBody struct {
 	// IncludeBootlegOnly List release groups that only exist as bootlegs
 	IncludeBootlegOnly *bool `json:"include_bootleg_only,omitempty"`
+
+	// MusicVideos List
+	MusicVideos *bool `json:"music_videos,omitempty"`
 
 	// Sources The providers to ask
 	Sources *[]string `json:"sources,omitempty"`

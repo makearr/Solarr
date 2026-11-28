@@ -499,6 +499,12 @@ func (s *Snapshot) IncludesBootlegOnly(categoryID int64) bool {
 	return found && library.IncludeBootlegOnly
 }
 
+// WantsMusicVideos says the library lists, searches and grabs video works; no library (0) never does.
+func (s *Snapshot) WantsMusicVideos(categoryID int64) bool {
+	library, found := s.Category(categoryID)
+	return found && library.MusicVideos
+}
+
 func validSourceFor(mediaType, source string) bool {
 	return slices.ContainsFunc(MetadataProvidersFor(mediaType), func(provider MetadataProvider) bool { return provider.Key == source })
 }
@@ -543,5 +549,16 @@ func (c *Cache) SetCategoryIncludeBootlegOnly(ctx context.Context, id int64, inc
 			return queries.SetCategoryBootlegOnly(ctx, id)
 		}
 		return queries.ClearCategoryBootlegOnly(ctx, id)
+	})
+}
+
+// SetCategoryMusicVideos switches a music library's video works (wanted, searched, grabbed) on or off.
+func (c *Cache) SetCategoryMusicVideos(ctx context.Context, id int64, enabled bool) error {
+	category, found := c.Snapshot().Category(id)
+	if !found || category.MediaType != "music" {
+		return fmt.Errorf("%w: music library %d", ErrNotFound, id)
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryMusicVideos(ctx, settingsdb.SetCategoryMusicVideosParams{CategoryID: id, Enabled: boolToInt(enabled)})
 	})
 }

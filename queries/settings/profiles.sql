@@ -129,3 +129,10 @@ INSERT OR IGNORE INTO category_bootleg_only (category_id) VALUES (?);
 
 -- name: ClearCategoryBootlegOnly :exec
 DELETE FROM category_bootleg_only WHERE category_id = ?;
+
+-- name: ListCategoryMusicVideos :many
+SELECT category_id, enabled FROM category_music_videos;
+
+-- name: SetCategoryMusicVideos :exec
+INSERT INTO category_music_videos (category_id, enabled) VALUES (?, ?)
+ON CONFLICT (category_id) DO UPDATE SET enabled = excluded.enabled;

@@ -137,6 +137,8 @@ type Category struct {
 	MetadataSources []string
 	// IncludeBootlegOnly lists the release groups that only exist as bootlegs, promos or pseudo-releases; off by default.
 	IncludeBootlegOnly bool
+	// MusicVideos lists, searches and grabs video works of a music library; its own choice, else on only for the video kinds.
+	MusicVideos bool
 	// The *Inherited flags say the value above is its media type's default, not the library's own.
 	QualityProfilesInherited, QualityTargetInherited, LanguageProfileInherited bool
 }

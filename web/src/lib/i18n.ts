@@ -57,6 +57,8 @@ const catalogue = {
   "mediaServers.cancel": "Cancel",
   "libraryMetadata.bootlegOnly": "Include release groups that only exist as bootlegs",
   "libraryMetadata.bootlegOnlyHelp": "Off lists what musicbrainz.org's artist page shows. On adds groups whose releases are all bootlegs, promos or pseudo-releases; a prolific live artist can gain hundreds. Takes effect when an artist's discography is next fetched.",
+  "libraryMetadata.musicVideos": "Music videos",
+  "libraryMetadata.musicVideosHelp": "On lists the artist's music videos and live concert films as wanted, searches them and grabs them. Off keeps video files you already have: shown and played, never wanted.",
   "replace.move": "Move what uses {name} to",
   "replace.button": "Move them and remove {name}",
   "replace.none": "There is no other one of this kind to move them to.",

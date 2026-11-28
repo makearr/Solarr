@@ -214,3 +214,9 @@ INSERT INTO target_profile (id, name, media_types, description, resolution, vide
   (13, 'Ebook EPUB', 'book', 'Novels and non-fiction: reflowable EPUB without DRM and with the cover embedded.', '', '', NULL, NULL, NULL, '', '', 0, '', '', NULL, NULL, NULL, NULL, 'EPUB, DRM-free, reflowable, embedded cover', 1),
   (14, 'Comic CBZ', 'book', 'Western comics: a CBZ archive with pages at digital-release size.', '', '', NULL, NULL, NULL, '', '', 0, '', '', NULL, NULL, NULL, NULL, 'CBZ, HD (3056 x 1988)', 1),
   (15, 'Manga CBZ', 'book', 'Manga volumes: a CBZ archive with pages at scanned-volume size.', '', '', NULL, NULL, NULL, '', '', 0, '', '', NULL, NULL, NULL, NULL, 'CBZ, manga HD (2400 x 1600)', 1);
+
+-- A music library's own choice on video works (wanted, searched, grabbed); a library without a row follows its kind.
+CREATE TABLE category_music_videos (
+  category_id INTEGER PRIMARY KEY REFERENCES category(id) ON DELETE CASCADE,
+  enabled     INTEGER NOT NULL
+);

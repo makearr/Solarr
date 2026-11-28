@@ -272,6 +272,38 @@ func TestALibraryLeavesBootlegOnlyReleaseGroupsOutUntilItIsToldOtherwise(t *test
 	}
 }
 
+func TestMusicVideosAreOffUntilTheLibraryOrItsKindSaysOtherwise(t *testing.T) {
+	cache, _ := newCache(t)
+	general, err := cache.CreateCategory(t.Context(), "music", "Music", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	concerts, err := cache.CreateCategory(t.Context(), "music", "Concerts", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.SetCategoryKind(t.Context(), concerts.ID, "concert_videos"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := cache.Snapshot()
+	if snapshot.WantsMusicVideos(general.ID) || snapshot.WantsMusicVideos(0) || !snapshot.WantsMusicVideos(concerts.ID) {
+		t.Fatalf("defaults: general=%v none=%v concerts=%v, want false false true", snapshot.WantsMusicVideos(general.ID), snapshot.WantsMusicVideos(0), snapshot.WantsMusicVideos(concerts.ID))
+	}
+	if err := cache.SetCategoryMusicVideos(t.Context(), general.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetCategoryMusicVideos(t.Context(), concerts.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	snapshot = cache.Snapshot()
+	if !snapshot.WantsMusicVideos(general.ID) || snapshot.WantsMusicVideos(concerts.ID) {
+		t.Errorf("own choices: general=%v concerts=%v, want true false", snapshot.WantsMusicVideos(general.ID), snapshot.WantsMusicVideos(concerts.ID))
+	}
+	if err := cache.SetCategoryMusicVideos(t.Context(), 9999, true); err == nil {
+		t.Error("a library that does not exist has no switch")
+	}
+}
+
 // shippedOn is an order as a library asks it with the providers that ship switched off left out.
 func shippedOn(order []string) []string {
 	return slices.DeleteFunc(slices.Clone(order), func(key string) bool { return slices.Contains(settings.DefaultDisabledProviders, key) })

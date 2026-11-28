@@ -32,7 +32,7 @@ export function LibraryMetadata() {
   });
   const save = useMutation({
     meta: { handlesErrors: true },
-    mutationFn: (body: { sources?: string[]; include_bootleg_only?: boolean }) =>
+    mutationFn: (body: { sources?: string[]; include_bootleg_only?: boolean; music_videos?: boolean }) =>
       ok(api.PUT("/categories/{id}/metadata-sources", { params: { path: { id } }, body })),
     onSuccess: (data: Sources) => queryClient.setQueryData(key, data),
   });
@@ -129,6 +129,16 @@ export function LibraryMetadata() {
               {t("libraryMetadata.bootlegOnly")}
             </label>
             <p className="text-xs text-ink-muted">{t("libraryMetadata.bootlegOnlyHelp")}</p>
+            <label className="mt-2 flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={saved.data.music_videos ?? false}
+                disabled={save.isPending}
+                onChange={(event) => save.mutate({ music_videos: event.target.checked })}
+              />
+              {t("libraryMetadata.musicVideos")}
+            </label>
+            <p className="text-xs text-ink-muted">{t("libraryMetadata.musicVideosHelp")}</p>
           </section>
         )}
         {mediaType?.cover_sources && <ReleaseTypes id={id} />}

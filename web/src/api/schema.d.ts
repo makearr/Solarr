@@ -8196,6 +8196,8 @@ export interface components {
             custom?: boolean;
             /** @description The library lists release groups that only exist as bootlegs; off by default. */
             include_bootleg_only?: boolean;
+            /** @description A music library wants video works: listed as wanted, searched and grabbed; off by default, on for the video kinds. */
+            music_videos?: boolean;
             /** @description The order a library of this type and kind starts with. */
             default: string[];
             available: components["schemas"]["MetadataProviderInfo"][];
@@ -23101,6 +23103,8 @@ export interface operations {
                     sources?: string[];
                     /** @description List release groups that only exist as bootlegs */
                     include_bootleg_only?: boolean;
+                    /** @description List */
+                    music_videos?: boolean;
                 };
             };
         };

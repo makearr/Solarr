@@ -141,6 +141,11 @@ type CategoryMetadataSource struct {
 	Ord        int64
 }
 
+type CategoryMusicVideo struct {
+	CategoryID int64
+	Enabled    int64
+}
+
 type CategoryQualityProfile struct {
 	CategoryID       int64
 	QualityProfileID int64

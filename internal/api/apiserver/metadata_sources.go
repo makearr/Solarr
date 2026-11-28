@@ -21,7 +21,7 @@ func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMeta
 	defaults := snapshot.TypeMetadataSources(category.MediaType, category.Kind)
 	view := gen.LibraryMetadataSources{
 		Sources: snapshot.MetadataSourcesFor(current), Custom: boolPtr(len(current.MetadataSources) > 0 && !slices.Equal(current.MetadataSources, defaults)),
-		Default: defaults, IncludeBootlegOnly: boolPtr(current.IncludeBootlegOnly),
+		Default: defaults, IncludeBootlegOnly: boolPtr(current.IncludeBootlegOnly), MusicVideos: boolPtr(current.MusicVideos),
 		Available: []gen.MetadataProviderInfo{},
 	}
 	for _, provider := range settings.MetadataProvidersFor(category.MediaType) {
@@ -193,6 +193,7 @@ func (s *Server) SetLibraryMetadataSources(w http.ResponseWriter, r *http.Reques
 	var body struct {
 		Sources            *[]string `json:"sources"`
 		IncludeBootlegOnly *bool     `json:"include_bootleg_only"`
+		MusicVideos        *bool     `json:"music_videos"`
 	}
 	if !s.decodeBody(w, r, maxSetupBody, &body, "expected sources or include_bootleg_only") {
 		return
@@ -202,6 +203,9 @@ func (s *Server) SetLibraryMetadataSources(w http.ResponseWriter, r *http.Reques
 	}
 	if err == nil && body.IncludeBootlegOnly != nil {
 		err = s.auth.Settings.SetCategoryIncludeBootlegOnly(r.Context(), id, *body.IncludeBootlegOnly)
+	}
+	if err == nil && body.MusicVideos != nil {
+		err = s.auth.Settings.SetCategoryMusicVideos(r.Context(), id, *body.MusicVideos)
 	}
 	if err != nil {
 		var problems config.Problems

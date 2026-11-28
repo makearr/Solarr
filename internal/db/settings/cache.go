@@ -235,6 +235,11 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("settings: list bootleg-only libraries: %w", err)
 	}
 
+	musicVideos, err := c.queries.ListCategoryMusicVideos(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list music video choices: %w", err)
+	}
+
 	stored, err := c.queries.ListInstanceSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list instance settings: %w", err)
@@ -268,8 +273,8 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	snapshot := newSnapshot(
 		convertUsers(users),
 		withTypeDefaults(
-			withMetadataSources(withBootlegOnly(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
-				qualityLists, convertQualityTargets(qualityTargets), categoryTargets, automaticTargets, convertQualityProfiles(qualityProfiles)), fileManagement), bootlegOnly), metadataSources),
+			withMetadataSources(withMusicVideos(withBootlegOnly(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
+				qualityLists, convertQualityTargets(qualityTargets), categoryTargets, automaticTargets, convertQualityProfiles(qualityProfiles)), fileManagement), bootlegOnly), musicVideos), metadataSources),
 			policy, convertQualityTargets(qualityTargets), convertQualityProfiles(qualityProfiles), convertedLanguageProfiles),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
@@ -574,6 +579,19 @@ func withBootlegOnly(categories []Category, ids []int64) []Category {
 	for _, id := range ids {
 		if i := slices.IndexFunc(categories, func(category Category) bool { return category.ID == id }); i >= 0 {
 			categories[i].IncludeBootlegOnly = true
+		}
+	}
+	return categories
+}
+
+// withMusicVideos settles each library's switch: its stored choice, else on for the kinds made of video works.
+func withMusicVideos(categories []Category, choices []settingsdb.CategoryMusicVideo) []Category {
+	for i := range categories {
+		categories[i].MusicVideos = categories[i].MediaType == "music" && (categories[i].Kind == "concert_videos" || categories[i].Kind == "music_videos")
+		for _, choice := range choices {
+			if choice.CategoryID == categories[i].ID {
+				categories[i].MusicVideos = choice.Enabled != 0
+			}
 		}
 	}
 	return categories
