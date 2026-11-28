@@ -309,10 +309,13 @@ type SeriesBook struct {
 	Title    string
 	Year     int
 	Position float64
+	// Language is its default edition's ISO 639-1 code, empty when Hardcover states none.
+	Language string
 }
 
 // SeriesBooks lists the books of the series named exactly like name, in series order; none when Hardcover has no such
-// series. A book listed twice (several editions of its place) is kept once.
+// series. A book listed twice (several editions of its place) is kept once, and a translation Hardcover files as a copy of
+// another book (canonical_id set) is left out.
 func (c Client) SeriesBooks(ctx context.Context, name string) ([]SeriesBook, error) {
 	if !c.Configured() || strings.TrimSpace(name) == "" {
 		return nil, nil
@@ -322,14 +325,20 @@ func (c Client) SeriesBooks(ctx context.Context, name string) ([]SeriesBook, err
 			Books []struct {
 				Position *float64 `json:"position"`
 				Book     struct {
-					ID    int64  `json:"id"`
-					Title string `json:"title"`
-					Year  int    `json:"release_year"`
+					ID          int64  `json:"id"`
+					Title       string `json:"title"`
+					Year        int    `json:"release_year"`
+					CanonicalID *int64 `json:"canonical_id"`
+					Edition     *struct {
+						Language *struct {
+							Code string `json:"code2"`
+						} `json:"language"`
+					} `json:"default_cover_edition"`
 				} `json:"book"`
 			} `json:"book_series"`
 		} `json:"series"`
 	}
-	const query = `query ($name: String!) { series(where: {name: {_eq: $name}}, limit: 5) { book_series(order_by: {position: asc}) { position book { id title release_year } } } }`
+	const query = `query ($name: String!) { series(where: {name: {_eq: $name}}, limit: 5) { book_series(order_by: {position: asc}) { position book { id title release_year canonical_id default_cover_edition { language { code2 } } } } } }`
 	if err := c.query(ctx, query, map[string]any{"name": strings.TrimSpace(name)}, &found); err != nil {
 		return nil, err
 	}
@@ -347,11 +356,14 @@ func (c Client) SeriesBooks(ctx context.Context, name string) ([]SeriesBook, err
 			continue
 		}
 		for _, row := range series.Books {
-			if row.Book.ID == 0 || row.Book.Title == "" || seen[row.Book.ID] {
+			if row.Book.ID == 0 || row.Book.Title == "" || row.Book.CanonicalID != nil || seen[row.Book.ID] {
 				continue
 			}
 			seen[row.Book.ID] = true
 			book := SeriesBook{ID: row.Book.ID, Title: row.Book.Title, Year: row.Book.Year}
+			if row.Book.Edition != nil && row.Book.Edition.Language != nil {
+				book.Language = strings.ToLower(row.Book.Edition.Language.Code)
+			}
 			if row.Position != nil {
 				book.Position = *row.Position
 			}

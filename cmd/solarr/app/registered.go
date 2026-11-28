@@ -650,7 +650,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 		Series: &book.SeriesBooks{
 			Franchises: library.NewFranchises(p.library), Reader: library.NewSeriesReader(p.library), Source: p.wikidataFetcher(), Catalog: catalog,
 			Lister: hardcoverSeries{client: hardcover.New(p.providerClient(providerHardcover, nil, httpx.ClientConfig{}), p.providerKey(settings.BookSourceHardcover))},
-			Titles: library.NewWorks(p.library),
+			Titles: library.NewWorks(p.library), Languages: p.bookLanguages,
 		},
 		Feed: book.Feed{
 			Format: format, Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(format.MediaType),
@@ -877,10 +877,13 @@ func (p *process) bookResolver(format book.Format) book.Resolver {
 	return book.Resolver{
 		Service: p.bookService(format), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID,
 		Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold, Locks: p.locksFor("book"),
-		Languages: func(int64) []string {
-			return settings.LanguageProfileFor(p.cache.Snapshot().DefaultLanguages(), false).AudioPreferred
-		},
+		Languages: p.bookLanguages,
 	}
+}
+
+// bookLanguages are the languages a book library prefers: its editions, and the books a collection lists.
+func (p *process) bookLanguages(int64) []string {
+	return settings.LanguageProfileFor(p.cache.Snapshot().DefaultLanguages(), false).AudioPreferred
 }
 
 func (p *process) adultResolver() adult.Resolver {
@@ -1296,7 +1299,7 @@ func (h hardcoverSeries) ListSeries(ctx context.Context, name string) ([]book.Li
 	found, err := h.client.SeriesBooks(ctx, name)
 	listed := make([]book.ListedBook, len(found))
 	for index, one := range found {
-		listed[index] = book.ListedBook{ID: strconv.FormatInt(one.ID, 10), Title: one.Title, Year: one.Year, Position: one.Position}
+		listed[index] = book.ListedBook{ID: strconv.FormatInt(one.ID, 10), Title: one.Title, Year: one.Year, Position: one.Position, Language: one.Language}
 	}
 	return listed, err
 }

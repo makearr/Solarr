@@ -115,3 +115,45 @@ func TestASeriesIsCompletedFromTheBookProvidersList(t *testing.T) {
 		t.Errorf("series total = %+v, want 6 books in all", facts)
 	}
 }
+
+// A collection lists the books in the languages its library prefers: a translation the provider lists is not part of the
+// series there, a book that states no language is.
+func TestASeriesLeavesOutBooksInLanguagesTheLibraryDoesNotPrefer(t *testing.T) {
+	opened := openFollowLibrary(t)
+	now := clock.NewFakeAtEpoch().Now()
+	series := library.NewSeries(opened)
+	if _, err := series.Upsert(t.Context(), now, library.SeriesWrite{
+		Work:      library.WorkIdentity{MediaType: "book", CanonicalTitle: "The Lantern Keeper", SortTitle: "The Lantern Keeper"},
+		IDs:       []library.ExternalIDWrite{{Provider: ProviderOpenLibrary, ExternalID: "OL1001W"}},
+		Franchise: &library.SeriesFranchiseWrite{Provider: ProviderSeries, ExternalID: PersonKey("Lantern Cycle"), Name: "Lantern Cycle"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	summaries, err := library.NewFranchises(opened).Summaries(t.Context(), "book")
+	if err != nil || len(summaries) != 1 {
+		t.Fatalf("collections = %+v, %v", summaries, err)
+	}
+	books := SeriesBooks{
+		Franchises: library.NewFranchises(opened), Reader: library.NewSeriesReader(opened), Source: &fakeSeries{},
+		Lister: fakeLister{
+			{ID: "20", Title: "Fuenf Buecher", Year: 2002, Position: 6, Language: "de"},
+			{ID: "21", Title: "Book Seven", Year: 2003, Position: 7, Language: "en"},
+			{ID: "22", Title: "Book Eight", Year: 2004, Position: 8},
+		},
+		Languages: func(int64) []string { return []string{"en"} },
+		Catalog:   Catalog{Service: Service{Format: Ebook, Series: series, Exclusions: library.NewExclusions(opened)}},
+	}
+	missing, err := books.MissingFranchiseMembers(t.Context(), 5, summaries[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, member := range missing {
+		if member.Provider == ProviderHardcover {
+			got = append(got, member.ExternalID)
+		}
+	}
+	if want := []string{"21", "22"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("listed books = %v, want %v: the German one is another language", got, want)
+	}
+}

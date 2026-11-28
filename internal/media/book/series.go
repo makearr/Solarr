@@ -25,6 +25,8 @@ type ListedBook struct {
 	Title    string
 	Year     int
 	Position float64
+	// Language is its ISO 639-1 code, empty when the provider states none.
+	Language string
 }
 
 // SeriesLister is a provider that lists the books of a series by its name (Hardcover, once a key is configured).
@@ -47,6 +49,9 @@ type SeriesBooks struct {
 	Lister  SeriesLister
 	Titles  TitleReader
 	Catalog Catalog
+	// Languages are the languages the collection's library prefers (ISO 639-1); a book in another is not part of the
+	// series there. nil keeps every language, as does a book that states none.
+	Languages func(categoryID int64) []string
 }
 
 var _ media.Franchising = SeriesBooks{}
@@ -89,6 +94,7 @@ func (s SeriesBooks) members(ctx context.Context, franchiseID int64) ([]seriesMe
 		return nil, err
 	}
 	service := s.Catalog.Service
+	wanted := s.wantedLanguage(ctx, franchiseID)
 	heldTitles := s.heldTitles(ctx, row.ID)
 	isHeld := func(title string, ids IDs) bool {
 		_, held := service.WorkByIDs(ctx, ids)
@@ -100,6 +106,9 @@ func (s SeriesBooks) members(ctx context.Context, franchiseID int64) ([]seriesMe
 	}
 	var members []seriesMember
 	for _, book := range books {
+		if !wanted(book.Languages...) {
+			continue
+		}
 		member := seriesMember{title: book.Title, year: book.Year, ordinal: ordinal(book.Ordinal)}
 		if len(book.OpenLibrary) > 0 {
 			member.provider, member.externalID = service.Format.Provider(ProviderOpenLibrary), book.OpenLibrary[0]
@@ -114,6 +123,9 @@ func (s SeriesBooks) members(ctx context.Context, franchiseID int64) ([]seriesMe
 			listed = nil
 		}
 		for _, book := range listed {
+			if !wanted(book.Language) {
+				continue
+			}
 			at := slices.IndexFunc(members, func(member seriesMember) bool { return foldTitle(member.title) == foldTitle(book.Title) })
 			if at >= 0 && members[at].externalID != "" {
 				continue
@@ -134,6 +146,23 @@ func (s SeriesBooks) members(ctx context.Context, franchiseID int64) ([]seriesMe
 		return cmp.Or(cmp.Compare(a.ordinal, b.ordinal), cmp.Compare(a.year, b.year))
 	})
 	return members, nil
+}
+
+// wantedLanguage tells whether a book of the given languages belongs in the series of the collection's library: one that
+// states none does, so does any when the library prefers none.
+func (s SeriesBooks) wantedLanguage(ctx context.Context, franchiseID int64) func(languages ...string) bool {
+	if s.Languages == nil {
+		return func(...string) bool { return true }
+	}
+	place, err := s.Franchises.PlaceOf(ctx, franchiseID)
+	if err != nil {
+		return func(...string) bool { return true }
+	}
+	preferred := s.Languages(place.CategoryID)
+	return func(languages ...string) bool {
+		stated := slices.DeleteFunc(slices.Clone(languages), func(language string) bool { return language == "" })
+		return len(preferred) == 0 || len(stated) == 0 || slices.ContainsFunc(stated, func(language string) bool { return slices.Contains(preferred, language) })
+	}
 }
 
 // heldTitles are the folded titles of the books the collection holds.

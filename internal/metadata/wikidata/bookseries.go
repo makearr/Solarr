@@ -19,6 +19,8 @@ type SeriesBook struct {
 	// Ordinal is the book's place in the series (P1545) as Wikidata writes it, "" when none is given.
 	Ordinal string
 	Year    int
+	// Languages are the ISO 639-1 codes of the book's language (P407); none when Wikidata names none.
+	Languages []string
 }
 
 // BookSeries answers every book of each series one of the Open Library works is part of, one per book and series.
@@ -32,9 +34,9 @@ func (f Fetcher) BookSeries(ctx context.Context, openLibraryIDs []string) ([]Ser
 	if len(valid) == 0 {
 		return nil, nil
 	}
-	rows, err := f.sparql(ctx, "SELECT DISTINCT ?series ?seriesLabel ?member ?memberLabel ?ol ?ordinal ?date WHERE { VALUES ?held { "+
+	rows, err := f.sparql(ctx, "SELECT DISTINCT ?series ?seriesLabel ?member ?memberLabel ?ol ?ordinal ?date ?lang WHERE { VALUES ?held { "+
 		strings.Join(valid, " ")+" } ?book wdt:P648 ?held; wdt:P179 ?series. ?member p:P179 ?statement. ?statement ps:P179 ?series."+
-		" OPTIONAL { ?statement pq:P1545 ?ordinal. } OPTIONAL { ?member wdt:P648 ?ol. } OPTIONAL { ?member wdt:P577 ?date. }"+
+		" OPTIONAL { ?statement pq:P1545 ?ordinal. } OPTIONAL { ?member wdt:P648 ?ol. } OPTIONAL { ?member wdt:P577 ?date. } OPTIONAL { ?member wdt:P407 ?language. ?language wdt:P218 ?lang. }"+
 		` SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }`)
 	if err != nil {
 		return nil, err
@@ -56,6 +58,9 @@ func (f Fetcher) BookSeries(ctx context.Context, openLibraryIDs []string) ([]Ser
 		book := &books[index]
 		if id := row["ol"].Value; openLibraryWorkPattern.MatchString(id) && !slices.Contains(book.OpenLibrary, id) {
 			book.OpenLibrary = append(book.OpenLibrary, id)
+		}
+		if lang := row["lang"].Value; lang != "" && !slices.Contains(book.Languages, lang) {
+			book.Languages = append(book.Languages, lang)
 		}
 		if date := row["date"].Value; len(date) >= 4 {
 			if year, err := strconv.Atoi(date[:4]); err == nil && (book.Year == 0 || year < book.Year) {
