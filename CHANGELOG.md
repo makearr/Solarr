@@ -4,6 +4,8 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Manga and hentai libraries open comics in the reader right to left by default.
+- Manage > Statistics > Network also charts the download clients' speed, per client and in all.
 - Albums keep the Wikidata item MusicBrainz lists for them (found with the collections pass), so an album page links its English Wikipedia article.
 - The maximum age of an account now also applies to Discover recommendations (rated above the limit, or unrated outside a Kids library), the calendar and collection lists.
 - *Arr connections: send what lies under one of the *Arr's root folders to another library (a Sonarr root for anime to the Anime library); imports, syncs, previews and adds to the *Arr (Companion mode) follow it, and a connection serves every library it has a root folder for.

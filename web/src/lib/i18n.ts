@@ -883,6 +883,7 @@ const catalogue = {
   "systemStatistics.scansPerMin": "Scans finished per minute",
   "systemStatistics.metadataPerMin": "Metadata jobs finished per minute",
   "systemStatistics.bandwidth": "Bandwidth received",
+  "systemStatistics.downloadSpeed": "Download clients' speed",
   "systemStatistics.internetLatency": "Internet latency (mean over providers)",
   "systemStatistics.library": "Library",
   "systemStatistics.items": "Items",

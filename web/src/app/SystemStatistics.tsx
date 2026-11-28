@@ -247,6 +247,7 @@ export function SystemStatistics() {
             range={range}
             specs={[
               { title: t("systemStatistics.bandwidth"), series: "net.bytes_per_sec", format: "rate" },
+              { title: t("systemStatistics.downloadSpeed"), series: "downloads.bytes_per_sec", format: "rate" },
               { title: t("systemStatistics.internetLatency"), series: "net.latency_ms", format: "ms" },
             ]}
           />

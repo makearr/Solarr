@@ -2,12 +2,16 @@ import { Link } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
 
 import { t } from "@/lib/i18n";
+import { useLibrary } from "@/lib/useLibrary";
 
 import { readerKindOf } from "./readerModel";
 
 /** Opens a comic, EPUB or PDF in the built-in reader; nothing for a file the reader cannot show. */
-export function ReadButton({ mediaObjectId, extension, title, rightToLeft = false, className }: { mediaObjectId: number; extension: string | undefined; title: string; rightToLeft?: boolean; className?: string }) {
+export function ReadButton({ mediaObjectId, extension, title, categoryId, className }: { mediaObjectId: number; extension: string | undefined; title: string; categoryId?: string; className?: string }) {
+  const kind = useLibrary(categoryId)?.kind;
   if (readerKindOf(extension) === null) return null;
+  // Manga and hentai libraries read right to left.
+  const rightToLeft = kind === "manga" || kind === "hentai";
   const label = `${t("reader.read")} ${title}`;
   return (
     <Link

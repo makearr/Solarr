@@ -290,7 +290,7 @@ function PartRow({
         {part.file && (
           <>
             <PlayButton extension={part.file.extension} item={{ mediaObjectId: part.file.media_object_id, title, durationMs: part.runtime_ms ?? undefined, file: part.file }} />
-            <ReadButton mediaObjectId={part.file.media_object_id} extension={part.file.extension} title={title} />
+            <ReadButton mediaObjectId={part.file.media_object_id} extension={part.file.extension} title={title} categoryId={categoryId} />
           </>
         )}
         {actions.onCrossover && (

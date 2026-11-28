@@ -125,6 +125,23 @@ func (p *process) minuteSamples(sampler *procstat.Sampler) []statistics.MetricSa
 			metadata += count
 		}
 	}
+	// The download clients' own speed, summed and per client; one failing client is left out of the minute.
+	if job := p.pollJob(); job != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		_, statuses, err := job.Queue(ctx)
+		cancel()
+		if err == nil {
+			var total float64
+			for _, status := range statuses {
+				if status.Err != nil || status.Status.Paused {
+					continue
+				}
+				add("downloads.bytes_per_sec", status.Name, float64(status.Status.SpeedBytesPerSec))
+				total += float64(status.Status.SpeedBytesPerSec)
+			}
+			add("downloads.bytes_per_sec", "", total)
+		}
+	}
 	add("jobs.scans_per_min", "", float64(scans))
 	add("jobs.metadata_per_min", "", float64(metadata))
 	return samples
