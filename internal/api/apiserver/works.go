@@ -83,6 +83,8 @@ type WorksFilter struct {
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating keeps the works the library's maximum rating does not admit.
 	AboveRating bool
+	// ViewerAge keeps from the list what the account's age limit holds back; nil for no limit.
+	ViewerAge *ViewerAge
 	// OwnProfile keeps the works with an item on a quality profile of its own.
 	OwnProfile bool
 	// MediaType keeps only works of one media type, "" all (a mixed library's type chip).
@@ -230,6 +232,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 			PersonID:       derefOr(params.PersonId, 0),
 			FavoriteUserID: favoriteViewer(params.Favorite, access),
 			MediaTypes:     s.libraryMediaTypes(params.CategoryId, derefOr(params.WholeLibrary, false)),
+			ViewerAge:      viewerAgeOf(access),
 		},
 		workCursor, limit+1)
 	if err != nil {

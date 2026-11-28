@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +30,9 @@ type UserLimits struct {
 	NewLibraryPermission Permission
 	// AutoApprove approves the account's requests at once; without it they wait for an administrator.
 	AutoApprove bool
+	// MaxAge is the oldest youngest-viewer age the account may see (13 for PG-13); nil for no limit. Unrated works stay
+	// hidden unless a library of the kids kind holds them.
+	MaxAge *int64
 }
 
 // UserBlockedTag is a library tag an account is kept from, by id, with its name as it was when blocked.
@@ -111,6 +115,9 @@ func validateLimits(limits UserLimits) config.Problems {
 		problems = append(problems, config.Problem{Path: "tier_default", Value: string(limits.TierDefault),
 			Expectation: fmt.Sprintf("no higher than the maximum, %s", limits.TierMax)})
 	}
+	if limits.MaxAge != nil && (*limits.MaxAge < 0 || *limits.MaxAge > 21) {
+		problems = append(problems, config.Problem{Path: "max_age", Value: strconv.FormatInt(*limits.MaxAge, 10), Expectation: "between 0 and 21, or none"})
+	}
 	if !limits.NewLibraryPermission.valid() {
 		problems = append(problems, config.Problem{Path: "new_library_permission",
 			Value: string(limits.NewLibraryPermission), Expectation: "none, read, request or manage"})
@@ -188,6 +195,7 @@ func (c *Cache) createAccount(ctx context.Context, cl clock.Clock, account NewAc
 			UiTierMax:            string(account.Limits.TierMax),
 			NewLibraryPermission: string(account.Limits.NewLibraryPermission),
 			AutoApprove:          boolToInt(account.Limits.AutoApprove),
+			MaxAge:               nullInt64(account.Limits.MaxAge),
 		})
 		if err != nil {
 			return err
@@ -230,7 +238,7 @@ func (c *Cache) SetUserLimits(ctx context.Context, id int64, limits UserLimits) 
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		if err := queries.SetUserLimits(ctx, settingsdb.SetUserLimitsParams{
 			ID: id, UiTierDefault: string(limits.TierDefault), UiTierMax: string(limits.TierMax),
-			NewLibraryPermission: string(limits.NewLibraryPermission), AutoApprove: boolToInt(limits.AutoApprove),
+			NewLibraryPermission: string(limits.NewLibraryPermission), AutoApprove: boolToInt(limits.AutoApprove), MaxAge: nullInt64(limits.MaxAge),
 		}); err != nil {
 			return err
 		}
@@ -259,10 +267,13 @@ func (c *Cache) newLibraryGrants() map[int64]Permission {
 // userFromRow builds the snapshot's view of an account; its tier is clamped to its maximum, so
 // lowering the maximum takes effect without touching the stored choice.
 func userFromRow(id int64, username string, hash sql.NullString, role string, createdAt int64,
-	tier, tierDefault, tierMax, newLibrary string, autoApprove int64,
+	tier, tierDefault, tierMax, newLibrary string, autoApprove int64, maxAge sql.NullInt64,
 ) User {
 	limits := UserLimits{
 		TierDefault: Tier(tierDefault), TierMax: Tier(tierMax), NewLibraryPermission: Permission(newLibrary), AutoApprove: autoApprove == 1,
+	}
+	if maxAge.Valid {
+		limits.MaxAge = &maxAge.Int64
 	}
 	effective := Tier(tier)
 	if !limits.TierMax.AtLeast(effective) {
@@ -331,7 +342,7 @@ func (c *Cache) UpdateAccount(ctx context.Context, id int64, patch AccountPatch)
 				limits.NewLibraryPermission = PermissionManage
 				if err := queries.SetUserLimits(ctx, settingsdb.SetUserLimitsParams{
 					ID: id, UiTierDefault: string(limits.TierDefault), UiTierMax: string(limits.TierMax),
-					NewLibraryPermission: string(limits.NewLibraryPermission), AutoApprove: boolToInt(limits.AutoApprove),
+					NewLibraryPermission: string(limits.NewLibraryPermission), AutoApprove: boolToInt(limits.AutoApprove), MaxAge: nullInt64(limits.MaxAge),
 				}); err != nil {
 					return err
 				}
@@ -350,7 +361,7 @@ func (c *Cache) UpdateAccount(ctx context.Context, id int64, patch AccountPatch)
 		if patch.Limits != nil {
 			if err := queries.SetUserLimits(ctx, settingsdb.SetUserLimitsParams{
 				ID: id, UiTierDefault: string(patch.Limits.TierDefault), UiTierMax: string(patch.Limits.TierMax),
-				NewLibraryPermission: string(patch.Limits.NewLibraryPermission), AutoApprove: boolToInt(patch.Limits.AutoApprove),
+				NewLibraryPermission: string(patch.Limits.NewLibraryPermission), AutoApprove: boolToInt(patch.Limits.AutoApprove), MaxAge: nullInt64(patch.Limits.MaxAge),
 			}); err != nil {
 				return err
 			}

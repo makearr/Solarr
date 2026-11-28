@@ -14,9 +14,11 @@ import (
 )
 
 type fakeWorkEditor struct {
-	row   apiserver.WorkEditRow
-	err   error
-	saved *apiserver.WorkEditRow
+	row apiserver.WorkEditRow
+	// heldByAge names the works an account's age limit keeps from it.
+	heldByAge map[int64]bool
+	err       error
+	saved     *apiserver.WorkEditRow
 
 	bulkSelection  apiserver.BulkSelection
 	bulkChange     apiserver.BulkEditChange
@@ -79,6 +81,10 @@ func (f *fakeWorkEditor) DeleteTag(_ context.Context, id int64) error {
 
 func (f *fakeWorkEditor) WorkCarriesAnyTag(_ context.Context, workID int64, _ []int64) (bool, error) {
 	return f.carrying[workID], f.err
+}
+
+func (f *fakeWorkEditor) WorkHeldFromViewer(_ context.Context, workID int64, _ apiserver.ViewerAge) (bool, error) {
+	return f.heldByAge[workID], f.err
 }
 
 func (f *fakeWorkEditor) BlockTag(_ context.Context, id, _ int64) error {

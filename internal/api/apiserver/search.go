@@ -90,7 +90,7 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request, params gen.Searc
 
 // withoutKeptWorks drops the results carrying a tag the account is blocked from.
 func (s *Server) withoutKeptWorks(ctx context.Context, access authz.Access, rows []SearchResultRow) []SearchResultRow {
-	if len(blockedTagIDs(access)) == 0 {
+	if !viewerRestricted(access) {
 		return rows
 	}
 	kept := make([]SearchResultRow, 0, len(rows))

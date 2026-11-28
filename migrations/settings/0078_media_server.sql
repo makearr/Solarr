@@ -3,6 +3,9 @@ ALTER TABLE root_folder ADD COLUMN min_free_percent INTEGER NOT NULL DEFAULT 5 C
 -- What the library holds on the root, measured by the capacity sweep.
 ALTER TABLE root_folder ADD COLUMN library_bytes INTEGER NOT NULL DEFAULT 0;
 
+-- The oldest youngest-viewer age an account may see (13 for PG-13); null is no limit.
+ALTER TABLE app_user ADD COLUMN max_age INTEGER CHECK (max_age IS NULL OR max_age BETWEEN 0 AND 21);
+
 -- Media server connections (Jellyfin, Navidrome, ...): scan push, local metadata, watch state.
 CREATE TABLE media_server (
   id            INTEGER PRIMARY KEY,

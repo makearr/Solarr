@@ -10903,6 +10903,7 @@ components:
         new_library_permission:
           $ref: "#/components/schemas/Permission"
         auto_approve: { type: boolean, default: false, description: Requests the account makes are approved at once; without it an administrator decides each. }
+        max_age: { type: integer, minimum: 0, maximum: 21, description: "The oldest youngest-viewer age the account may see (13 for PG-13); absent for no limit. Unrated works are hidden unless a library of the kids kind holds them." }
 
     UserDefaults:
       type: object

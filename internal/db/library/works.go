@@ -118,6 +118,8 @@ type WorkFilter struct {
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating keeps only the works a library's maximum rating does not admit; nil does not filter.
 	AboveRating *RatingLimit
+	// HeldFromViewer leaves out the works an account's age limit keeps from it; nil does not filter.
+	HeldFromViewer *ViewerAge
 	// OwnProfileOnly keeps the works with an item that carries a quality profile of its own.
 	OwnProfileOnly bool
 	// Where are the conditions of a custom filter, all of which must hold.
@@ -221,6 +223,10 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	}
 	if limit := filter.AboveRating; limit != nil {
 		predicates.Add(aboveRatingSQL, boolToInt(limit.AllowUnrated), limit.MaxAge)
+	}
+	if limit := filter.HeldFromViewer; limit != nil {
+		held, arguments := limit.heldFromViewerSQL()
+		predicates.Add("NOT "+held, arguments...)
 	}
 	predicates.AddIf(filter.OwnProfileOnly,
 		"EXISTS (SELECT 1 FROM desired_item odi JOIN desired_profile_override opo ON opo.desired_item_id = odi.id WHERE odi.work_id = work.id)")

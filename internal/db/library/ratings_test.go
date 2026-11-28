@@ -144,3 +144,61 @@ func TestWorkFilter_OwnProfileKeepsTheWorksWithAnOverride(t *testing.T) {
 		t.Fatalf("own profile list = %v, %v; want Pinned only", rows, err)
 	}
 }
+
+// An account's age limit leaves out what is older and what is unrated, unless a kids library holds it.
+func TestViewerAge_HoldsOlderAndUnratedWorksExceptInKidsLibraries(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	desired := library.NewDesired(opened)
+	add := func(title, tvdb, rating string, age, categoryID int64) int64 {
+		write := sampleSeries()
+		write.Work.CanonicalTitle, write.Work.SortTitle = title, title
+		write.IDs = []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: tvdb}}
+		write.Certification, write.CertificationAge = rating, age
+		result, err := series.Upsert(t.Context(), seriesAt, write)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: categoryID, ProfileID: 1, Monitored: true}); err != nil {
+			t.Fatal(err)
+		}
+		return result.WorkID
+	}
+	add("Cartoon", "1", "TV-Y7", 7, 3)
+	add("Drama", "2", "TV-MA", 17, 3)
+	add("Unknown", "3", "XX", -1, 3)
+	add("Kids unknown", "4", "XX", -1, 9)
+
+	works := library.NewWorks(opened)
+	shown := func(limit library.ViewerAge) []string {
+		rows, err := works.List(t.Context(), library.WorkFilter{HeldFromViewer: &limit}, library.WorkCursor{}, 10)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		var titles []string
+		for _, row := range rows {
+			titles = append(titles, row.CanonicalTitle)
+		}
+		return titles
+	}
+	if got := shown(library.ViewerAge{MaxAge: 13}); len(got) != 1 || got[0] != "Cartoon" {
+		t.Errorf("up to 13 without a kids library shows %v, want Cartoon", got)
+	}
+	if got := shown(library.ViewerAge{MaxAge: 13, KidsCategoryIDs: []int64{9}}); len(got) != 2 || got[0] != "Cartoon" || got[1] != "Kids unknown" {
+		t.Errorf("up to 13 with library 9 as kids shows %v, want Cartoon and Kids unknown", got)
+	}
+	people := library.NewPeople(opened)
+	rows, err := works.List(t.Context(), library.WorkFilter{}, library.WorkCursor{}, 10)
+	if err != nil || len(rows) != 4 {
+		t.Fatalf("all works: %v, %v", rows, err)
+	}
+	for _, row := range rows {
+		held, err := people.WorkHeldFromViewer(t.Context(), row.ID, library.ViewerAge{MaxAge: 13})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := row.CanonicalTitle != "Cartoon"; held != want {
+			t.Errorf("%s held = %v, want %v", row.CanonicalTitle, held, want)
+		}
+	}
+}

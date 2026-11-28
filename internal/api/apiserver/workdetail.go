@@ -671,15 +671,56 @@ func blockedTagIDs(access authz.Access) []int64 {
 	return ids
 }
 
-// keptFromWork says the account may not see the work because it carries a tag the account is blocked from; a failed
-// lookup keeps it hidden rather than shown.
+// ViewerAge is an account's age limit: works above MaxAge are held from it, and unrated ones unless a library of the
+// kids kind (KidsCategoryIDs) holds them.
+type ViewerAge struct {
+	MaxAge          int64
+	KidsCategoryIDs []int64
+}
+
+// viewerAgeOf is the account's age limit, nil for an account with none.
+func viewerAgeOf(access authz.Access) *ViewerAge {
+	snapshot := access.Snapshot()
+	if snapshot == nil {
+		return nil
+	}
+	user, found := snapshot.User(access.UserID())
+	if !found || user.Limits.MaxAge == nil {
+		return nil
+	}
+	limit := &ViewerAge{MaxAge: *user.Limits.MaxAge}
+	for _, category := range snapshot.Categories() {
+		if category.Kind == kidsKind {
+			limit.KidsCategoryIDs = append(limit.KidsCategoryIDs, category.ID)
+		}
+	}
+	return limit
+}
+
+// kidsKind is the library kind every media type that has one names for children's content.
+const kidsKind = "kids"
+
+// viewerRestricted says something keeps works from the account: a blocked tag or an age limit.
+func viewerRestricted(access authz.Access) bool {
+	return len(blockedTagIDs(access)) > 0 || viewerAgeOf(access) != nil
+}
+
+// keptFromWork says the account may not see the work because it carries a tag the account is blocked from or its age
+// limit holds it back; a failed lookup keeps it hidden rather than shown.
 func (s *Server) keptFromWork(ctx context.Context, access authz.Access, workID int64) bool {
-	ids := blockedTagIDs(access)
-	if len(ids) == 0 || s.workEditor == nil {
+	if s.workEditor == nil || !viewerRestricted(access) {
 		return false
 	}
-	carries, err := s.workEditor.WorkCarriesAnyTag(ctx, workID, ids)
-	return err != nil || carries
+	if ids := blockedTagIDs(access); len(ids) > 0 {
+		if carries, err := s.workEditor.WorkCarriesAnyTag(ctx, workID, ids); err != nil || carries {
+			return true
+		}
+	}
+	if limit := viewerAgeOf(access); limit != nil {
+		held, err := s.workEditor.WorkHeldFromViewer(ctx, workID, *limit)
+		return err != nil || held
+	}
+	return false
 }
 
 func (s *Server) workPermitted(

@@ -83,6 +83,36 @@ const workRatingAge = "CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification
 // aboveRatingSQL holds a work a limit does not admit; its arguments are allow-unrated (0 or 1) and the age.
 const aboveRatingSQL = "((" + workRatingAge + " < 0 AND ? = 0) OR " + workRatingAge + " > ?)"
 
+// ViewerAge is an account's age limit: a work older than MaxAge is held from it, and so is an unrated one unless a
+// library of the kids kind (KidsCategoryIDs) holds it.
+type ViewerAge struct {
+	MaxAge          int64
+	KidsCategoryIDs []int64
+}
+
+// heldFromViewerSQL is true for a work the limit keeps from the account; its arguments are in the order returned.
+func (v ViewerAge) heldFromViewerSQL() (string, []any) {
+	over := workRatingAge + " > ?"
+	if len(v.KidsCategoryIDs) == 0 {
+		return "(" + over + " OR " + workRatingAge + " < 0)", []any{v.MaxAge}
+	}
+	fragment, arguments, _ := membershipFragment(
+		"EXISTS (SELECT 1 FROM desired_item ki WHERE ki.work_id = work.id AND ki.category_id IN (%s))", v.KidsCategoryIDs)
+	return "(" + over + " OR (" + workRatingAge + " < 0 AND NOT " + fragment + "))", append([]any{v.MaxAge}, arguments...)
+}
+
+// WorkHeldFromViewer says the limit keeps the work from the account.
+func (p People) WorkHeldFromViewer(ctx context.Context, workID int64, limit ViewerAge) (bool, error) {
+	held, arguments := limit.heldFromViewerSQL()
+	var kept bool
+	err := p.store.Read().QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM work WHERE id = ? AND "+held+")",
+		append([]any{workID}, arguments...)...).Scan(&kept)
+	if err != nil {
+		return false, fmt.Errorf("library: rating of work %d for an account: %w", workID, err)
+	}
+	return kept, nil
+}
+
 // CountAboveRating answers how many of a library's works its maximum rating does not admit; a live count on purpose, as the
 // limit is whatever the preview asks about and no counter holds it.
 func (w Works) CountAboveRating(ctx context.Context, categoryID int64, limit RatingLimit) (int64, error) {

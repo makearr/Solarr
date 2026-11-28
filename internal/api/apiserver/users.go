@@ -265,7 +265,7 @@ func (s *Server) userView(user settings.User) gen.UserAccount {
 		BlockedTags: blockedTagViews(snapshot.UserBlockedTags(user.ID)),
 		Limits: gen.UserLimits{
 			TierDefault: gen.Tier(user.Limits.TierDefault), TierMax: gen.Tier(user.Limits.TierMax),
-			NewLibraryPermission: gen.Permission(user.Limits.NewLibraryPermission), AutoApprove: &user.Limits.AutoApprove,
+			NewLibraryPermission: gen.Permission(user.Limits.NewLibraryPermission), AutoApprove: &user.Limits.AutoApprove, MaxAge: intFromInt64(user.Limits.MaxAge),
 		},
 	}
 }
@@ -303,7 +303,7 @@ func (s *Server) blockedTagsOf(w http.ResponseWriter, r *http.Request, ids []int
 func limitsFrom(limits gen.UserLimits) settings.UserLimits {
 	return settings.UserLimits{
 		TierDefault: settings.Tier(limits.TierDefault), TierMax: settings.Tier(limits.TierMax),
-		NewLibraryPermission: settings.Permission(limits.NewLibraryPermission), AutoApprove: derefOr(limits.AutoApprove, false),
+		NewLibraryPermission: settings.Permission(limits.NewLibraryPermission), AutoApprove: derefOr(limits.AutoApprove, false), MaxAge: int64FromInt(limits.MaxAge),
 	}
 }
 
@@ -389,4 +389,20 @@ func blockedTagViews(tags []settings.UserBlockedTag) *[]gen.UserBlockedTag {
 		views[index] = gen.UserBlockedTag{TagId: tag.TagID, Name: tag.Name}
 	}
 	return &views
+}
+
+func intFromInt64(value *int64) *int {
+	if value == nil {
+		return nil
+	}
+	converted := int(*value)
+	return &converted
+}
+
+func int64FromInt(value *int) *int64 {
+	if value == nil {
+		return nil
+	}
+	converted := int64(*value)
+	return &converted
 }

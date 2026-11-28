@@ -95,6 +95,7 @@ func (a Works) ListWorks(
 			TagIDs:          filter.TagIDs,
 			ExcludedTagIDs:  filter.ExcludedTagIDs,
 			AboveRating:     aboveRating(filter.AboveRating, filter.CategoryIDs, a.RatingLimit),
+			HeldFromViewer:  viewerAge(filter.ViewerAge),
 			OwnProfileOnly:  filter.OwnProfile,
 			MediaType:       filter.MediaType,
 			MediaTypes:      filter.MediaTypes,
@@ -230,4 +231,11 @@ func libraryPairs(pairs []apiserver.WatchPair) []library.PlaybackPair {
 		out[i] = library.PlaybackPair(pair)
 	}
 	return out
+}
+
+func viewerAge(limit *apiserver.ViewerAge) *library.ViewerAge {
+	if limit == nil {
+		return nil
+	}
+	return &library.ViewerAge{MaxAge: limit.MaxAge, KidsCategoryIDs: limit.KidsCategoryIDs}
 }

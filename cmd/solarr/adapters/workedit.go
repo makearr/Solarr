@@ -376,6 +376,11 @@ func (a WorkEdit) DeleteTag(ctx context.Context, id int64) error {
 	return a.People.DeleteTag(ctx, id)
 }
 
+// WorkHeldFromViewer says an account's age limit keeps the work from it.
+func (a WorkEdit) WorkHeldFromViewer(ctx context.Context, workID int64, limit apiserver.ViewerAge) (bool, error) {
+	return a.People.WorkHeldFromViewer(ctx, workID, library.ViewerAge{MaxAge: limit.MaxAge, KidsCategoryIDs: limit.KidsCategoryIDs})
+}
+
 // WorkCarriesAnyTag says whether the work carries one of the tags or one below it.
 func (a WorkEdit) WorkCarriesAnyTag(ctx context.Context, workID int64, tagIDs []int64) (bool, error) {
 	return a.People.WorkCarriesAnyTag(ctx, workID, tagIDs)

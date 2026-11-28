@@ -72,6 +72,8 @@ type WorkEditor interface {
 	DeleteTag(ctx context.Context, id int64) error
 	// WorkCarriesAnyTag says whether the work carries one of the tags or one below it.
 	WorkCarriesAnyTag(ctx context.Context, workID int64, tagIDs []int64) (bool, error)
+	// WorkHeldFromViewer says an account's age limit keeps the work from it.
+	WorkHeldFromViewer(ctx context.Context, workID int64, limit ViewerAge) (bool, error)
 	// BlockTag removes the tag from every work and refuses it from then on; at is when.
 	BlockTag(ctx context.Context, id, at int64) error
 	// BlockedTags lists what was blocked.

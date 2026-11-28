@@ -29,6 +29,7 @@ type AppUser struct {
 	UiTierMax            string
 	NewLibraryPermission string
 	AutoApprove          int64
+	MaxAge               sql.NullInt64
 }
 
 type ArrInstance struct {

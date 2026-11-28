@@ -484,10 +484,15 @@ func (s *Server) listLibraryLevelWorks(
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 		return
 	}
+	var viewerAge *ViewerAge
+	if access, err := authz.FromContext(r.Context()); err == nil {
+		viewerAge = viewerAgeOf(access)
+	}
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs,
 			Sort: sort, Direction: direction, Where: where, FavoriteUserID: favoriteUser,
+			ViewerAge: viewerAge,
 		},
 		workCursor, limit+1)
 	if err != nil {

@@ -8382,6 +8382,9 @@ type UserLimits struct {
 	// AutoApprove Requests the account makes are approved at once; without it an administrator decides each.
 	AutoApprove *bool `json:"auto_approve,omitempty"`
 
+	// MaxAge The oldest youngest-viewer age the account may see (13 for PG-13); absent for no limit. Unrated works are hidden unless a library of the kids kind holds them.
+	MaxAge *int `json:"max_age,omitempty"`
+
 	// NewLibraryPermission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 	NewLibraryPermission Permission `json:"new_library_permission"`
 	TierDefault          Tier       `json:"tier_default"`

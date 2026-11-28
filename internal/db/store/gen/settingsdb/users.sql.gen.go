@@ -75,10 +75,10 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO app_user (username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission, auto_approve)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  new_library_permission, auto_approve, max_age)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission, auto_approve
+  new_library_permission, auto_approve, max_age
 `
 
 type CreateUserParams struct {
@@ -91,6 +91,7 @@ type CreateUserParams struct {
 	UiTierMax            string
 	NewLibraryPermission string
 	AutoApprove          int64
+	MaxAge               sql.NullInt64
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (AppUser, error) {
@@ -104,6 +105,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (AppUser
 		arg.UiTierMax,
 		arg.NewLibraryPermission,
 		arg.AutoApprove,
+		arg.MaxAge,
 	)
 	var i AppUser
 	err := row.Scan(
@@ -117,6 +119,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (AppUser
 		&i.UiTierMax,
 		&i.NewLibraryPermission,
 		&i.AutoApprove,
+		&i.MaxAge,
 	)
 	return i, err
 }
@@ -175,7 +178,7 @@ func (q *Queries) GetPreference(ctx context.Context, arg GetPreferenceParams) (U
 
 const getUserByAPIKeyHash = `-- name: GetUserByAPIKeyHash :one
 SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, u.ui_tier_default,
-  u.ui_tier_max, u.new_library_permission, u.auto_approve, k.id AS key_id
+  u.ui_tier_max, u.new_library_permission, u.auto_approve, u.max_age, k.id AS key_id
 FROM api_key k JOIN app_user u ON u.id = k.user_id
 WHERE k.key_hash = ?
 `
@@ -191,6 +194,7 @@ type GetUserByAPIKeyHashRow struct {
 	UiTierMax            string
 	NewLibraryPermission string
 	AutoApprove          int64
+	MaxAge               sql.NullInt64
 	KeyID                int64
 }
 
@@ -208,6 +212,7 @@ func (q *Queries) GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetU
 		&i.UiTierMax,
 		&i.NewLibraryPermission,
 		&i.AutoApprove,
+		&i.MaxAge,
 		&i.KeyID,
 	)
 	return i, err
@@ -216,7 +221,7 @@ func (q *Queries) GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetU
 const getUserByUsername = `-- name: GetUserByUsername :one
 
 SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission, auto_approve
+  new_library_permission, auto_approve, max_age
 FROM app_user WHERE username = ?
 `
 
@@ -236,6 +241,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (AppUs
 		&i.UiTierMax,
 		&i.NewLibraryPermission,
 		&i.AutoApprove,
+		&i.MaxAge,
 	)
 	return i, err
 }
@@ -374,7 +380,7 @@ func (q *Queries) ListPreferencesForUser(ctx context.Context, userID int64) ([]U
 
 const listUsers = `-- name: ListUsers :many
 SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission, auto_approve
+  new_library_permission, auto_approve, max_age
 FROM app_user ORDER BY username
 `
 
@@ -398,6 +404,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]AppUser, error) {
 			&i.UiTierMax,
 			&i.NewLibraryPermission,
 			&i.AutoApprove,
+			&i.MaxAge,
 		); err != nil {
 			return nil, err
 		}
@@ -461,7 +468,7 @@ func (q *Queries) SetPreference(ctx context.Context, arg SetPreferenceParams) er
 }
 
 const setUserLimits = `-- name: SetUserLimits :exec
-UPDATE app_user SET ui_tier_default = ?, ui_tier_max = ?, new_library_permission = ?, auto_approve = ? WHERE id = ?
+UPDATE app_user SET ui_tier_default = ?, ui_tier_max = ?, new_library_permission = ?, auto_approve = ?, max_age = ? WHERE id = ?
 `
 
 type SetUserLimitsParams struct {
@@ -469,6 +476,7 @@ type SetUserLimitsParams struct {
 	UiTierMax            string
 	NewLibraryPermission string
 	AutoApprove          int64
+	MaxAge               sql.NullInt64
 	ID                   int64
 }
 
@@ -478,6 +486,7 @@ func (q *Queries) SetUserLimits(ctx context.Context, arg SetUserLimitsParams) er
 		arg.UiTierMax,
 		arg.NewLibraryPermission,
 		arg.AutoApprove,
+		arg.MaxAge,
 		arg.ID,
 	)
 	return err

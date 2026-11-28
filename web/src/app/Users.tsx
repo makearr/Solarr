@@ -716,6 +716,25 @@ function LimitsFields({
           {t("users.requestsNeedNoApproval")}
         </label>
       )}
+      <label className="flex items-center gap-1.5" title={t("users.maxAgeHelp")}>
+        {t("users.maxAge")}
+        <select
+          aria-label={t("users.maxAgeFor", { who })}
+          className="rounded border border-border-subtle bg-surface px-1.5 py-0.5"
+          value={limits.max_age ?? ""}
+          disabled={disabled}
+          onChange={(event) => {
+            onChange({ ...limits, max_age: event.target.value === "" ? undefined : Number(event.target.value) });
+          }}
+        >
+          <option value="">{t("users.maxAgeNone")}</option>
+          {[0, 6, 12, 16].map((age) => (
+            <option key={age} value={age}>
+              {age === 0 ? t("users.maxAgeAllAges") : t("users.maxAgeUpTo", { age })}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }

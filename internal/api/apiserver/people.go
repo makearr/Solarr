@@ -269,7 +269,7 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		writeError(w, s.logger, err)
 		return
 	}
-	if access, err := authz.FromContext(r.Context()); err == nil && len(blockedTagIDs(access)) > 0 {
+	if access, err := authz.FromContext(r.Context()); err == nil && viewerRestricted(access) {
 		visibleCredits := make([]PersonCreditRow, 0, len(credits))
 		for _, credit := range credits {
 			if !s.keptFromWork(r.Context(), access, credit.Work.ID) {

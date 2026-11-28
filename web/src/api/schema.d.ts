@@ -7113,6 +7113,8 @@ export interface components {
              * @default false
              */
             auto_approve: boolean;
+            /** @description The oldest youngest-viewer age the account may see (13 for PG-13); absent for no limit. Unrated works are hidden unless a library of the kids kind holds them. */
+            max_age?: number;
         };
         UserDefaults: {
             new_library_permission: components["schemas"]["Permission"];

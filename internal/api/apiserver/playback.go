@@ -99,7 +99,7 @@ type FileWorkReader interface {
 // fileKeptFrom says the account is kept from every work the file belongs to; a file no work holds follows its root only.
 func (s *Server) fileKeptFrom(ctx context.Context, access authz.Access, mediaObjectID int64) bool {
 	reader, ok := s.playback.(FileWorkReader)
-	if !ok || len(blockedTagIDs(access)) == 0 {
+	if !ok || !viewerRestricted(access) {
 		return false
 	}
 	workIDs, err := reader.WorksOfFile(ctx, mediaObjectID)

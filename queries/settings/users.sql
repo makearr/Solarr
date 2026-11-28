@@ -3,20 +3,20 @@
 
 -- name: GetUserByUsername :one
 SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission, auto_approve
+  new_library_permission, auto_approve, max_age
 FROM app_user WHERE username = ?;
 
 -- name: ListUsers :many
 SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission, auto_approve
+  new_library_permission, auto_approve, max_age
 FROM app_user ORDER BY username;
 
 -- name: CreateUser :one
 INSERT INTO app_user (username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission, auto_approve)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  new_library_permission, auto_approve, max_age)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission, auto_approve;
+  new_library_permission, auto_approve, max_age;
 
 -- name: SetUserPasswordHash :exec
 UPDATE app_user SET password_hash = ? WHERE id = ?;
@@ -28,7 +28,7 @@ UPDATE app_user SET role = ? WHERE id = ?;
 UPDATE app_user SET ui_tier = ? WHERE id = ?;
 
 -- name: SetUserLimits :exec
-UPDATE app_user SET ui_tier_default = ?, ui_tier_max = ?, new_library_permission = ?, auto_approve = ? WHERE id = ?;
+UPDATE app_user SET ui_tier_default = ?, ui_tier_max = ?, new_library_permission = ?, auto_approve = ?, max_age = ? WHERE id = ?;
 
 -- name: DeleteUser :exec
 DELETE FROM app_user WHERE id = ?;
@@ -72,7 +72,7 @@ DELETE FROM api_key WHERE id = ?;
 
 -- name: GetUserByAPIKeyHash :one
 SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, u.ui_tier_default,
-  u.ui_tier_max, u.new_library_permission, u.auto_approve, k.id AS key_id
+  u.ui_tier_max, u.new_library_permission, u.auto_approve, u.max_age, k.id AS key_id
 FROM api_key k JOIN app_user u ON u.id = k.user_id
 WHERE k.key_hash = ?;
 
