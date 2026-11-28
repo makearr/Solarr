@@ -757,3 +757,34 @@ func TestDirect_AlbumReadsAMediumsPregapAsAnOptionalTrackZero(t *testing.T) {
 		t.Errorf("Tracks = %+v, want %+v", got, want)
 	}
 }
+
+// An artist's videos are the recordings flagged video and the live groups with a release on a video medium, each once.
+func TestDirect_ArtistVideosListsRecordingsAndLiveGroupsWithAVideoRelease(t *testing.T) {
+	recordings := "https://musicbrainz.invalid/recording/?query=arid%3A" + radioheadMBID + "+AND+video%3Atrue&fmt=json&limit=100&offset=0"
+	releases := "https://musicbrainz.invalid/release?artist=" + radioheadMBID + "&type=live&inc=release-groups+media&limit=100&offset=0&fmt=json"
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		recordings: {status: http.StatusOK, body: `{"count": 1, "recordings": [{"id": "r-1", "title": "Invented Song", "artist-credit": [{"name": "Invented Artist"}],
+          "releases": [{"date": "2020-05-01", "release-group": {"id": "g-1", "title": "Invented Album", "primary-type": "Album"}}]}]}`},
+		releases: {status: http.StatusOK, body: `{"release-count": 4, "releases": [
+          {"release-group": {"id": "g-live", "title": "Invented Live", "primary-type": "Album", "secondary-types": ["Live"], "first-release-date": "2019-03-02"}, "media": [{"format": "CD"}]},
+          {"release-group": {"id": "g-live", "title": "Invented Live", "primary-type": "Album", "secondary-types": ["Live"], "first-release-date": "2019-03-02"}, "media": [{"format": "Blu-ray"}]},
+          {"release-group": {"id": "g-live", "title": "Invented Live", "primary-type": "Album", "secondary-types": ["Live"], "first-release-date": "2019-03-02"}, "media": [{"format": "DVD-Video"}]},
+          {"release-group": {"id": "g-audio", "title": "Invented Surround", "primary-type": "Album", "secondary-types": ["Live"]}, "media": [{"format": "DVD-Audio"}]}]}`},
+	}}
+	client := newTestClient(t, transport, musicbrainz.DirectName)
+	lister, ok := musicbrainz.NewDirect(client, "https://musicbrainz.invalid").(musicbrainz.ArtistVideoLister)
+	if !ok {
+		t.Fatal("the direct source does not list an artist's videos")
+	}
+	got, err := lister.ArtistVideos(t.Context(), radioheadMBID)
+	if err != nil {
+		t.Fatalf("ArtistVideos: %v", err)
+	}
+	if len(got.Recordings) != 1 || got.Recordings[0].RecordingMBID != "r-1" || got.Recordings[0].ReleaseGroups[0].MBID != "g-1" {
+		t.Errorf("recordings = %+v, want the one video recording on its album", got.Recordings)
+	}
+	want := []musicbrainz.ReleaseGroup{{MBID: "g-live", Title: "Invented Live", PrimaryType: "Album", SecondaryTypes: []string{"Live"}, FirstReleaseDate: "2019-03-02"}}
+	if !reflect.DeepEqual(got.Concerts, want) {
+		t.Errorf("concerts = %+v, want %+v", got.Concerts, want)
+	}
+}

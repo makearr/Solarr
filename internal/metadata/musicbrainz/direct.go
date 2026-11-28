@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -384,6 +385,7 @@ func (d direct) SearchReleases(ctx context.Context, query ReleaseQuery, limit in
 
 // directRecordingSearchResponse is ws/2's recording search JSON, verified live 2026-09-17.
 type directRecordingSearchResponse struct {
+	Count      int               `json:"count"`
 	Recordings []directRecording `json:"recordings"`
 }
 
@@ -476,6 +478,76 @@ func (d direct) searchRecordings(ctx context.Context, artist, title, narrowing s
 		matches[i] = recording.toMatch()
 	}
 	return matches, nil
+}
+
+// artistVideoPages bounds each of the two lists an artist's videos are read from.
+const artistVideoPages = 5
+
+// videoFormats are the substrings of a medium format that holds film; DVD-Audio is sound.
+var videoFormats = []string{"dvd", "blu-ray", "vhs", "laserdisc", "vcd", "umd", "videotape"}
+
+func isVideoFormat(format string) bool {
+	format = strings.ToLower(format)
+	return !strings.Contains(format, "audio") && slices.ContainsFunc(videoFormats, func(video string) bool { return strings.Contains(format, video) })
+}
+
+// directLiveReleases is the release browse of an artist's live releases with their media.
+type directLiveReleases struct {
+	ReleaseCount int `json:"release-count"`
+	Releases     []struct {
+		ReleaseGroup directBrowseReleaseGroup `json:"release-group"`
+		Media        []directMedium           `json:"media"`
+	} `json:"releases"`
+}
+
+type directMedium struct {
+	Format string `json:"format"`
+}
+
+// ArtistVideos implements ArtistVideoLister: recordings searched by artist id and flagged video, and the live release
+// groups with a release on a video medium (DVD, Blu-ray, VHS), each group once.
+func (d direct) ArtistVideos(ctx context.Context, artistMBID string) (VideoCatalogue, error) {
+	var catalogue VideoCatalogue
+	query := url.QueryEscape("arid:" + artistMBID + " AND video:true")
+	for page := range artistVideoPages {
+		offset := page * artistReleaseGroupsPageSize
+		var parsed directRecordingSearchResponse
+		requestURL := fmt.Sprintf("%s/recording/?query=%s&fmt=json&limit=%d&offset=%d", d.baseURL, query, artistReleaseGroupsPageSize, offset)
+		if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+			return VideoCatalogue{}, fmt.Errorf("musicbrainz: video recordings of %s: %w", artistMBID, err)
+		}
+		for _, recording := range parsed.Recordings {
+			catalogue.Recordings = append(catalogue.Recordings, recording.toMatch())
+		}
+		if len(parsed.Recordings) < artistReleaseGroupsPageSize || offset+len(parsed.Recordings) >= parsed.Count {
+			break
+		}
+	}
+	seen := map[string]bool{}
+	for page := range artistVideoPages {
+		offset := page * artistReleaseGroupsPageSize
+		var parsed directLiveReleases
+		requestURL := fmt.Sprintf("%s/release?artist=%s&type=live&inc=release-groups+media&limit=%d&offset=%d&fmt=json",
+			d.baseURL, url.QueryEscape(artistMBID), artistReleaseGroupsPageSize, offset)
+		if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+			return VideoCatalogue{}, fmt.Errorf("musicbrainz: live releases of %s: %w", artistMBID, err)
+		}
+		for _, release := range parsed.Releases {
+			group := release.ReleaseGroup
+			if group.ID == "" || seen[group.ID] || !slices.ContainsFunc(release.Media, func(medium directMedium) bool { return isVideoFormat(medium.Format) }) {
+				continue
+			}
+			seen[group.ID] = true
+			catalogue.Concerts = append(catalogue.Concerts, ReleaseGroup{
+				MBID: group.ID, Title: group.Title, PrimaryType: group.PrimaryType,
+				SecondaryTypes: group.SecondaryTypes, FirstReleaseDate: group.FirstReleaseDate,
+			})
+		}
+		if len(parsed.Releases) < artistReleaseGroupsPageSize || offset+len(parsed.Releases) >= parsed.ReleaseCount {
+			break
+		}
+	}
+	return catalogue, nil
 }
 
 // recordingReleasePages bounds the releases read for one recording: a hit is on hundreds of

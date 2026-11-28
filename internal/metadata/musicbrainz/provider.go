@@ -58,6 +58,8 @@ const (
 	cacheKindRecordingSearch = "musicbrainz:recording-search"
 	// cacheKindVideoSearch is a video recording search's result set, keyed like cacheKindSearch.
 	cacheKindVideoSearch = "musicbrainz:video-search"
+	// cacheKindArtistVideos is one artist's VideoCatalogue keyed on MBID; it grows like a discography.
+	cacheKindArtistVideos = "musicbrainz:artist-videos"
 	// cacheKindReleaseSearch is a barcode or catalogue number search's result set.
 	cacheKindReleaseSearch = "musicbrainz:release-search"
 	// cacheKindRecording is one recording with the release groups it is on, keyed on its MBID.
@@ -315,6 +317,17 @@ func (p Provider) SearchVideoRecordings(ctx context.Context, priority Priority, 
 	}
 	return through(ctx, p, priority, call, func(ctx context.Context, searcher VideoRecordingSearcher) ([]RecordingMatch, error) {
 		return searcher.SearchVideoRecordings(ctx, artist, title, limit)
+	})
+}
+
+// ArtistVideos answers an artist's music videos and concert films, cache-first. Only ArtistVideoLister sources are tried.
+func (p Provider) ArtistVideos(ctx context.Context, priority Priority, artistMBID string) (VideoCatalogue, error) {
+	call := lookup{
+		kind: cacheKindArtistVideos, key: artistMBID, what: "videos of artist " + artistMBID,
+		noSource: fmt.Errorf("%w: list the videos of artist %s", ErrNoCapableSource, artistMBID),
+	}
+	return through(ctx, p, priority, call, func(ctx context.Context, lister ArtistVideoLister) (VideoCatalogue, error) {
+		return lister.ArtistVideos(ctx, artistMBID)
 	})
 }
 

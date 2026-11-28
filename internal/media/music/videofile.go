@@ -125,3 +125,19 @@ func WantedVideosOf(snapshot *settings.Snapshot) library.WantedVideos {
 	}
 	return videos
 }
+
+// videoProfileNames are the shipped profiles a video work of a music library is judged by, best first; they are the
+// movie profiles, since a music profile judges sound.
+var videoProfileNames = []string{"HD 720p/1080p", "WEB 1080p"}
+
+// VideoProfileFor is the quality profile a library's video works get; zero when the shipped ones are gone.
+func VideoProfileFor(snapshot *settings.Snapshot) int64 {
+	for _, name := range videoProfileNames {
+		for _, profile := range snapshot.QualityProfiles() {
+			if profile.Name == name && profile.MediaType == "movie" {
+				return profile.ID
+			}
+		}
+	}
+	return 0
+}

@@ -654,9 +654,11 @@ type FollowCandidate struct {
 	// Provider and ExternalID name the work at the provider, which is also what an exclusion is kept by.
 	Provider   string
 	ExternalID string
-	Title      string
-	Year       int64
-	PosterURL  string
+	// Also are the work's further provider ids, by provider.
+	Also      map[string]string
+	Title     string
+	Year      int64
+	PosterURL string
 	// Role is what the person did on it; empty for an organisation.
 	Role string
 	// Held is set when the library already has the work, monitored or not.

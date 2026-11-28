@@ -183,6 +183,18 @@ type VideoRecordingSearcher interface {
 	SearchVideoRecordings(ctx context.Context, artist, title string, limit int) ([]RecordingMatch, error)
 }
 
+// VideoCatalogue is the videos MusicBrainz lists for one artist: recordings flagged video (music videos) and the live
+// release groups with a video release (concert films).
+type VideoCatalogue struct {
+	Recordings []RecordingMatch
+	Concerts   []ReleaseGroup
+}
+
+// ArtistVideoLister is an optional Source capability: an artist's VideoCatalogue.
+type ArtistVideoLister interface {
+	ArtistVideos(ctx context.Context, artistMBID string) (VideoCatalogue, error)
+}
+
 // RecordingLookup is an optional Source capability: one recording by id and the release groups it is on.
 type RecordingLookup interface {
 	Recording(ctx context.Context, mbid string) (RecordingMatch, error)

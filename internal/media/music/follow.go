@@ -40,17 +40,29 @@ type Discography interface {
 	LabelReleaseGroups(ctx context.Context, priority musicbrainz.Priority, labelMBID string) ([]musicbrainz.ReleaseGroup, error)
 }
 
+// ArtistVideos is the provider as listing an artist's videos needs it.
+type ArtistVideos interface {
+	ArtistVideos(ctx context.Context, priority musicbrainz.Priority, artistMBID string) (musicbrainz.VideoCatalogue, error)
+}
+
+// videosPerRun bounds the videos one follow run adds: an artist's video list runs to the hundreds.
+const videosPerRun = 50
+
 // newReleaseWindow lets a label's follow also catch an album released shortly before the follow was made.
 const newReleaseWindow = 30 * 24 * time.Hour
 
 // Following is music's part of a follow: an artist's release groups, as the follow's options admit (section 19.6).
 type Following struct {
-	People           library.People
-	Organisations    library.Organisations
-	Identity         library.Identity
-	Desired          *library.Desired
-	Categories       CategoryFinder
-	Discography      Discography
+	People        library.People
+	Organisations library.Organisations
+	Identity      library.Identity
+	Desired       *library.Desired
+	Categories    CategoryFinder
+	Discography   Discography
+	// Videos lists an artist's videos for a library that switched music videos on; nil lists none.
+	Videos ArtistVideos
+	// VideoProfile answers the quality profile of a library's video works; zero takes the library's own.
+	VideoProfile     func(category settings.Category) int64
 	DefaultProfileID int64
 	Clock            clock.Clock
 	// Search is optional; without it a follow asking for a search only adds.
@@ -113,7 +125,117 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 		candidates = append(candidates, candidate)
 	}
 	slices.SortStableFunc(candidates, func(a, b media.FollowCandidate) int { return int(b.Year - a.Year) })
+	if follow.SubjectType == "person" && haveCategory && category.MusicVideos {
+		videos, err := f.videoCandidates(musicbrainz.ForLibrary(ctx, follow.CategoryID), follow)
+		if err != nil {
+			return nil, err
+		}
+		candidates = append(candidates, videos...)
+	}
 	return candidates, nil
+}
+
+// videoCandidates are the artist's music videos and concert films the library lacks, newest first and at most
+// videosPerRun of them; what it holds is listed too, marked held.
+func (f Following) videoCandidates(ctx context.Context, follow media.Follow) ([]media.FollowCandidate, error) {
+	if f.Videos == nil {
+		return nil, nil
+	}
+	artistMBID, ok, err := f.People.ExternalIDFor(ctx, follow.SubjectID, ProviderArtist)
+	if err != nil {
+		return nil, fmt.Errorf("music: artist id: %w", err)
+	}
+	if !ok || !hasDiscography(artistMBID) {
+		return nil, nil
+	}
+	catalogue, err := f.Videos.ArtistVideos(ctx, musicbrainz.PriorityBackfill, artistMBID)
+	if errors.Is(err, musicbrainz.ErrNoCapableSource) || errors.Is(err, musicbrainz.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("musicbrainz: %w", err)
+	}
+	var candidates []media.FollowCandidate
+	for _, recording := range catalogue.Recordings {
+		candidate := media.FollowCandidate{Provider: ProviderVideoRecording, ExternalID: recording.RecordingMBID, Title: recording.Title, Role: CreditRoleArtist}
+		if group, found := earliestGroup(recording.ReleaseGroups); found {
+			candidate.Year = int64(leadingYear(group.FirstReleaseDate))
+			candidate.Also = map[string]string{ProviderVideoAlbum: VideoAlbumID(group.MBID, recording.RecordingMBID)}
+		}
+		candidates = append(candidates, candidate)
+	}
+	for _, concert := range catalogue.Concerts {
+		candidates = append(candidates, media.FollowCandidate{
+			Provider: ProviderLiveVideo, ExternalID: concert.MBID, Title: concert.Title, Year: int64(leadingYear(concert.FirstReleaseDate)), Role: CreditRoleArtist,
+		})
+	}
+	slices.SortStableFunc(candidates, func(a, b media.FollowCandidate) int { return int(b.Year - a.Year) })
+	missing := 0
+	for index := range candidates {
+		held, err := f.heldVideo(ctx, candidates[index], follow.CategoryID)
+		if err != nil {
+			return nil, err
+		}
+		if candidates[index].Held = held; !held {
+			if missing++; missing > videosPerRun {
+				return candidates[:index], nil
+			}
+		}
+	}
+	return candidates, nil
+}
+
+// heldVideo reports whether the library already wants the video, monitored or not.
+func (f Following) heldVideo(ctx context.Context, candidate media.FollowCandidate, categoryID int64) (bool, error) {
+	workID, found, err := f.Identity.WorkByExternalID(ctx, candidate.Provider, candidate.ExternalID)
+	if err != nil || !found {
+		return false, err
+	}
+	return f.Desired.WantedIn(ctx, workID, categoryID)
+}
+
+// addVideo makes the video a work of the followed artist with a monitored item for one file, in the library's video profile.
+func (f Following) addVideo(ctx context.Context, follow media.Follow, category settings.Category, candidate media.FollowCandidate) error {
+	subtype := SubtypeMusicVideo
+	if candidate.Provider == ProviderLiveVideo {
+		subtype = SubtypeConcertVideo
+	}
+	now := f.Clock.Now()
+	workIDs, err := f.Identity.ResolveWorks(ctx, now, []library.WorkLink{{
+		Provider: candidate.Provider, ExternalID: candidate.ExternalID, Confidence: 1.0,
+		Work: library.WorkIdentity{MediaType: string(MediaType), CanonicalTitle: candidate.Title, SortTitle: library.SortTitle(candidate.Title), Subtype: subtype},
+	}})
+	if err != nil {
+		return fmt.Errorf("music: resolve video work: %w", err)
+	}
+	for provider, id := range candidate.Also {
+		if err := f.Identity.LinkExternalIDIfFree(ctx, now, workIDs[0], provider, id, 1.0); err != nil {
+			return fmt.Errorf("music: link video album: %w", err)
+		}
+	}
+	if err := f.People.AddLeadCredit(ctx, workIDs[0], follow.SubjectID, CreditRoleArtist); err != nil {
+		return fmt.Errorf("music: credit video: %w", err)
+	}
+	profileID := f.libraryProfile(category)
+	if f.VideoProfile != nil {
+		if id := f.VideoProfile(category); id != 0 {
+			profileID = id
+		}
+	}
+	_, err = f.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
+		WorkID: workIDs[0], CategoryID: category.ID, ProfileID: profileID, Monitored: true, RequiredWithoutParts: 1,
+	})
+	if err != nil {
+		return fmt.Errorf("music: ensure video item: %w", err)
+	}
+	return nil
+}
+
+func (f Following) libraryProfile(category settings.Category) int64 {
+	if category.QualityProfileID != nil {
+		return *category.QualityProfileID
+	}
+	return f.DefaultProfileID
 }
 
 // releaseGroupsOf browses the subject's release groups: an artist's whole discography, a label's catalogue from
@@ -176,10 +298,10 @@ func (f Following) AddFollowed(ctx context.Context, follow media.Follow, candida
 	if !ok {
 		return fmt.Errorf("music: no library for the follow")
 	}
-	profileID := f.DefaultProfileID
-	if category.QualityProfileID != nil {
-		profileID = *category.QualityProfileID
+	if candidate.Provider == ProviderVideoRecording || candidate.Provider == ProviderLiveVideo {
+		return f.addVideo(ctx, follow, category, candidate)
 	}
+	profileID := f.libraryProfile(category)
 	workIDs, err := f.Identity.ResolveWorks(ctx, f.Clock.Now(), []library.WorkLink{{
 		Provider: ProviderReleaseGroup, ExternalID: candidate.ExternalID, Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: string(MediaType), CanonicalTitle: candidate.Title, SortTitle: library.SortTitle(candidate.Title)},

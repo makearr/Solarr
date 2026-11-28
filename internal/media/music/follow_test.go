@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -108,7 +109,7 @@ func newFollowing(t *testing.T, source musicbrainz.Source, categories music.Cate
 	})
 	return music.Following{
 		People: library.NewPeople(libraryStore), Organisations: library.NewOrganisations(libraryStore), Identity: library.NewIdentity(libraryStore), Desired: &desired,
-		Categories: categories, Discography: provider, DefaultProfileID: 99, Clock: fake,
+		Categories: categories, Discography: provider, Videos: provider, DefaultProfileID: 99, Clock: fake,
 	}, libraryStore
 }
 
@@ -276,5 +277,75 @@ func TestFollowing_ALabelBringsItsNewReleases(t *testing.T) {
 	}
 	if limit := following.FollowLimit(followed); limit != 25 {
 		t.Errorf("a label's limit = %d, want 25 a run", limit)
+	}
+}
+
+// fakeVideoSource is a discography source that also lists one artist's videos.
+type fakeVideoSource struct {
+	fakeDiscographySource
+	catalogue musicbrainz.VideoCatalogue
+}
+
+func (f *fakeVideoSource) ArtistVideos(context.Context, string) (musicbrainz.VideoCatalogue, error) {
+	return f.catalogue, nil
+}
+
+// With the library's switch on, the artist's video recordings and live video groups are candidates beside the albums;
+// adding one makes a credited, monitored one-file video work, and the library holds it afterwards. Off: no video at all.
+func TestFollowing_VideosAreWantedOnlyWhereTheLibrarySwitchedThemOn(t *testing.T) {
+	source := &fakeVideoSource{
+		fakeDiscographySource: fakeDiscographySource{groups: []musicbrainz.ReleaseGroup{{MBID: "rg-album", Title: "Invented Album", PrimaryType: "Album"}}},
+		catalogue: musicbrainz.VideoCatalogue{
+			Recordings: []musicbrainz.RecordingMatch{{
+				RecordingMBID: "rec-1", Title: "Invented Song",
+				ReleaseGroups: []musicbrainz.ReleaseGroup{{MBID: "rg-album", FirstReleaseDate: "2018-04-01"}},
+			}},
+			Concerts: []musicbrainz.ReleaseGroup{{MBID: "rg-live", Title: "Invented Live", FirstReleaseDate: "2020-06-01", SecondaryTypes: []string{"Live"}}},
+		},
+	}
+	off := settings.Category{ID: 1, MediaType: "music", Kind: "general"}
+	on := settings.Category{ID: 2, MediaType: "music", Kind: "general", MusicVideos: true}
+	following, opened := newFollowing(t, source, twoCategories{first: off, second: on})
+	artist := artistWithID(t, opened, "katupoken-mbid")
+
+	candidates, err := following.FollowCandidates(t.Context(), media.Follow{SubjectType: "person", SubjectID: artist, CategoryID: 1})
+	if err != nil || !slices.Equal(candidateIDs(candidates), []string{"rg-album"}) {
+		t.Fatalf("switch off: candidates = %v, %v; want the album only", candidateIDs(candidates), err)
+	}
+	followed := media.Follow{SubjectType: "person", SubjectID: artist, CategoryID: 2}
+	candidates, err = following.FollowCandidates(t.Context(), followed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []media.FollowCandidate{
+		{Provider: music.ProviderReleaseGroup, ExternalID: "rg-album", Title: "Invented Album", Role: music.CreditRoleArtist},
+		{Provider: music.ProviderLiveVideo, ExternalID: "rg-live", Title: "Invented Live", Year: 2020, Role: music.CreditRoleArtist},
+		{Provider: music.ProviderVideoRecording, ExternalID: "rec-1", Title: "Invented Song", Year: 2018, Role: music.CreditRoleArtist,
+			Also: map[string]string{music.ProviderVideoAlbum: "rg-album/rec-1"}},
+	}
+	if !reflect.DeepEqual(candidates, want) {
+		t.Fatalf("switch on: candidates = %+v, want %+v", candidates, want)
+	}
+	for _, candidate := range candidates[1:] {
+		if err := following.AddFollowed(t.Context(), followed, candidate); err != nil {
+			t.Fatal(err)
+		}
+	}
+	queries := librarydb.New(opened.Read())
+	concert, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{Provider: music.ProviderLiveVideo, ExternalID: "rg-live"})
+	if err != nil || concert.Subtype.String != music.SubtypeConcertVideo {
+		t.Fatalf("concert work = %+v, %v; want subtype %q", concert, err, music.SubtypeConcertVideo)
+	}
+	items, err := queries.ListDesiredItemsForWork(t.Context(), concert.ID)
+	if err != nil || len(items) != 1 || items[0].Monitored != 1 || items[0].CategoryID != 2 || items[0].RequiredCount.Int64 != 1 {
+		t.Fatalf("concert items = %+v, %v; want one monitored item for one file in library 2", items, err)
+	}
+	albumVideo, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{Provider: music.ProviderVideoAlbum, ExternalID: "rg-album/rec-1"})
+	if err != nil || albumVideo.Subtype.String != music.SubtypeMusicVideo {
+		t.Fatalf("music video work by its album id = %+v, %v; want subtype %q", albumVideo, err, music.SubtypeMusicVideo)
+	}
+	again, err := following.FollowCandidates(t.Context(), followed)
+	if err != nil || len(again) != 3 || again[1].Held != true || again[2].Held != true || again[0].Held {
+		t.Errorf("after adding, candidates = %+v, %v; want both videos held and the album not", again, err)
 	}
 }
