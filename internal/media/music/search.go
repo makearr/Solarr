@@ -72,6 +72,8 @@ type Search struct {
 	Sightings *library.Sightings
 	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
 	IndexerDeadline time.Duration
+	// VideoReader, when set, lets the search handle video works (music videos, concert films) by their own spec.
+	VideoReader library.SeriesReader
 }
 
 // SearchTerms are a person's own artist and album for "search with different terms".
@@ -140,6 +142,11 @@ func (s Search) SearchItemWithTerms(
 	}
 	if !plan.SearchedOnItsOwn(item.SatisfactionKind) {
 		return ItemSearchResult{}, ErrTrackSearchNotSupported
+	}
+	if video, err := s.videoItem(ctx, item); err != nil {
+		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
+	} else if video {
+		return s.videoSearch().SearchItem(ctx, itemID, indexers, at)
 	}
 
 	measure, err := s.yardstickFor(ctx, item)
@@ -325,6 +332,11 @@ func (s Search) JudgeFeed(
 	}
 	if !plan.SearchedOnItsOwn(item.SatisfactionKind) {
 		return ItemSearchResult{}, ErrTrackSearchNotSupported
+	}
+	if video, err := s.videoItem(ctx, item); err != nil {
+		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
+	} else if video {
+		return s.videoSearch().JudgeFeed(ctx, itemID, conn, raws, at)
 	}
 	measure, err := s.yardstickFor(ctx, item)
 	if err != nil {

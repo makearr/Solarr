@@ -182,7 +182,7 @@ func (p *process) musicSearch() music.Search {
 	return music.Search{
 		Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library),
 		Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(),
-		Blocklist: &blocklist, Sightings: &sightings,
+		Blocklist: &blocklist, Sightings: &sightings, VideoReader: library.NewSeriesReader(p.library),
 	}
 }
 
