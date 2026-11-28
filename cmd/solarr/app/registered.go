@@ -1058,6 +1058,10 @@ func (p *process) comicModule() comic.Module {
 		Registrations: []media.JobRegistration{
 			{Definition: comic.RefreshDefinition(), Handler: comic.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
 			{Definition: comic.ArtworkDefinition(), Handler: comic.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
+			{Definition: comic.CoverDefinition, Handler: comic.NewCoverJob(comic.CoverJobConfig{
+				Artworks: library.NewArtworks(p.library), Pictures: library.NewWorks(p.library), Roots: adapters.Roots{Cache: p.cache},
+				FS: p.fsys, ImagesDir: p.config.Paths.MediaCoverDir, Clock: clock.NewSystem(), Logger: p.logger,
+			})},
 			{Definition: comic.ReaderFilesDefinition, Handler: comic.ReaderFilesJob{
 				Writer:    *readerFiles,
 				Libraries: func() []settings.Category { return p.cache.Snapshot().Categories() },
@@ -1074,6 +1078,9 @@ func (p *process) comicModule() comic.Module {
 				return result.Duplicate, err
 			},
 			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
+				if _, err := comic.EnqueueCovers(ctx, p.queue); err != nil {
+					p.logger.Warn("enqueue comic covers from files", slog.Any("error", err))
+				}
 				result, err := comic.EnqueueArtwork(ctx, p.queue)
 				return result.Duplicate, err
 			},
