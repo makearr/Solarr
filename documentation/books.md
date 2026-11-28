@@ -100,10 +100,14 @@ author's page shows: those first published from the year of the follow on, or al
 5 a run (25 for the back catalogue), each added monitored and never past an exclusion. Only the author role is
 followed: Open Library lists books by author.
 
-**A series** is a collection (one per series name). Its missing books (`series.go`) come from Wikidata: the series the
-held books' Open Library works are part of (P648, P179), its books in series order (P1545) with their Open Library work
-ids; a book held under any of its ids, excluded, or with no Open Library work id is not listed. Monitor collection adds
-the missing ones.
+**A series** is a collection (one per series name) whatever it holds: its missing books (`series.go`) come from the whole series, not
+from what is held. Wikidata always answers: the series the held books' Open Library works are part of (P648, P179), its books
+in series order (P1545). When a Hardcover key is configured Hardcover's list of the series (by the collection's name) completes
+it: a book Wikidata lists without an Open Library work id is added by its Hardcover id, a book only Hardcover knows is listed
+too, matching by folded title. A book held under any of its ids or by its title, or excluded, is not missing. Monitor
+collection adds the missing ones (title and year kept as the fallback when no source answers). The collection's `complete_at`
+is the number of books the whole series has, held or not (filled by the collection facts pass from this list), so the page can
+say "held of total" and show the missing ones the way a crossover shows its missing parts.
 
 ## Not built
 

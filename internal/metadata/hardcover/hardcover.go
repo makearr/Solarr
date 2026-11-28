@@ -302,3 +302,61 @@ func (c Client) ListBooks(ctx context.Context, listID int64, limit, offset int) 
 	}
 	return books, nil
 }
+
+// SeriesBook is one book of a Hardcover series with its place in it.
+type SeriesBook struct {
+	ID       int64
+	Title    string
+	Year     int
+	Position float64
+}
+
+// SeriesBooks lists the books of the series named exactly like name, in series order; none when Hardcover has no such
+// series. A book listed twice (several editions of its place) is kept once.
+func (c Client) SeriesBooks(ctx context.Context, name string) ([]SeriesBook, error) {
+	if !c.Configured() || strings.TrimSpace(name) == "" {
+		return nil, nil
+	}
+	var found struct {
+		Series []struct {
+			Books []struct {
+				Position *float64 `json:"position"`
+				Book     struct {
+					ID    int64  `json:"id"`
+					Title string `json:"title"`
+					Year  int    `json:"release_year"`
+				} `json:"book"`
+			} `json:"book_series"`
+		} `json:"series"`
+	}
+	const query = `query ($name: String!) { series(where: {name: {_eq: $name}}, limit: 5) { book_series(order_by: {position: asc}) { position book { id title release_year } } } }`
+	if err := c.query(ctx, query, map[string]any{"name": strings.TrimSpace(name)}, &found); err != nil {
+		return nil, err
+	}
+	// Several series can share a name; the one with the most books is the real one.
+	most := 0
+	for index, series := range found.Series {
+		if len(series.Books) > len(found.Series[most].Books) {
+			most = index
+		}
+	}
+	var books []SeriesBook
+	seen := map[int64]bool{}
+	for index, series := range found.Series {
+		if index != most {
+			continue
+		}
+		for _, row := range series.Books {
+			if row.Book.ID == 0 || row.Book.Title == "" || seen[row.Book.ID] {
+				continue
+			}
+			seen[row.Book.ID] = true
+			book := SeriesBook{ID: row.Book.ID, Title: row.Book.Title, Year: row.Book.Year}
+			if row.Position != nil {
+				book.Position = *row.Position
+			}
+			books = append(books, book)
+		}
+	}
+	return books, nil
+}

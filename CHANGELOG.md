@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Book and audiobook series: the collection lists the whole series (Wikidata, completed by Hardcover when its key is set), shows how many books it has in all and which are missing, and Monitor adds them even when Wikidata has no Open Library id for them.
 - Settings > Database > Pictures: one image format (WebP by default, JPEG or PNG) for item pictures and video previews; changing it converts the stored ones in the background and new ones are written in it.
 - Video hashing and previews read each folder with more files at once only while that folder's disk answers as fast as it normally does, and back off when it slows; broken-file detection still runs before previews and hashes.
 - Comics: a series with no provider poster takes its cover from the first page of its first issue (cbz, cbr, cb7, cbt), a page named cover first; a provider poster still wins.

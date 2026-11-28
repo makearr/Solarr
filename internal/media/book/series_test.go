@@ -67,3 +67,51 @@ func TestASeriesMissingBooksAreThoseItHoldsUnderNoIDInSeriesOrder(t *testing.T) 
 		t.Errorf("asked = %v, want the two held books' ids", source.asked)
 	}
 }
+
+type fakeLister []ListedBook
+
+func (f fakeLister) ListSeries(context.Context, string) ([]ListedBook, error) { return f, nil }
+
+// The provider's list completes Wikidata's: a book Wikidata gives no Open Library id is added by the provider's id, a
+// book only the provider knows is listed too, and the count is the whole series.
+func TestASeriesIsCompletedFromTheBookProvidersList(t *testing.T) {
+	opened := openFollowLibrary(t)
+	now := clock.NewFakeAtEpoch().Now()
+	series := library.NewSeries(opened)
+	if _, err := series.Upsert(t.Context(), now, library.SeriesWrite{
+		Work:      library.WorkIdentity{MediaType: "book", CanonicalTitle: "The Lantern Keeper", SortTitle: "The Lantern Keeper"},
+		IDs:       []library.ExternalIDWrite{{Provider: ProviderOpenLibrary, ExternalID: "OL1001W"}},
+		Franchise: &library.SeriesFranchiseWrite{Provider: ProviderSeries, ExternalID: PersonKey("Lantern Cycle"), Name: "Lantern Cycle"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	summaries, err := library.NewFranchises(opened).Summaries(t.Context(), "book")
+	if err != nil || len(summaries) != 1 {
+		t.Fatalf("collections = %+v, %v", summaries, err)
+	}
+	books := SeriesBooks{
+		Franchises: library.NewFranchises(opened), Reader: library.NewSeriesReader(opened), Source: &fakeSeries{},
+		Lister: fakeLister{
+			{ID: "1", Title: "The Lantern Keeper", Position: 1},
+			{ID: "15", Title: "Tales of the Cycle", Year: 1999},
+			{ID: "16", Title: "Book Five", Year: 2001, Position: 5},
+		},
+		Catalog: Catalog{Service: Service{Format: Ebook, Series: series, Exclusions: library.NewExclusions(opened)}},
+	}
+	missing, err := books.MissingFranchiseMembers(t.Context(), 5, summaries[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, member := range missing {
+		got = append(got, member.Provider+":"+member.ExternalID)
+	}
+	want := []string{ProviderOpenLibrary + ":OL1002W", ProviderOpenLibrary + ":OL1003W", ProviderOpenLibrary + ":OL1004W", ProviderHardcover + ":16", ProviderHardcover + ":15"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("missing = %v, want %v in series order", got, want)
+	}
+	facts := books.FranchiseFacts(t.Context(), []media.FranchiseRef{{ID: summaries[0].ID}})
+	if facts[summaries[0].ID].Total != 6 {
+		t.Errorf("series total = %+v, want 6 books in all", facts)
+	}
+}

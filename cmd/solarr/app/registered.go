@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -648,6 +649,8 @@ func (p *process) bookModule(format book.Format) book.Module {
 		Follow:  &book.Following{Authors: authors, Catalog: catalog},
 		Series: &book.SeriesBooks{
 			Franchises: library.NewFranchises(p.library), Reader: library.NewSeriesReader(p.library), Source: p.wikidataFetcher(), Catalog: catalog,
+			Lister: hardcoverSeries{client: hardcover.New(p.providerClient(providerHardcover, nil, httpx.ClientConfig{}), p.providerKey(settings.BookSourceHardcover))},
+			Titles: library.NewWorks(p.library),
 		},
 		Feed: book.Feed{
 			Format: format, Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(format.MediaType),
@@ -1283,4 +1286,17 @@ func (p *process) bookFeeds(format book.Format) media.Recommending {
 		return append(media.JoinedFeeds{audiblefeeds.Feeds{Charts: audible.New(client, client, nil), Kind: format.MediaType, Clock: clock.NewSystem()}}, joined...)
 	}
 	return joined
+}
+
+// hardcoverSeries lists a series' books from Hardcover, which answers nothing until a key is stored.
+type hardcoverSeries struct{ client hardcover.Client }
+
+// ListSeries implements book.SeriesLister.
+func (h hardcoverSeries) ListSeries(ctx context.Context, name string) ([]book.ListedBook, error) {
+	found, err := h.client.SeriesBooks(ctx, name)
+	listed := make([]book.ListedBook, len(found))
+	for index, one := range found {
+		listed[index] = book.ListedBook{ID: strconv.FormatInt(one.ID, 10), Title: one.Title, Year: one.Year, Position: one.Position}
+	}
+	return listed, err
 }
