@@ -52,8 +52,9 @@ test("a library of several types has each type's pages in its sections", () => {
   expect(sectionAt({ path: "/library/9/wanted" }, "7", kinds)?.key).toBe("library:7:wanted");
 });
 
-test("connections are one section of four tabs at the normal tier; import lists and webhooks stay in settings", () => {
+test("connections are one section: four tabs at the normal tier, import lists and webhooks join at the advanced tier", () => {
   expect(labels(visibleTabs(CONNECTIONS, { tier: "normal", administrator: true }))).toEqual(["Download clients", "Indexers", "Arr apps", "Media servers"]);
   expect(sectionAt({ path: "/connections/indexers/add" }, undefined)?.key).toBe("connections");
-  expect(sectionAt({ path: "/connections/webhooks" }, undefined)?.key).toBe("settings");
+  expect(labels(visibleTabs(CONNECTIONS, { tier: "advanced", administrator: true }))).toEqual(["Download clients", "Indexers", "Arr apps", "Media servers", "Import lists", "Webhooks"]);
+  expect(sectionAt({ path: "/connections/webhooks" }, undefined)?.key).toBe("connections");
 });

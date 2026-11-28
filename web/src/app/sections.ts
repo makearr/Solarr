@@ -43,10 +43,12 @@ export const CONNECTIONS: Section = {
     { label: "Indexers", path: "/connections/indexers", tier: "normal", administrator: true },
     { label: "Arr apps", path: "/connections/arr", tier: "normal", administrator: true },
     { label: "Media servers", path: "/connections/media-servers", tier: "normal", administrator: true },
+    { label: "Import lists", path: "/connections/import-lists", tier: "advanced", administrator: true },
+    { label: "Webhooks", path: "/connections/webhooks", tier: "advanced", administrator: true },
   ],
 };
 
-export const SETTINGS_GROUPS = ["Media", "Connections", "Storage", "System"] as const;
+export const SETTINGS_GROUPS = ["Media", "Storage", "System"] as const;
 export type SettingsGroup = (typeof SETTINGS_GROUPS)[number];
 
 export const SETTINGS: Section = {
@@ -61,8 +63,6 @@ export const SETTINGS: Section = {
     { group: "Media", label: "Player", path: "/settings/player", tier: "normal", administrator: true },
     { group: "Media", label: "Tags", path: "/settings/tags", tier: "normal", administrator: true },
     { group: "Media", label: "Blocklists", path: "/settings/blocklists", tier: "expert", administrator: true },
-    { group: "Connections", label: "Import lists", path: "/connections/import-lists", tier: "advanced", administrator: true },
-    { group: "Connections", label: "Webhooks", path: "/connections/webhooks", tier: "advanced", administrator: true },
     { group: "Storage", label: "Folders", path: "/storage/folders", tier: "advanced", administrator: true },
     { group: "Storage", label: "Import", path: "/storage/import", tier: "advanced", administrator: true },
     { group: "Storage", label: "Duplicates", path: "/storage/duplicates", tier: "advanced", administrator: true },
