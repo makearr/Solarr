@@ -47,6 +47,7 @@ import { WorkCollections } from "./WorkCollections";
 import { WorkSearchTab, runInteractiveKey } from "./WorkSearchTab";
 import { PlayButton } from "../player/PlayButton";
 import { ReadButton } from "../reader/ReadButton";
+import { WorkStart } from "./WorkStart";
 
 type Work = components["schemas"]["WorkDetail"];
 type Group = components["schemas"]["WorkGroup"];
@@ -279,6 +280,7 @@ function WorkHeader({
         image={
           <div className="flex flex-col items-center gap-2">
             <Image shape={shape} title={work.title} src={poster ? remoteImage(poster, "small") : undefined} artwork={poster ? undefined : { subject: "works", id: work.id, size: "full" }} />
+            <WorkStart work={work} categoryId={categoryId} />
             <ChooseImage subject="works" id={work.id} title={work.title} shape={shape} onChosen={changed} />
           </div>
         }
