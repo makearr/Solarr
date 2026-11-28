@@ -45,7 +45,10 @@ type Sampler struct {
 }
 
 // New builds a sampler.
-func New(fsys fsx.FS, c clock.Clock) *Sampler { return &Sampler{fsys: fsys, clock: c} }
+func New(fsys fsx.FS, c clock.Clock) *Sampler {
+	makeReadable()
+	return &Sampler{fsys: fsys, clock: c}
+}
 
 func (s *Sampler) readAll(path string) (string, bool) {
 	file, err := s.fsys.Open(path)

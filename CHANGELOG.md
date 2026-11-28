@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Manage > Statistics > Solarr process shows the read and write figures again (they stayed at zero when the container runs as a media user).
 - The Folders page and the storage statistics now show how much each root folder holds (the capacity sweep never recorded it); the Statistics page has the same margins as the other pages.
 - Manga and hentai libraries open comics in the reader right to left by default.
 - Manage > Statistics > Network also charts the download clients' speed, per client and in all.
