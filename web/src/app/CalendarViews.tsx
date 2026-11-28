@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { t } from "@/lib/i18n";
+import { partLink } from "@/lib/partLink";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -54,9 +55,10 @@ function byDate(entries: readonly CalendarEntry[] | undefined): Map<string, Cale
   return grouped;
 }
 
-/** An episode opens its series page, a release its album page. */
+/** An episode opens that episode on its series page, a release its album page. */
 export function entryTarget(entry: CalendarEntry) {
   if (entry.part_id != null && entry.category_id != null) {
+    if (entry.media_ref) return partLink(entry.work_id, entry.media_ref, String(entry.category_id));
     return {
       to: "/library/$categoryId/works/$workId",
       params: { categoryId: String(entry.category_id), workId: String(entry.work_id) },

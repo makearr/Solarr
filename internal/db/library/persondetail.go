@@ -214,3 +214,27 @@ func (w Works) Pictures(ctx context.Context, workID int64) (map[string]string, e
 	}
 	return pictures, nil
 }
+
+// RatingAges answers the youngest age each work's certification admits; a work with no understood rating is absent.
+func (w Works) RatingAges(ctx context.Context, workIDs []int64) (map[int64]int64, error) {
+	ids := unique(workIDs)
+	ages := make(map[int64]int64, len(ids))
+	if len(ids) == 0 {
+		return ages, nil
+	}
+	fragment, arguments, _ := membershipFragment(
+		"SELECT work_id, MAX(age) FROM work_certification WHERE age >= 0 AND work_id IN (%s) GROUP BY work_id", ids)
+	rows, err := w.store.Read().QueryContext(ctx, fragment, arguments...)
+	if err != nil {
+		return nil, fmt.Errorf("library: ratings of %d works: %w", len(ids), err)
+	}
+	defer rows.Close() //nolint:errcheck // read-only
+	for rows.Next() {
+		var id, age int64
+		if err := rows.Scan(&id, &age); err != nil {
+			return nil, fmt.Errorf("library: scan a work's rating: %w", err)
+		}
+		ages[id] = age
+	}
+	return ages, rows.Err()
+}

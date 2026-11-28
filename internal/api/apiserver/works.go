@@ -171,6 +171,8 @@ type WorkRow struct {
 	PosterURL string
 	// BadgeURL is the logo that marks the work's tile (a series' network) and BadgeName whose it is; empty for none.
 	BadgeURL, BadgeName string
+	// AgeRating is the youngest age the work's certification admits; nil when it has no understood rating.
+	AgeRating *int64
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -449,6 +451,7 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort, now time.Time) gen.
 		}
 		views[index].Facets = &facets
 		views[index].PosterUrl = strPtr(row.PosterURL)
+		views[index].Age = row.AgeRating
 		views[index].BadgeUrl, views[index].BadgeName = strPtr(row.BadgeURL), strPtr(row.BadgeName)
 		views[index].Totals = &struct {
 			Present    int64 `json:"present"`

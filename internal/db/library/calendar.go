@@ -30,6 +30,8 @@ type CalendarEntry struct {
 	// PartID is the episode, zero for a release; CategoryID is the TV library an episode is in.
 	PartID     int64
 	CategoryID int64
+	// MediaRef names the episode inside its series, for a link that opens it.
+	MediaRef string
 	// AirTime is an episode's air moment as Unix seconds, zero when only its date is known.
 	AirTime int64
 }
@@ -90,7 +92,7 @@ func (c Calendar) Entries(
 		}
 		entries = append(entries, CalendarEntry{
 			WorkID: row.WorkID, Title: row.CanonicalTitle, Artist: named,
-			Subtype: subtype, ReleaseDate: row.Date.String, OnDisk: row.OnDisk, PartID: row.PartID, CategoryID: asInt(row.CategoryID), AirTime: row.AvailableAt.Int64,
+			Subtype: subtype, ReleaseDate: row.Date.String, OnDisk: row.OnDisk, PartID: row.PartID, MediaRef: row.MediaRef, CategoryID: asInt(row.CategoryID), AirTime: row.AvailableAt.Int64,
 		})
 	}
 	if len(episodes) > 0 {

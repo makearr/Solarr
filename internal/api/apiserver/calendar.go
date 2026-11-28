@@ -21,6 +21,7 @@ type CalendarRow struct {
 	OnDisk      bool
 	// PartID and CategoryID are set for a TV episode.
 	PartID, CategoryID int64
+	MediaRef           string
 	// AirTime is an episode's air moment as Unix seconds, zero when only its date is known.
 	AirTime int64
 }
@@ -117,6 +118,7 @@ func (s *Server) ListCalendar(w http.ResponseWriter, r *http.Request, params gen
 		}
 		if row.PartID != 0 {
 			view.PartId, view.CategoryId = &row.PartID, &row.CategoryID
+			view.MediaRef = &row.MediaRef
 			if row.AirTime != 0 {
 				airTime := time.Unix(row.AirTime, 0).UTC()
 				view.AirTime = &airTime

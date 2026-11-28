@@ -9155,6 +9155,11 @@ export interface components {
             badge_url?: string;
             /** @description The name of the organisation the badge is the logo of. */
             badge_name?: string;
+            /**
+             * Format: int64
+             * @description The youngest age the work's certification admits (0 to 18); absent when it has no understood rating.
+             */
+            age?: number;
             /** @description An audiobook's readers, comma-joined; absent on any other work. */
             narrators?: string;
             watch?: components["schemas"]["WorkWatch"];
@@ -9562,6 +9567,8 @@ export interface components {
              * @description The TV library an episode is in, for linking to its series.
              */
             category_id?: number;
+            /** @description The episode's reference inside its series (s01e02), for a link that opens it. */
+            media_ref?: string;
             /**
              * Format: date-time
              * @description An episode's air moment, absent when only its date is known.

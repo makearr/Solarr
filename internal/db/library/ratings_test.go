@@ -192,6 +192,19 @@ func TestViewerAge_HoldsOlderAndUnratedWorksExceptInKidsLibraries(t *testing.T) 
 	if err != nil || len(rows) != 4 {
 		t.Fatalf("all works: %v, %v", rows, err)
 	}
+	ids := make([]int64, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+	}
+	ages, err := works.RatingAges(t.Context(), ids)
+	if err != nil || len(ages) != 2 {
+		t.Fatalf("RatingAges = %v, %v; want the two rated works", ages, err)
+	}
+	for _, row := range rows {
+		if age, rated := ages[row.ID]; rated != (row.CanonicalTitle == "Cartoon" || row.CanonicalTitle == "Drama") || (rated && row.CanonicalTitle == "Cartoon" && age != 7) {
+			t.Errorf("%s age = %d, rated %v", row.CanonicalTitle, age, rated)
+		}
+	}
 	for _, row := range rows {
 		held, err := people.WorkHeldFromViewer(t.Context(), row.ID, library.ViewerAge{MaxAge: 13})
 		if err != nil {

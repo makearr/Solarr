@@ -2399,6 +2399,9 @@ type CalendarEntry struct {
 	// CategoryId The TV library an episode is in, for linking to its series.
 	CategoryId *int64 `json:"category_id,omitempty"`
 
+	// MediaRef The episode's reference inside its series (s01e02), for a link that opens it.
+	MediaRef *string `json:"media_ref,omitempty"`
+
 	// OnDisk Whether the library already holds a file for this work.
 	OnDisk bool `json:"on_disk"`
 
@@ -8558,6 +8561,9 @@ type WebhookWrite struct {
 // Work defines model for Work.
 type Work struct {
 	AddedAt time.Time `json:"added_at"`
+
+	// Age The youngest age the work's certification admits (0 to 18); absent when it has no understood rating.
+	Age *int64 `json:"age,omitempty"`
 
 	// Artist The work's own primary artist credit, when it has one. Ordered on by sort=artist.
 	Artist *string `json:"artist,omitempty"`

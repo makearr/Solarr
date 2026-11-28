@@ -173,8 +173,15 @@ func (a Works) fillTypeFields(ctx context.Context, views []apiserver.WorkRow) er
 	if err != nil {
 		return err
 	}
+	ages, err := a.Works.RatingAges(ctx, ids)
+	if err != nil {
+		return err
+	}
 	for i := range views {
 		views[i].PosterURL = posters[views[i].ID]
+		if age, rated := ages[views[i].ID]; rated {
+			views[i].AgeRating = &age
+		}
 	}
 	if a.Facets == nil {
 		return nil
