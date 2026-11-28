@@ -728,7 +728,7 @@ func TestWanted_AnAlbumWithoutATracklistIsWaitingNotMissing(t *testing.T) {
 	if len(page) != 1 || page[0].ID != missing.ID {
 		t.Errorf("wanted page = %+v, want only the album with a tracklist", page)
 	}
-	items, err := library.NewDesired(opened).IncompleteItems(t.Context(), 0, 0, 0, 100)
+	items, err := library.NewDesired(opened).IncompleteItems(t.Context(), 0, 0, 0, 100, library.WantedVideos{})
 	if err != nil {
 		t.Fatalf("IncompleteItems: %v", err)
 	}
@@ -1178,5 +1178,50 @@ func TestListWorks_LinkedKeepsWorksHoldingAProviderIDPrefix(t *testing.T) {
 	}
 	if got := list(); len(got) != 3 {
 		t.Errorf("unfiltered = %v, want all three", got)
+	}
+}
+
+// A video work has no tracklist: it is wanted, listed and searched only where its library switched music videos on.
+func TestWanted_AVideoWorkIsWantedOnlyInALibraryThatSwitchedVideosOn(t *testing.T) {
+	opened, _ := newLibrary(t)
+	video := createWork(t, opened, "music", "Invented Song")
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.UpdateWorkSubtypeIfNull(ctx, librarydb.UpdateWorkSubtypeIfNullParams{Subtype: sql.NullString{String: "Music video", Valid: true}, UpdatedAt: 1, ID: video.ID})
+	})
+	createDesiredInCategory(t, opened, video.ID, 7)
+	subtypes := []string{"Concert video", "Music video"}
+	cases := []struct {
+		name   string
+		videos library.WantedVideos
+		want   []int64
+	}{
+		{"switch off", library.WantedVideos{}, nil},
+		{"another library has it on", library.WantedVideos{CategoryIDs: []int64{8}, Subtypes: subtypes}, nil},
+		{"its library has it on", library.WantedVideos{CategoryIDs: []int64{7}, Subtypes: subtypes}, []int64{video.ID}},
+		{"another subtype", library.WantedVideos{CategoryIDs: []int64{7}, Subtypes: []string{"Concert video"}}, nil},
+	}
+	for _, tc := range cases {
+		page, err := library.NewWorks(opened).List(t.Context(), library.WorkFilter{WantedOnly: true, WantedVideos: tc.videos}, library.WorkCursor{}, 100)
+		if err != nil {
+			t.Fatalf("%s: List: %v", tc.name, err)
+		}
+		var listed []int64
+		for _, row := range page {
+			listed = append(listed, row.ID)
+		}
+		if !slices.Equal(listed, tc.want) {
+			t.Errorf("%s: wanted list = %v, want %v", tc.name, listed, tc.want)
+		}
+		items, err := library.NewDesired(opened).IncompleteItems(t.Context(), 0, 0, 0, 100, tc.videos)
+		if err != nil {
+			t.Fatalf("%s: IncompleteItems: %v", tc.name, err)
+		}
+		var searched []int64
+		for _, item := range items {
+			searched = append(searched, item.WorkID)
+		}
+		if !slices.Equal(searched, tc.want) {
+			t.Errorf("%s: searched = %v, want %v", tc.name, searched, tc.want)
+		}
 	}
 }

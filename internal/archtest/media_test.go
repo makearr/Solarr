@@ -31,6 +31,7 @@ var directWiredMediaFiles = []string{
 	"cmd/solarr/app/fingerprint_retry.go",
 	"cmd/solarr/app/job_artwork.go",
 	"cmd/solarr/app/job_bridge.go",
+	"cmd/solarr/app/job_categorycounts.go",
 	"cmd/solarr/app/job_discography.go",
 	"cmd/solarr/app/job_enrich.go",
 	"cmd/solarr/app/job_import.go",

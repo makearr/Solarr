@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -50,6 +51,9 @@ func (j categoryCountsJob) Run(ctx context.Context, _ jobs.Job) error {
 		}
 		scopes[index] = library.CategoryScope{
 			CategoryID: category.ID, RootFolderIDs: roots, OfflineRootFolderIDs: offline, MediaType: category.MediaType,
+		}
+		if category.MediaType == "music" && category.MusicVideos {
+			scopes[index].WantedVideoSubtypes = music.VideoSubtypes()
 		}
 	}
 

@@ -50,7 +50,9 @@ SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
 ) AS visible
 WHERE EXISTS (SELECT 1 FROM desired_item di
               WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL'))
-  AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id)
+  AND (EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id)
+       OR (sqlc.arg(wants_videos) = 1 AND EXISTS (SELECT 1 FROM work vw
+           WHERE vw.id = visible.work_id AND vw.subtype IN (SELECT value FROM json_each(sqlc.arg(video_subtypes))))))
   AND (sqlc.arg(media_type) = '' OR EXISTS (SELECT 1 FROM work WHERE work.id = visible.work_id AND work.media_type = sqlc.arg(media_type)));
 
 -- The "parts" count for one category (ADR-54's work_part-entity navigation levels,

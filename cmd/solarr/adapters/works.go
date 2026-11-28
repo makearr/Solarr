@@ -27,6 +27,15 @@ type Works struct {
 	MediaTypeOf func(categoryID int64) (string, bool)
 	// RatingLimit answers a library's maximum rating, false when it has none; nil filters nothing by rating.
 	RatingLimit func(categoryID int64) (library.RatingLimit, bool)
+	// WantedVideos answers the video works the Wanted list includes; nil includes none.
+	WantedVideos func() library.WantedVideos
+}
+
+func (a Works) wantedVideos() library.WantedVideos {
+	if a.WantedVideos == nil {
+		return library.WantedVideos{}
+	}
+	return a.WantedVideos()
 }
 
 // aboveRating is the list's Above rating filter for the one library it shows; a library without a limit holds
@@ -89,6 +98,7 @@ func (a Works) ListWorks(
 			FreshSince:      freshSince,
 			FreshRSSSince:   freshRSSSince,
 			WantedOnly:      filter.Wanted,
+			WantedVideos:    a.wantedVideos(),
 			CutoffUnmetOnly: filter.CutoffUnmet,
 			Status:          filter.Status,
 			Now:             a.Clock.Now().Unix(),

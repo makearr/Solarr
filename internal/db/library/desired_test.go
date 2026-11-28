@@ -253,7 +253,7 @@ func TestDesired_CountIncompleteAndIncompleteItems(t *testing.T) {
 		t.Errorf("CountIncomplete = %d, want 2 (missing + partial, not complete or unmonitored)", count)
 	}
 
-	items, err := desired.IncompleteItems(t.Context(), 0, 0, 0, 10)
+	items, err := desired.IncompleteItems(t.Context(), 0, 0, 0, 10, library.WantedVideos{})
 	if err != nil {
 		t.Fatalf("IncompleteItems: %v", err)
 	}
@@ -510,7 +510,7 @@ func TestDesired_IncompleteItemsForOnePerson(t *testing.T) {
 		})
 	}
 
-	items, err := library.NewDesired(opened).IncompleteItems(t.Context(), 0, heka, 0, 10)
+	items, err := library.NewDesired(opened).IncompleteItems(t.Context(), 0, heka, 0, 10, library.WantedVideos{})
 	if err != nil || len(items) != 1 || items[0].WorkID != hers.ID {
 		t.Errorf("IncompleteItems(Heka) = %+v, %v; want only Zanuvode", items, err)
 	}

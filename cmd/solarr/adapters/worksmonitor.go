@@ -19,6 +19,8 @@ import (
 
 // WorksMonitor satisfies apiserver.WorksMonitor over library.Desired, resolving category and profile as music.SubscriptionExpandJob does, since a work page has no root folder to derive one from.
 type WorksMonitor struct {
+	// WantedVideos answers the video works the Wanted list includes; nil includes none.
+	WantedVideos func() library.WantedVideos
 	// RatingLimit answers a library's maximum rating, for a selection made under Above rating; nil filters nothing.
 	RatingLimit func(categoryID int64) (library.RatingLimit, bool)
 	Works       library.Works
@@ -310,7 +312,7 @@ func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.B
 		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
 	}
 	filter := library.WorkFilter{
-		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, WantedOnly: selection.Wanted, CutoffUnmetOnly: selection.CutoffUnmet,
+		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, WantedOnly: selection.Wanted, WantedVideos: a.wantedVideoWorks(), CutoffUnmetOnly: selection.CutoffUnmet,
 		Where: where, TagIDs: selection.TagIDs, ExcludedTagIDs: selection.ExcludedTagIDs,
 		AboveRating: aboveRating(selection.AboveRating, categoryIDs, a.RatingLimit), MediaType: selection.MediaType, OwnProfileOnly: selection.OwnProfile,
 		PersonID: selection.PersonID, FavoriteUserID: selection.FavoriteUserID,
@@ -457,4 +459,11 @@ func (a WorksMonitor) RemovePart(
 		result.FilesRecycled = 1
 	}
 	return result, nil
+}
+
+func (a WorksMonitor) wantedVideoWorks() library.WantedVideos {
+	if a.WantedVideos == nil {
+		return library.WantedVideos{}
+	}
+	return a.WantedVideos()
 }

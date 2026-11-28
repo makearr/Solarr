@@ -1057,20 +1057,25 @@ FROM desired_item d
 JOIN work w ON w.id = d.work_id
 WHERE d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
   -- An album whose tracks are not known yet may be complete on disk: never searched for (2026-09-28).
-  AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = d.work_id)
-  AND (CAST(?1 AS INTEGER) = 0 OR d.category_id = ?1)
-  AND (CAST(?2 AS INTEGER) = 0 OR EXISTS (
-    SELECT 1 FROM credit c WHERE c.work_id = d.work_id AND c.person_id = ?2))
-  AND d.id > ?3
+  -- A video work has no tracklist: it is wanted only in a library that switched music videos on.
+  AND (EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = d.work_id)
+       OR (d.category_id IN (SELECT value FROM json_each(?1))
+           AND w.subtype IN (SELECT value FROM json_each(?2))))
+  AND (CAST(?3 AS INTEGER) = 0 OR d.category_id = ?3)
+  AND (CAST(?4 AS INTEGER) = 0 OR EXISTS (
+    SELECT 1 FROM credit c WHERE c.work_id = d.work_id AND c.person_id = ?4))
+  AND d.id > ?5
 ORDER BY d.id
-LIMIT ?4
+LIMIT ?6
 `
 
 type ListIncompleteDesiredItemsParams struct {
-	CategoryID int64
-	PersonID   int64
-	AfterID    int64
-	PageSize   int64
+	VideoCategoryIds interface{}
+	VideoSubtypes    interface{}
+	CategoryID       int64
+	PersonID         int64
+	AfterID          int64
+	PageSize         int64
 }
 
 type ListIncompleteDesiredItemsRow struct {
@@ -1090,6 +1095,8 @@ type ListIncompleteDesiredItemsRow struct {
 // wanted, a different report from "missing" entirely.
 func (q *Queries) ListIncompleteDesiredItems(ctx context.Context, arg ListIncompleteDesiredItemsParams) ([]ListIncompleteDesiredItemsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listIncompleteDesiredItems,
+		arg.VideoCategoryIds,
+		arg.VideoSubtypes,
 		arg.CategoryID,
 		arg.PersonID,
 		arg.AfterID,

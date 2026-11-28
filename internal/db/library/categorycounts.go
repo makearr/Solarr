@@ -21,6 +21,8 @@ type CategoryScope struct {
 	MediaType string
 	// OfflineRootFolderIDs is the subset of RootFolderIDs settings.db declares offline (section 10.4), composed in Go (ADR-25); "files" stays the true total and "files_offline" counts the unreachable part (todo 4.18).
 	OfflineRootFolderIDs []int64
+	// WantedVideoSubtypes are the video subtypes the library's wanted count includes; nil when it did not switch videos on.
+	WantedVideoSubtypes []string
 }
 
 // CategoryCounters recomputes works, works_wanted, files, files_offline, parts and artists per category. Files group library_path by root; the others read the root-or-desired union with one distinct count per scope, since summing the two sides would double-count; parts and artists back ADR-54's level counts.
@@ -108,8 +110,14 @@ func (c CategoryCounters) reconcileScope(
 	if err != nil {
 		return nil, fmt.Errorf("count parts: %w", err)
 	}
+	wantedVideos := WantedVideos{Subtypes: scope.WantedVideoSubtypes}
+	_, videoSubtypes, err := wantedVideos.encoded()
+	if err != nil {
+		return nil, err
+	}
 	wanted, err := reader.CountWantedWorksVisibleToCategory(ctx, librarydb.CountWantedWorksVisibleToCategoryParams{
 		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID, MediaType: scope.MediaType,
+		WantsVideos: boolToInt(len(scope.WantedVideoSubtypes) > 0), VideoSubtypes: videoSubtypes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("count wanted works: %w", err)

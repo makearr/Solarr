@@ -55,20 +55,30 @@ SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
 ) AS visible
 WHERE EXISTS (SELECT 1 FROM desired_item di
               WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL'))
-  AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id)
-  AND (?3 = '' OR EXISTS (SELECT 1 FROM work WHERE work.id = visible.work_id AND work.media_type = ?3))
+  AND (EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id)
+       OR (?3 = 1 AND EXISTS (SELECT 1 FROM work vw
+           WHERE vw.id = visible.work_id AND vw.subtype IN (SELECT value FROM json_each(?4)))))
+  AND (?5 = '' OR EXISTS (SELECT 1 FROM work WHERE work.id = visible.work_id AND work.media_type = ?5))
 `
 
 type CountWantedWorksVisibleToCategoryParams struct {
 	RootFolderIds interface{}
 	CategoryID    int64
+	WantsVideos   interface{}
+	VideoSubtypes interface{}
 	MediaType     interface{}
 }
 
 // The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 // have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 func (q *Queries) CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countWantedWorksVisibleToCategory, arg.RootFolderIds, arg.CategoryID, arg.MediaType)
+	row := q.db.QueryRowContext(ctx, countWantedWorksVisibleToCategory,
+		arg.RootFolderIds,
+		arg.CategoryID,
+		arg.WantsVideos,
+		arg.VideoSubtypes,
+		arg.MediaType,
+	)
 	var total int64
 	err := row.Scan(&total)
 	return total, err

@@ -111,6 +111,8 @@ type WorkFilter struct {
 	Direction SortDirection
 	// WantedOnly restricts to works with a monitored desired_item not yet COMPLETE (todo 4.13 Wanted screen), reusing this list's pagination, sort and visibility.
 	WantedOnly bool
+	// WantedVideos are the video works the wanted list includes without a tracklist.
+	WantedVideos WantedVideos
 	// CutoffUnmetOnly restricts to works whose monitored album falls short of its cutoff (M1d, Lidarr's
 	// Wanted -> Cutoff Unmet).
 	CutoffUnmetOnly bool
@@ -267,9 +269,13 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		WorkDateStreet, filter.FreshSince, filter.FreshRSSSince)
 	// A work with no tracks yet is waiting for metadata, not missing: Lidarr never calls an album
 	// missing before it knows its tracks (answered 2026-09-28).
-	predicates.AddIf(filter.WantedOnly,
-		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL'))"+
-			" AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = work.id)")
+	if filter.WantedOnly {
+		videoCategories, videoSubtypes, _ := filter.WantedVideos.encoded()
+		predicates.Add("EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL')"+
+			" AND (EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = work.id)"+
+			" OR (work.subtype IN (SELECT value FROM json_each(?)) AND di.category_id IN (SELECT value FROM json_each(?)))))",
+			videoSubtypes, videoCategories)
+	}
 	addStatus(&predicates, filter.Status, filter.Now)
 	predicates.AddIf(filter.CutoffUnmetOnly,
 		"EXISTS (SELECT 1 FROM desired_item cu WHERE cu.work_id = work.id AND cu.monitored = 1 AND cu.state = 'UPGRADABLE')")

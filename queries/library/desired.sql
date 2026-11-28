@@ -333,7 +333,10 @@ FROM desired_item d
 JOIN work w ON w.id = d.work_id
 WHERE d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
   -- An album whose tracks are not known yet may be complete on disk: never searched for (2026-09-28).
-  AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = d.work_id)
+  -- A video work has no tracklist: it is wanted only in a library that switched music videos on.
+  AND (EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = d.work_id)
+       OR (d.category_id IN (SELECT value FROM json_each(sqlc.arg(video_category_ids)))
+           AND w.subtype IN (SELECT value FROM json_each(sqlc.arg(video_subtypes)))))
   AND (CAST(sqlc.arg(category_id) AS INTEGER) = 0 OR d.category_id = sqlc.arg(category_id))
   AND (CAST(sqlc.arg(person_id) AS INTEGER) = 0 OR EXISTS (
     SELECT 1 FROM credit c WHERE c.work_id = d.work_id AND c.person_id = sqlc.arg(person_id)))

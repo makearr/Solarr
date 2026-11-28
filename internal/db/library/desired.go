@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -945,11 +946,43 @@ func (d Desired) CountIncomplete(ctx context.Context, categoryID int64) (int64, 
 	return total, nil
 }
 
+// WantedVideos names the video works a wanted list includes though they have no tracklist: those of these subtypes in
+// libraries that switched music videos on. The zero value includes none.
+type WantedVideos struct {
+	CategoryIDs []int64
+	Subtypes    []string
+}
+
+// encoded is both lists as the JSON arrays the queries read; nil lists are empty arrays, never NULL.
+func (v WantedVideos) encoded() (categories, subtypes string, err error) {
+	categoryIDs, subtypeNames := v.CategoryIDs, v.Subtypes
+	if categoryIDs == nil {
+		categoryIDs = []int64{}
+	}
+	if subtypeNames == nil {
+		subtypeNames = []string{}
+	}
+	encodedCategories, err := json.Marshal(categoryIDs)
+	if err != nil {
+		return "", "", fmt.Errorf("encode video library ids: %w", err)
+	}
+	encodedSubtypes, err := json.Marshal(subtypeNames)
+	if err != nil {
+		return "", "", fmt.Errorf("encode video subtypes: %w", err)
+	}
+	return string(encodedCategories), string(encodedSubtypes), nil
+}
+
 // IncompleteItems pages through every monitored MISSING/PARTIAL item, oldest id first. A zero
 // categoryID means every category, a zero personID every artist.
-func (d Desired) IncompleteItems(ctx context.Context, categoryID, personID, afterID int64, pageSize int64) ([]IncompleteItem, error) {
+func (d Desired) IncompleteItems(ctx context.Context, categoryID, personID, afterID int64, pageSize int64, videos WantedVideos) ([]IncompleteItem, error) {
+	videoCategories, videoSubtypes, err := videos.encoded()
+	if err != nil {
+		return nil, err
+	}
 	rows, err := librarydb.New(d.store.Read()).ListIncompleteDesiredItems(ctx, librarydb.ListIncompleteDesiredItemsParams{
 		CategoryID: categoryID, PersonID: personID, AfterID: afterID, PageSize: pageSize,
+		VideoCategoryIds: videoCategories, VideoSubtypes: videoSubtypes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list incomplete desired items: %w", err)

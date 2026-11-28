@@ -176,7 +176,7 @@ func (j *SearchCategoryJob) grabIncomplete(
 		if payload.CutoffUnmet {
 			items, err = j.grab.Search.Desired.UpgradableItems(ctx, payload.CategoryID, afterID, searchCategoryPageSize)
 		} else {
-			items, err = j.grab.Search.Desired.IncompleteItems(ctx, payload.CategoryID, payload.PersonID, afterID, searchCategoryPageSize)
+			items, err = j.grab.Search.Desired.IncompleteItems(ctx, payload.CategoryID, payload.PersonID, afterID, searchCategoryPageSize, j.wantedVideos())
 		}
 		if err != nil {
 			return fmt.Errorf("music: search category %d: list items: %w", payload.CategoryID, err)
@@ -192,6 +192,14 @@ func (j *SearchCategoryJob) grabIncomplete(
 			return nil
 		}
 	}
+}
+
+// wantedVideos is the video works the walk includes, none while settings are not wired.
+func (j *SearchCategoryJob) wantedVideos() library.WantedVideos {
+	if j.grab.Search.Settings == nil {
+		return library.WantedVideos{}
+	}
+	return WantedVideosOf(j.grab.Search.Settings.Snapshot())
 }
 
 func (j *SearchCategoryJob) grabOne(

@@ -943,7 +943,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Works: adapters.Works{
 			Works: library.NewWorks(p.library), Clock: clock.NewSystem(), Fresh: p.freshWindow,
 			Facets: adapters.MediaTypes{Registry: p.media}.WorkFacets, MediaTypeOf: adapters.Categories{Cache: p.cache}.MediaTypeOf,
-			RatingLimit: p.ratingLimit,
+			RatingLimit: p.ratingLimit, WantedVideos: p.wantedVideos,
 		},
 		WorkDetail: adapters.WorkDetail{
 			Works: library.NewWorks(p.library), SearchStatus: p.searchStatus,
@@ -1259,8 +1259,8 @@ func (p *process) reportRootFolders() {
 // look for one.
 func (p *process) worksMonitor() adapters.WorksMonitor {
 	return adapters.WorksMonitor{
-		RatingLimit: p.ratingLimit,
-		Identity:    library.NewIdentity(p.library), Works: library.NewWorks(p.library),
+		RatingLimit: p.ratingLimit, WantedVideos: p.wantedVideos,
+		Identity: library.NewIdentity(p.library), Works: library.NewWorks(p.library),
 		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
 		Libraries: adapters.Categories{Cache: p.cache}, Remover: p.fileRemover(),
 		DefaultProfileID: p.defaultQualityProfileID, ProfileFor: adapters.Categories{Cache: p.cache}.ProfileFor,
@@ -1428,4 +1428,9 @@ func (p *process) systemHealth() adapters.SystemHealth {
 			return jobs.CadenceInterval(p.cache.Snapshot().ScheduleCadences("backup", backupScheduleCron), backupScheduleCron, now)
 		},
 	}
+}
+
+// wantedVideos is the video works the Wanted list includes: those of the libraries that switched music videos on.
+func (p *process) wantedVideos() library.WantedVideos {
+	return music.WantedVideosOf(p.cache.Snapshot())
 }

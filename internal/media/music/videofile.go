@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
@@ -108,4 +110,18 @@ func videoSubtype(libraryKind string, duration time.Duration) string {
 	default:
 		return SubtypeMusicVideo
 	}
+}
+
+// WantedVideosOf names the video works the wanted lists include: those of every music library that switched videos on.
+func WantedVideosOf(snapshot *settings.Snapshot) library.WantedVideos {
+	var videos library.WantedVideos
+	for _, category := range snapshot.Categories() {
+		if category.MediaType == "music" && category.MusicVideos {
+			videos.CategoryIDs = append(videos.CategoryIDs, category.ID)
+		}
+	}
+	if len(videos.CategoryIDs) > 0 {
+		videos.Subtypes = VideoSubtypes()
+	}
+	return videos
 }

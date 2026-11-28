@@ -62,7 +62,7 @@ func (a LibraryHealth) Report(ctx context.Context) (apiserver.LibraryHealthRepor
 	if err != nil {
 		return apiserver.LibraryHealthReport{}, fmt.Errorf("library health: incomplete count: %w", err)
 	}
-	incomplete, err := a.Desired.IncompleteItems(ctx, 0, 0, 0, healthSampleSize)
+	incomplete, err := a.Desired.IncompleteItems(ctx, 0, 0, 0, healthSampleSize, library.WantedVideos{})
 	if err != nil {
 		return apiserver.LibraryHealthReport{}, fmt.Errorf("library health: incomplete sample: %w", err)
 	}
