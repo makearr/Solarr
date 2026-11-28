@@ -18,6 +18,7 @@ func (p *process) registerCapacityJob(registry *jobs.Registry, executor *jobs.Ex
 	}
 	job := capacity.NewJob(capacity.Config{
 		FS: p.fsys, Cache: p.cache, Clock: clock.NewSystem(), Logger: p.logger, Idle: p.diskTurns.rootIdle,
+		LibraryBytes: library.NewPhysical(p.library).LibraryBytes,
 	})
 	executor.Handle(capacity.JobType, job)
 	if err := registry.Register(capacity.ReachDefinition); err != nil {

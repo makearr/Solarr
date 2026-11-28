@@ -120,7 +120,7 @@ export function SystemStatistics() {
   const nameOf = (id: string) => categories.data?.find((category) => String(category.id) === id)?.name ?? id;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <PageHeader title={t("nav.statistics")} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div role="tablist" className="flex flex-wrap gap-1 border-b border-border-subtle text-sm">
