@@ -153,7 +153,7 @@ export function Gauge({ label, value, max, format, note }: { label: string; valu
     <figure className="flex flex-col items-center gap-0.5 rounded-lg border border-border-subtle bg-surface p-3">
       <svg viewBox="0 0 100 58" role="img" aria-label={`${label} ${value === undefined ? "-" : formatValue(value, format)}`} className="w-full max-w-40">
         <path d={`M${point(0)} A${ARC / 2},${ARC / 2} 0 0 1 ${point(1)}`} fill="none" className="stroke-border-subtle" strokeWidth="9" strokeLinecap="round" />
-        {share > 0 && <path d={`M${point(0)} A${ARC / 2},${ARC / 2} 0 ${share > 0.5 ? 1 : 0} 1 ${point(share)}`} fill="none" className="stroke-accent" strokeWidth="9" strokeLinecap="round" />}
+        {share > 0 && <path d={`M${point(0)} A${ARC / 2},${ARC / 2} 0 0 1 ${point(share)}`} fill="none" className="stroke-accent" strokeWidth="9" strokeLinecap="round" />}
         <text x="50" y="50" textAnchor="middle" className="fill-current text-[11px] font-semibold tabular-nums">{value === undefined ? "-" : formatValue(value, format)}</text>
       </svg>
       <figcaption className="text-center text-xs text-ink-muted">
