@@ -129,6 +129,20 @@ func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspec
 	return p.config.Resolver.Resolve(ctx, request.CategoryID, ev)
 }
 
+// ResolveByName implements works.UnitPlacer: the series from the first file's name and folders, without opening the archive.
+func (p placing) ResolveByName(ctx context.Context, request batch.Request, unit inspect.Unit) (int64, []model.Identification) {
+	files := comicFiles(unit)
+	if len(files) == 0 {
+		return 0, nil
+	}
+	ev := evidenceOfPath(files[0].RelPath, Facts{})
+	if titleKey(ev.Series) == "" || ev.Series == "." || ev.Series == "/" {
+		extra := EvidenceOf(nil, downloadClaims(request)...)
+		ev.Series = extra.Series
+	}
+	return p.config.Resolver.Resolve(ctx, request.CategoryID, ev)
+}
+
 // ResolveNamed implements works.UnitPlacer: an id of the type's providers a person named.
 func (p placing) ResolveNamed(ctx context.Context, categoryID int64, named batch.Named) (int64, error) {
 	if !slices.Contains(allProviders, named.Provider) {

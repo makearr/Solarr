@@ -136,3 +136,7 @@ func TestCommitCluster_ALaterTypesFailureKeepsTheEarlierUnitAndHoldsItsOwn(t *te
 		t.Errorf("units = %v, want %v", got, want)
 	}
 }
+
+func (typedImporter) NameMatches(_ context.Context, request importbatch.Request) []importbatch.NameMatch {
+	return make([]importbatch.NameMatch, len(request.Units))
+}

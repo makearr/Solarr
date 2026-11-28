@@ -51,6 +51,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 			}
 			return ""
 		},
+		WorkTitle:       library.NewWorks(p.library).TitleOf,
 		Libraries:       p.suggester().ImportLibraries,
 		Tracked:         p.trackedDownloadAt,
 		Acquisitions:    library.NewAcquisitions(p.library),

@@ -85,6 +85,23 @@ func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspec
 	return 0, candidates
 }
 
+// ResolveByName implements works.UnitPlacer: Resolve without the file's fingerprint.
+func (p placing) ResolveByName(ctx context.Context, request batch.Request, unit inspect.Unit) (int64, []model.Identification) {
+	file := works.LargestFile(unit.Media)
+	if file == nil {
+		return 0, nil
+	}
+	if info, parsed := parseadult.ParsePath(file.RelPath); parsed {
+		if workID, found := p.config.Resolver.Resolve(ctx, request.CategoryID, info, ""); workID != 0 {
+			return workID, found
+		}
+	}
+	if release, ok := parseadult.ParseName(path.Base(path.Join(request.SourcePath, unit.Directory))); ok {
+		return p.config.Resolver.Resolve(ctx, request.CategoryID, release, "")
+	}
+	return 0, nil
+}
+
 // ResolveNamed implements works.UnitPlacer: a film's id adds the film, a scene's finds the scene.
 func (p placing) ResolveNamed(ctx context.Context, categoryID int64, named batch.Named) (int64, error) {
 	if named.Provider == ProviderFilm {

@@ -119,6 +119,10 @@ type Job struct {
 	// provisional holds, per running session, the units the listing pass recorded that the identifying pass has not replaced yet.
 	provisionalMu sync.Mutex
 	provisional   map[int64]map[string]int64
+	// nameMatches holds, per running session and unit folder, what the name stage matched, for the identifying pass to confirm.
+	nameMatches map[int64]map[string]importbatch.NameMatch
+	// workTitle shows a matched work by its title; nil shows none.
+	workTitle func(ctx context.Context, workID int64) (string, error)
 }
 
 // Config is what a Job needs. Every field is required except MediaTypeOf, Libraries, Workspace, ArchiveLimits, Events,
@@ -148,10 +152,12 @@ type Config struct {
 	ArchiveLimits archive.Limits
 	// MaxArchiveBytes reads the administrator's largest archive each time one is opened; nil keeps the limits' own.
 	MaxArchiveBytes func() int64
-	Events          *events.Bus
-	OnCommitted     func(context.Context)
-	Clock           clock.Clock
-	Logger          *slog.Logger
+	// WorkTitle names a work for the name stage's provisional match; nil shows the match without a title.
+	WorkTitle   func(ctx context.Context, workID int64) (string, error)
+	Events      *events.Bus
+	OnCommitted func(context.Context)
+	Clock       clock.Clock
+	Logger      *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -165,7 +171,7 @@ func NewJob(config Config) *Job {
 		workspace: config.Workspace, recycleArchive: config.RecycleArchive, archiveLimits: config.ArchiveLimits, maxArchive: config.MaxArchiveBytes,
 		importers: config.Importers, mediaTypeOf: config.MediaTypeOf, unassigned: config.Unassigned, libraries: config.Libraries,
 		tracked: config.Tracked, events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
-		releases: releaseNotes{acquisitions: config.Acquisitions, clock: config.Clock},
+		releases: releaseNotes{acquisitions: config.Acquisitions, clock: config.Clock}, workTitle: config.WorkTitle,
 	}
 }
 
@@ -766,6 +772,7 @@ func (j *Job) commitCluster(
 			request.Units = append(request.Units, routes[i].unit)
 			request.UnitIDs = append(request.UnitIDs, ids[i])
 		}
+		request.Names = j.namesOf(sessionID, request.Units)
 		result, err := group.importer.ImportBatch(ctx, request)
 		if err != nil {
 			j.abandonUnrecorded(ctx, sessionID, ids, groups[position:], recordedAny, err)
@@ -997,18 +1004,17 @@ func (j *Job) walkOptions(payload Payload) inspect.WalkOptions {
 }
 
 // listFirst records every unit the folder holds by what a listing shows (folders and file names, no tag or content read)
-// before the identifying pass starts, so the whole batch is visible as "identifying" at once. A failure only costs that
-// early view: the identifying pass finds the same units.
+// before the identifying pass starts, so the whole batch is visible as "identifying" at once, then names each one from
+// its names alone. A failure only costs that early view: the identifying pass finds the same units.
 func (j *Job) listFirst(ctx context.Context, sessionID int64, payload Payload) {
 	options := j.walkOptions(payload)
-	if options.TagsFor == nil {
-		return
-	}
 	options.TagsFor = nil
 	if stale, err := j.sessions.ProvisionalUnits(ctx, sessionID); err == nil && len(stale) > 0 {
 		_ = j.sessions.DeleteUnits(ctx, sessionID, slices.Collect(maps.Values(stale)))
 	}
 	found := map[string]int64{}
+	var listed []inspect.Unit
+	var listedIDs []int64
 	_, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{}, options,
 		func(ctx context.Context, batch []inspect.Unit) error {
 			units := make([]library.NewUnit, len(batch))
@@ -1038,6 +1044,8 @@ func (j *Job) listFirst(ctx context.Context, sessionID int64, payload Payload) {
 				}
 				found[batch[i].Directory] = id
 			}
+			listed = append(listed, batch...)
+			listedIDs = append(listedIDs, ids...)
 			j.provisionalMu.Lock()
 			if j.provisional == nil {
 				j.provisional = map[int64]map[string]int64{}
@@ -1049,7 +1057,100 @@ func (j *Job) listFirst(ctx context.Context, sessionID int64, payload Payload) {
 	if err != nil {
 		j.logger.Warn("import listing pass failed; identifying goes on without it",
 			slog.Int64("session_id", sessionID), slog.Any("error", err))
+		return
 	}
+	j.nameStage(ctx, sessionID, payload, listed, listedIDs)
+}
+
+// nameStageChunk is how many units one name-matching call takes, so the first matches show while the rest still wait.
+const nameStageChunk = 40
+
+// nameStage matches the listed units to works by name alone, shows each match of at least batch.NameMatchFloor on its
+// provisional unit, and keeps it for the identifying pass, which commits only when the files agree.
+func (j *Job) nameStage(ctx context.Context, sessionID int64, payload Payload, listed []inspect.Unit, ids []int64) {
+	if payload.CategoryID == nil || len(listed) == 0 {
+		return
+	}
+	importer, _ := j.importerFor(payload.CategoryID)
+	if importer == nil {
+		return
+	}
+	session, err := j.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return
+	}
+	for from := 0; from < len(listed); from += nameStageChunk {
+		to := min(from+nameStageChunk, len(listed))
+		request := importbatch.Request{
+			SessionID: sessionID, CategoryID: *payload.CategoryID, AcquisitionID: session.AcquisitionID,
+			SourcePath: payload.SourcePath, Units: listed[from:to], UnitIDs: ids[from:to], Threshold: session.Threshold,
+		}
+		var shown []library.UnitDecision
+		for k, match := range importer.NameMatches(ctx, request) {
+			if !match.Matched() {
+				continue
+			}
+			unit := listed[from+k]
+			j.provisionalMu.Lock()
+			if j.nameMatches == nil {
+				j.nameMatches = map[int64]map[string]importbatch.NameMatch{}
+			}
+			if j.nameMatches[sessionID] == nil {
+				j.nameMatches[sessionID] = map[string]importbatch.NameMatch{}
+			}
+			j.nameMatches[sessionID][unit.Directory] = match
+			j.provisionalMu.Unlock()
+			shown = append(shown, j.provisionalDecision(ctx, ids[from+k], match))
+		}
+		if err := j.sessions.SetUnitDecisions(ctx, sessionID, shown); err != nil {
+			j.logger.Warn("import name stage could not show its matches", slog.Int64("session_id", sessionID), slog.Any("error", err))
+			return
+		}
+		if ctx.Err() != nil {
+			return
+		}
+	}
+}
+
+// provisionalDecision is a unit still being identified, carrying the work its names matched.
+func (j *Job) provisionalDecision(ctx context.Context, unitID int64, match importbatch.NameMatch) library.UnitDecision {
+	title := match.Title
+	if title == "" && match.WorkID != 0 && j.workTitle != nil {
+		title, _ = j.workTitle(ctx, match.WorkID)
+	}
+	candidates := match.Candidates
+	if len(candidates) == 0 || match.Title == "" {
+		candidates = []model.Identification{{
+			Strategy: "parse", ExternalID: match.External, Precedence: model.PrecedenceSearched, Confidence: match.Confidence,
+			Evidence: []model.MatchEvidence{{Kind: "parse", Detail: title}},
+		}}
+	}
+	decision := library.UnitDecision{
+		UnitID: unitID, Decision: library.UnitQueue, Confidence: match.Confidence, Reason: model.ReasonIdentifying,
+	}
+	if match.WorkID != 0 {
+		workID := match.WorkID
+		decision.WorkID = &workID
+	}
+	if encoded, err := json.Marshal(candidates); err == nil {
+		decision.CandidatesJSON = string(encoded)
+	}
+	return decision
+}
+
+// namesOf is what the name stage matched each unit of a group to, nothing for a unit it matched to nothing.
+func (j *Job) namesOf(sessionID int64, units []inspect.Unit) []importbatch.NameMatch {
+	j.provisionalMu.Lock()
+	defer j.provisionalMu.Unlock()
+	known := j.nameMatches[sessionID]
+	if len(known) == 0 {
+		return nil
+	}
+	names := make([]importbatch.NameMatch, len(units))
+	for index, unit := range units {
+		names[index] = known[unit.Directory]
+	}
+	return names
 }
 
 // replaceProvisional removes the provisional units of the folders a cluster is about to record for real, so the
@@ -1075,6 +1176,7 @@ func (j *Job) dropProvisional(sessionID int64) {
 	j.provisionalMu.Lock()
 	left := j.provisional[sessionID]
 	delete(j.provisional, sessionID)
+	delete(j.nameMatches, sessionID)
 	j.provisionalMu.Unlock()
 	if len(left) == 0 {
 		return

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -1398,5 +1399,74 @@ func TestJob_ListsEveryFolderAsIdentifyingBeforeReadingAnyFile(t *testing.T) {
 	}
 	if len(units) != 3 {
 		t.Errorf("units after the run = %d, want 3", len(units))
+	}
+}
+
+// namingImporter matches every unit below "Show" to work 5 by name and records what the name stage showed and handed on.
+type namingImporter struct {
+	sessions library.ImportSessions
+	shown    *library.Unit
+	names    map[string]int64
+}
+
+func (n *namingImporter) NameMatches(_ context.Context, request batch.Request) []batch.NameMatch {
+	matches := make([]batch.NameMatch, len(request.Units))
+	for index, unit := range request.Units {
+		if strings.HasPrefix(unit.Directory, "Show") {
+			matches[index] = batch.NameMatch{WorkID: 5, Confidence: 1}
+		}
+	}
+	return matches
+}
+
+func (n *namingImporter) ImportBatch(ctx context.Context, request batch.Request) (batch.Result, error) {
+	units, _ := n.sessions.ListUnits(ctx, request.SessionID)
+	for _, unit := range units {
+		if unit.Reason == model.ReasonIdentifying && strings.HasPrefix(unit.RelPath, "Show") && n.shown == nil {
+			shown := unit
+			n.shown = &shown
+		}
+	}
+	result := batch.Result{Placements: make([]*library.Placement, len(request.Units))}
+	for index, unit := range request.Units {
+		if n.names == nil {
+			n.names = map[string]int64{}
+		}
+		n.names[unit.Directory] = request.NameOf(index).WorkID
+		result.Decisions = append(result.Decisions, library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitCommit, Confidence: 1})
+	}
+	return result, nil
+}
+
+// A unit whose names match a work shows it while its files are still unread, and the importer is told what the names said.
+func TestJob_ShowsTheNameMatchOfAFolderBeforeItsFilesAreIdentified(t *testing.T) {
+	fx := newFixture(t, "Other/Season 1/e01.mkv", "Show/Season 1/e01.mkv")
+	named := &namingImporter{sessions: fx.sessions()}
+	catID := int64(7)
+	if err := fx.store.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO work (id, media_type, canonical_title, sort_title, added_at, updated_at) VALUES (5, 'tv', 'A Show', 'a show', 0, 0)`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: fx.sessions(), Policy: fixedPolicy(0.9),
+		Importers: map[string]batch.Importer{"tv": named}, MediaTypeOf: func(int64) string { return "tv" },
+		WorkTitle: func(context.Context, int64) (string, error) { return "A Show", nil },
+		Packs:     library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if named.shown == nil || named.shown.WorkID == nil || *named.shown.WorkID != 5 || !strings.Contains(named.shown.CandidatesJSON, "A Show") {
+		t.Errorf("provisional unit while identifying = %+v, want work 5 titled A Show", named.shown)
+	}
+	for directory, workID := range named.names {
+		if want := map[bool]int64{true: 5, false: 0}[strings.HasPrefix(directory, "Show")]; workID != want {
+			t.Errorf("name match handed to the importer for %q = %d, want %d", directory, workID, want)
+		}
+	}
+	if len(named.names) != 2 {
+		t.Errorf("units imported = %v, want both", named.names)
 	}
 }

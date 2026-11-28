@@ -73,6 +73,19 @@ func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspec
 	return p.config.Resolver.Resolve(ctx, request.CategoryID, info, NFOIDs(p.config.FS, path.Join(request.SourcePath, file.RelPath)))
 }
 
+// ResolveByName implements works.UnitPlacer: Resolve without the nfo beside the file.
+func (p placing) ResolveByName(ctx context.Context, request batch.Request, unit inspect.Unit) (int64, []model.Identification) {
+	file := works.LargestFile(unit.Media)
+	if file == nil {
+		return 0, nil
+	}
+	info, ok := parsemovie.ParsePathAt(file.RelPath, p.config.Clock.Now().Year())
+	if !ok {
+		return 0, nil
+	}
+	return p.config.Resolver.Resolve(ctx, request.CategoryID, info, IDs{})
+}
+
 // ResolveNamed implements works.UnitPlacer: a TMDB or IMDb id a person named.
 func (p placing) ResolveNamed(ctx context.Context, categoryID int64, named batch.Named) (int64, error) {
 	ids, err := namedIDs(named.Provider, named.ExternalID)

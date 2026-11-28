@@ -19,6 +19,8 @@ import (
 type UnitPlacer interface {
 	// Resolve finds the work a unit holds; 0 with the candidates it might be when it is not sure.
 	Resolve(ctx context.Context, request batch.Request, unit inspect.Unit) (workID int64, candidates []model.Identification)
+	// ResolveByName is Resolve from the unit's folder and file names alone: no file opened, no tag, nfo or fingerprint read.
+	ResolveByName(ctx context.Context, request batch.Request, unit inspect.Unit) (workID int64, candidates []model.Identification)
 	// ResolveNamed is the work a person named for a held unit, 0 when none of the library is; an error refuses the name.
 	ResolveNamed(ctx context.Context, categoryID int64, named batch.Named) (int64, error)
 	// Place places the unit's files as the work's: batch.ErrNothingToPlace when none adds anything, a
@@ -62,6 +64,18 @@ var (
 	_ batch.HeldCommitter = Importer{}
 )
 
+// NameMatches implements batch.Importer: a download holds one work, so the names stage is the placer's name-only resolve.
+func (i Importer) NameMatches(ctx context.Context, request batch.Request) []batch.NameMatch {
+	matches := make([]batch.NameMatch, len(request.Units))
+	batch.ResolveAll(ctx, len(request.Units), func(ctx context.Context, index int) {
+		workID, candidates := i.config.Units.ResolveByName(ctx, request, request.Units[index])
+		if workID > 0 {
+			matches[index] = batch.NameMatch{WorkID: workID, Confidence: 1, Candidates: candidates}
+		}
+	})
+	return matches
+}
+
 // ImportBatch implements batch.Importer.
 func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch.Result, error) {
 	result := batch.Result{
@@ -97,6 +111,11 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			continue
 		}
 		decision.WorkID = &workID
+		if seeded == 0 && request.NameOf(index).Disagrees(workID, nil) {
+			decision.Reason = batch.ReasonNameDisagrees
+			result.Decisions[index] = decision
+			continue
+		}
 		if request.Preview {
 			decision.Reason, decision.Confidence = batch.ReasonPreview, 1
 			result.Decisions[index] = decision

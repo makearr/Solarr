@@ -135,6 +135,54 @@ func (i Importer) probesFor(ctx context.Context, absolute []string) ([]mediatool
 	return probes, nil
 }
 
+// unreadTags is the tag source of the name stage: it has read nothing, so the search identifier falls back to the folder.
+type unreadTags struct{}
+
+func (unreadTags) TagsFor(context.Context, model.FileRef) (mediatool.Tags, error) { return nil, nil }
+
+// NameMatches implements batch.Importer: the album a unit's folder names, searched through the same identifier the
+// files go through but fed no tags, so nothing of the audio is read.
+func (i Importer) NameMatches(ctx context.Context, request batch.Request) []batch.NameMatch {
+	matches := make([]batch.NameMatch, len(request.Units))
+	if i.config.Search == nil {
+		return matches
+	}
+	ctx = musicbrainz.ForLibrary(ctx, request.CategoryID)
+	identifiers := []model.Identifier{NewSearchIdentifier(SearchIdentifierConfig{Tags: unreadTags{}, Search: i.config.Search})}
+	cfg := model.ChainConfig{AcceptThreshold: DefaultAcceptThreshold, AmbiguityThreshold: request.Threshold}
+	batch.ResolveAll(ctx, len(request.Units), func(ctx context.Context, index int) {
+		unit := request.Units[index]
+		if len(unit.Media) == 0 {
+			return
+		}
+		named := unit
+		named.Media = unit.Media[:1]
+		result, err := IdentifyUnit(ctx, named, identifiers, cfg)
+		if err != nil || result.Best == nil || result.Best.ExternalID == nil || result.Best.Confidence < batch.NameMatchFloor {
+			return
+		}
+		matches[index] = batch.NameMatch{
+			External: result.Best.ExternalID, Title: nameMatchTitle(*result.Best),
+			Confidence: result.Best.Confidence, Candidates: []model.Identification{*result.Best},
+		}
+	})
+	return matches
+}
+
+// nameMatchTitle is "Artist - Album" as the search read it.
+func nameMatchTitle(best model.Identification) string {
+	var artist, title string
+	for _, evidence := range best.Evidence {
+		switch evidence.Kind {
+		case EvidenceArtist:
+			artist = evidence.Detail
+		case EvidenceTitle:
+			title = evidence.Detail
+		}
+	}
+	return combinedTitle(artist, title)
+}
+
 // identifyParallelism bounds IDENTIFY's fan-out across one batch's units; writes stay with the import job.
 const identifyParallelism = 8
 
@@ -176,6 +224,13 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	}
 	if request.Preview {
 		holdForReview(decisions)
+	}
+
+	for index, decision := range decisions {
+		if decision.Decision == library.UnitCommit && results[index].Best != nil &&
+			request.NameOf(index).Disagrees(0, results[index].Best.ExternalID) {
+			decisions[index].Decision, decisions[index].Reason = library.UnitQueue, batch.ReasonNameDisagrees
+		}
 	}
 
 	placements := make([]*library.Placement, len(request.Units))

@@ -50,3 +50,35 @@ func TestImportBatch_APreviewHoldsAResolvedUnitAtFullConfidence(t *testing.T) {
 		t.Errorf("decision = %+v, want %+v", got, want)
 	}
 }
+
+func (r resolvedAs) ResolveByName(context.Context, batch.Request, inspect.Unit) (int64, []model.Identification) {
+	return r.workID, nil
+}
+
+// A unit whose files resolve to another work than its names did is held for a person, not placed.
+func TestImportBatch_AUnitWhoseNamesAndFilesDisagreeWaitsForAPerson(t *testing.T) {
+	importer := NewImporter(ImporterConfig{Units: resolvedAs{workID: 41}})
+	request := batch.Request{
+		Units: []inspect.Unit{unitOf(10)}, UnitIDs: []int64{1},
+		Names: []batch.NameMatch{{WorkID: 7, Confidence: 1}},
+	}
+	result, err := importer.ImportBatch(t.Context(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := result.Decisions[0]; got.Decision != library.UnitQueue || got.Reason != batch.ReasonNameDisagrees || result.Placements[0] != nil {
+		t.Errorf("decision = %+v placement = %v, want queued as %q", got, result.Placements[0], batch.ReasonNameDisagrees)
+	}
+}
+
+// The name stage shows a resolved work at full confidence and nothing for a unit its names cannot place.
+func TestNameMatches_ShowTheWorkTheNamesResolveTo(t *testing.T) {
+	matches := NewImporter(ImporterConfig{Units: resolvedAs{workID: 41}}).NameMatches(t.Context(), batch.Request{Units: []inspect.Unit{unitOf(10)}})
+	if len(matches) != 1 || matches[0].WorkID != 41 || !matches[0].Matched() {
+		t.Errorf("matches = %+v, want work 41 matched", matches)
+	}
+	none := NewImporter(ImporterConfig{Units: resolvedAs{}}).NameMatches(t.Context(), batch.Request{Units: []inspect.Unit{unitOf(10)}})
+	if none[0].Matched() {
+		t.Errorf("a unit the names cannot place matched: %+v", none[0])
+	}
+}

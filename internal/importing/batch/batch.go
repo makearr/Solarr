@@ -66,6 +66,62 @@ type Request struct {
 	Threshold float64
 	// AddUnidentified asks for what nothing identified to be added as unverified, when the type can (D6).
 	AddUnidentified bool
+	// Names is what the name stage matched each unit to before any file was read, parallel to Units; nil when it ran for none.
+	Names []NameMatch
+}
+
+// NameOf is what the name stage matched unit index to, the zero match when it ran for none.
+func (r Request) NameOf(index int) NameMatch {
+	if index < len(r.Names) {
+		return r.Names[index]
+	}
+	return NameMatch{}
+}
+
+// NameMatchFloor is the confidence a name-only match needs to show its work on a unit before its files are read.
+const NameMatchFloor = 0.90
+
+// NameMatch is what a unit's folder and file names alone say it is. The zero value says nothing.
+type NameMatch struct {
+	// WorkID is the work of the library the names resolved to, 0 when the type has no work for it yet.
+	WorkID int64
+	// External is the provider id the names resolved to when no work of the library holds it yet.
+	External *model.ExternalID
+	// Title is how to show the match; empty lets the import job read the work's title.
+	Title      string
+	Confidence float64
+	Candidates []model.Identification
+}
+
+// Matched says the names named something sure enough to show.
+func (m NameMatch) Matched() bool {
+	return m.Confidence >= NameMatchFloor && (m.WorkID != 0 || m.External != nil)
+}
+
+// Disagrees says the file evidence settled on something else than the names did; a names stage that matched nothing
+// disagrees with nothing.
+func (m NameMatch) Disagrees(workID int64, external *model.ExternalID) bool {
+	if !m.Matched() {
+		return false
+	}
+	if m.WorkID != 0 && workID != 0 {
+		return m.WorkID != workID
+	}
+	if m.External != nil && external != nil {
+		return m.External.Provider != external.Provider || m.External.ExternalID != external.ExternalID
+	}
+	return false
+}
+
+// ReasonNameDisagrees holds a unit whose files point to another work than its names did, for a person to settle.
+const ReasonNameDisagrees = "the names and the files point to different works"
+
+// NamesNothing is the name stage of an Importer that cannot tell a unit from its names; embed it to opt out.
+type NamesNothing struct{}
+
+// NameMatches implements Importer.
+func (NamesNothing) NameMatches(_ context.Context, request Request) []NameMatch {
+	return make([]NameMatch, len(request.Units))
 }
 
 // Result is what a media type decided and placed for a batch; both are parallel to Request.Units.
@@ -79,6 +135,9 @@ type Result struct {
 // season or an album is (ADR-23).
 type Importer interface {
 	ImportBatch(ctx context.Context, request Request) (Result, error)
+	// NameMatches matches each unit to a work from its folder and file names alone (no tag or content read), parallel
+	// to request.Units, so the import shows a provisional match before the files are read; the files then confirm it.
+	NameMatches(ctx context.Context, request Request) []NameMatch
 }
 
 // ReleaseFacts is what a media type reads from a release name: where it came from, who made it, and which revision.

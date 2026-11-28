@@ -119,6 +119,27 @@ func (Importer) MediaSizeFloorBytes() int64 { return batch.VideoSizeFloorBytes }
 
 var _ batch.Importer = Importer{}
 
+// NameMatches implements batch.Importer: the series from each unit's folder and file names, with no nfo read.
+func (i Importer) NameMatches(ctx context.Context, request batch.Request) []batch.NameMatch {
+	matches := make([]batch.NameMatch, len(request.Units))
+	batch.ResolveAll(ctx, len(request.Units), func(ctx context.Context, index int) {
+		unit := request.Units[index]
+		folder := path.Base(request.SourcePath)
+		if unit.Directory != "" {
+			folder = path.Base(unit.Directory)
+		}
+		guess := FolderGuess{Path: path.Join(request.SourcePath, unit.Directory)}
+		if seasonFolder.MatchString(path.Base(unit.Directory)) {
+			guess.Path = path.Dir(guess.Path)
+		}
+		workID, candidates := i.config.Resolver.ResolveFolder(ctx, request.CategoryID, folder, []string{firstMedia(unit)}, guess)
+		if workID > 0 {
+			matches[index] = batch.NameMatch{WorkID: workID, Confidence: 1, Candidates: candidates}
+		}
+	})
+	return matches
+}
+
 // ImportBatch implements batch.Importer.
 func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch.Result, error) {
 	result := batch.Result{
@@ -163,6 +184,11 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		if workID <= 0 {
 			result.Decisions[index] = decision
 			result.Decisions[index].CandidatesJSON = library.CandidatesJSON(candidates)
+			continue
+		}
+		if seeded == 0 && request.NameOf(index).Disagrees(workID, nil) {
+			decision.Reason, decision.WorkID = batch.ReasonNameDisagrees, &workID
+			result.Decisions[index] = decision
 			continue
 		}
 		if request.Preview {

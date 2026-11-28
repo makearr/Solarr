@@ -39,3 +39,12 @@ when its name, or the part after the last " - ", is the exact title of one episo
 stay in Review. A file numbered past its season's end (S01E19 of a season of 18) is never placed by itself: Review offers the
 episode the number counts on to, "Duplicate episode: a second copy of S02E01" when that one is held, and picking it (with the
 whole folder if asked) adds the file there, where the Duplicates report lists both copies and can link them.
+
+## The name stage: a match before any file is read
+
+The import job lists every unit first (folders and file names, no content read), records each as "Identifying", then asks the
+library's importer for `NameMatches`: the work each unit's folder and file names alone resolve to, through the same resolver
+the identifying pass uses but without nfo, tag, fingerprint or archive reads (music searches MusicBrainz with the folder's
+artist and album). A match of at least `batch.NameMatchFloor` (0.90) is shown on the provisional unit (work and title) at once.
+The identifying pass then reads the files as before; when it settles on another work than the names did, the unit is held in
+Review (`batch.ReasonNameDisagrees`) instead of committed. Agreement commits as usual and stays revertible.

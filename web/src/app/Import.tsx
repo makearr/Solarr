@@ -1332,7 +1332,7 @@ function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId
             <span className="text-ink-muted">{describeTransfer(unit.transfer_methods!)}</span>
           )}
         </button>
-        {commitsHeld && unit.decision === "QUEUE" && ((unit.candidates?.length ?? 0) > 0 || unit.work_id != null) && guessPlaceable && (
+        {commitsHeld && unit.decision === "QUEUE" && unit.reason !== "IDENTIFYING" && ((unit.candidates?.length ?? 0) > 0 || unit.work_id != null) && guessPlaceable && (
           <button
             type="button"
             onClick={() => commit.mutate()}
@@ -1344,7 +1344,7 @@ function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId
             {commit.isPending ? "Committing…" : "Commit anyway"}
           </button>
         )}
-        {commitsHeld && unit.decision === "QUEUE" && categoryId !== null && (
+        {commitsHeld && unit.decision === "QUEUE" && unit.reason !== "IDENTIFYING" && categoryId !== null && (
           <button
             type="button"
             onClick={() => setIdentifying(true)}
